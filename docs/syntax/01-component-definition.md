@@ -1,12 +1,54 @@
 # Component Definition Syntax
 
+**Status:** ✅ DECIDED - See [Decision 003: @prop Annotation](./decisions/003-prop-annotation.md)
+
 ## Context
 
 Components are the fundamental building block. The syntax needs to be:
 - **Clear**: Easy to understand what's a prop vs state vs method
 - **Concise**: Minimal boilerplate for common cases
-- **Familiar**: Leverage patterns from React/Vue/Svelte/Swift
+- **Kotlin-native**: Use Kotlin keywords and conventions
 - **Type-safe**: Map cleanly to Kotlin's type system
+
+## DECIDED SYNTAX
+
+**Filename = Component Name** - No redundant `component Button` declaration inside files.
+
+**Component Structure:**
+```whitehall
+<!-- Optional: imports -->
+import android.util.Log
+import com.example.data.UserRepository
+
+<!-- Script section: props, state, functions -->
+<script>
+  @prop val propName: Type
+  @prop val optionalProp: Type = defaultValue
+
+  var stateVariable = initialValue
+  val computedValue = someExpression
+
+  fun handleSomething() {
+    // logic
+  }
+</script>
+
+<!-- Optional: styles (future) -->
+<style>
+  // CSS-like styling
+</style>
+
+<!-- UI markup (everything outside script/style) -->
+<Column>
+  <Text>{propName}</Text>
+</Column>
+```
+
+**Key Rules:**
+- Props: `@prop val name: Type` (explicit type required, must use `val`)
+- State: `var name = value` (Kotlin var/val)
+- Functions: `fun name() { }` (Kotlin syntax)
+- Filename determines component name (e.g., `Button.wh` → `Button` component)
 
 ---
 
@@ -231,7 +273,99 @@ Or make everything public by default and use file organization?
 
 ---
 
-## Recommendation
+## Complete Examples with DECIDED Syntax
+
+### Simple Button Component
+
+**Button.wh:**
+```whitehall
+<script>
+  @prop val text: String
+  @prop val onClick: () -> Unit
+  @prop val disabled: Boolean = false
+
+  var isPressed = false
+
+  fun handlePress() {
+    if (!disabled) {
+      isPressed = true
+      onClick()
+    }
+  }
+</script>
+
+<TouchableRipple
+  onClick={handlePress}
+  disabled={disabled}
+>
+  <Text color={disabled ? "gray" : "primary"}>
+    {text}
+  </Text>
+</TouchableRipple>
+```
+
+### Component with Complex Props
+
+**UserCard.wh:**
+```whitehall
+import com.example.models.User
+
+<script>
+  @prop val user: User
+  @prop val onEdit: (User) -> Unit
+  @prop val highlighted: Boolean = false
+
+  var showMenu = false
+
+  fun toggleMenu() {
+    showMenu = !showMenu
+  }
+</script>
+
+<Card elevation={highlighted ? 8 : 2}>
+  <Row padding={16} spacing={12}>
+    <Avatar url={user.avatarUrl} size={48} />
+    <Column fill>
+      <Text fontSize={18} fontWeight="bold">{user.name}</Text>
+      <Text color="secondary">{user.email}</Text>
+    </Column>
+    {#if showMenu}
+      <IconButton icon="edit" onClick={() => onEdit(user)} />
+    {/if}
+  </Row>
+</Card>
+```
+
+### Component with No Props
+
+**Counter.wh:**
+```whitehall
+<script>
+  var count = 0
+
+  fun increment() {
+    count++
+  }
+
+  fun reset() {
+    count = 0
+  }
+</script>
+
+<Column center spacing={16}>
+  <Text fontSize={48} fontWeight="bold">{count}</Text>
+  <Row spacing={8}>
+    <Button text="+" onClick={increment} />
+    <Button text="Reset" onClick={reset} />
+  </Row>
+</Column>
+```
+
+---
+
+## Historical Options Considered (For Reference)
+
+### Option C (Previous Recommendation)
 
 **Start with Option C** for these reasons:
 1. **Props in signature**: Familiar to most developers (JS/TS/Rust)

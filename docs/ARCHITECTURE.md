@@ -143,34 +143,48 @@ my-app/
 
 ### 6. The .whitehall File Format
 
-Initial concept (subject to evolution):
+**Current syntax** (see `docs/syntax/` for full specification):
 
+**LoginScreen.wh:**
 ```whitehall
-component LoginScreen {
-  state {
-    email: String = ""
-    password: String = ""
-  }
+<script>
+  @prop val title: String = "Login"
 
-  view {
-    Column(padding = 16) {
-      TextField(
-        value = email,
-        onChanged = (value) => { email = value }
-      )
+  var email = ""
+  var password = ""
 
-      Button(
-        text = "Login",
-        onClick = () => { handleLogin() }
-      )
-    }
+  fun handleLogin() {
+    // Authentication logic
   }
+</script>
 
-  fn handleLogin() {
-    // Logic here
-  }
-}
+<Column padding={16} spacing={8}>
+  <Text fontSize={24}>{title}</Text>
+
+  <Input
+    bind:value={email}
+    label="Email"
+  />
+
+  <Input
+    bind:value={password}
+    label="Password"
+    type="password"
+  />
+
+  <Button
+    text="Login"
+    onClick={handleLogin}
+  />
+</Column>
 ```
+
+**Key features:**
+- Markup-based UI (inspired by Svelte)
+- `<script>` section for logic
+- `@prop val` for component props (Kotlin-native)
+- `var`/`val` for state (Kotlin keywords)
+- Filename determines component name
 
 This transpiles to idiomatic Kotlin with Jetpack Compose.
 

@@ -1,18 +1,18 @@
-component App {
-  state {
-    message: String = "Hello, Whitehall!"
-  }
+<script>
+  var message = "Hello, Whitehall!"
 
-  view {
-    Column(padding = 16) {
-      Text(text = message)
-
-      Button(
-        text = "Click Me",
-        onClick = () => {
-          message = "Button clicked!"
-        }
-      )
-    }
+  fun handleClick() {
+    message = "Button clicked!"
   }
-}
+</script>
+
+<Column padding={16} spacing={8}>
+  <Text fontSize={24} fontWeight="bold">
+    {message}
+  </Text>
+
+  <Button
+    text="Click Me"
+    onClick={handleClick}
+  />
+</Column>
