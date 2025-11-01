@@ -233,7 +233,7 @@ impl Parser {
                 // Plain text
                 let text = self.read_until_markup();
                 if !text.trim().is_empty() {
-                    elements.push(Markup::Text(text.trim().to_string()));
+                    elements.push(Markup::Text(text));
                 }
             }
 
@@ -305,8 +305,9 @@ impl Parser {
                 } else {
                     // Text content
                     let text = self.read_text_until_markup();
+                    // Only skip completely empty/whitespace-only nodes
                     if !text.trim().is_empty() {
-                        children.push(Markup::Text(text.trim().to_string()));
+                        children.push(Markup::Text(text));
                     }
                 }
             }
@@ -560,7 +561,7 @@ impl Parser {
             } else {
                 let text = self.read_text_until_markup();
                 if !text.trim().is_empty() {
-                    elements.push(Markup::Text(text.trim().to_string()));
+                    elements.push(Markup::Text(text));
                 }
             }
         }

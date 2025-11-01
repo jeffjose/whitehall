@@ -154,12 +154,12 @@ impl CodeGenerator {
     }
 
     fn collect_imports(&mut self, file: &WhitehallFile) {
-        // Always need Composable
-        self.required_imports.insert("androidx.compose.runtime.Composable".to_string());
-
         // State management
         if !file.state.is_empty() {
             self.required_imports.insert("androidx.compose.runtime.*".to_string());
+        } else {
+            // Only need Composable if we don't have runtime.*
+            self.required_imports.insert("androidx.compose.runtime.Composable".to_string());
         }
 
         // Lifecycle
@@ -669,7 +669,7 @@ impl CodeGenerator {
         if children.len() == 1 {
             return match &children[0] {
                 Markup::Text(text) => format!("\"{}\"", text),
-                Markup::Interpolation(expr) => format!("${}", expr),
+                Markup::Interpolation(expr) => expr.to_string(), // Just the variable name
                 _ => String::new(),
             };
         }
@@ -679,7 +679,14 @@ impl CodeGenerator {
         for child in children {
             match child {
                 Markup::Text(text) => parts.push(text.to_string()),
-                Markup::Interpolation(expr) => parts.push(format!("${{{}}}", expr)),
+                Markup::Interpolation(expr) => {
+                    // Use $name for simple identifiers, ${expr} for complex expressions
+                    if expr.chars().all(|c| c.is_alphanumeric() || c == '_') {
+                        parts.push(format!("${}", expr));
+                    } else {
+                        parts.push(format!("${{{}}}", expr));
+                    }
+                }
                 _ => {}
             }
         }
