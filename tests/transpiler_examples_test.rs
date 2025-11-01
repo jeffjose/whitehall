@@ -134,7 +134,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_parse_markdown_files() {
+    fn parse() {
         let test_files = load_test_files();
 
         assert!(
@@ -165,7 +165,7 @@ mod tests {
     }
 
     #[test]
-    fn test_transpile_all_examples() {
+    fn transpile() {
         use whitehall::transpiler::transpile;
 
         let test_files = load_test_files();
@@ -226,7 +226,7 @@ mod tests {
     }
 
     #[test]
-    fn test_basic_component_structure() {
+    fn basic_component() {
         // Test that we can parse the basic component example
         let content = include_str!("transpiler-examples/01-basic-component.md");
         let test = parse_test_file(content, "01-basic-component.md")
@@ -239,7 +239,7 @@ mod tests {
     }
 
     #[test]
-    fn test_control_flow_if_structure() {
+    fn control_flow_if() {
         let content = include_str!("transpiler-examples/02-control-flow-if.md");
         let test = parse_test_file(content, "02-control-flow-if.md")
             .expect("Failed to parse if/else test");
@@ -250,7 +250,7 @@ mod tests {
     }
 
     #[test]
-    fn test_for_loop_structure() {
+    fn for_loop() {
         let content = include_str!("transpiler-examples/03-control-flow-for.md");
         let test = parse_test_file(content, "03-control-flow-for.md")
             .expect("Failed to parse for loop test");
