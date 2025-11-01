@@ -590,6 +590,8 @@ impl CodeGenerator {
             output.push_str(&self.indent());
             // Extract key expression from lambda
             let key_expr = key_lambda.trim_start_matches('{').trim_end_matches('}').trim();
+            // Replace 'it' with the actual iterator variable name
+            let key_expr = key_expr.replace("it.", &format!("{}.", ctrl.item));
             output.push_str(&format!("key({}) {{\n", key_expr));
             self.indent_level += 1;
         }

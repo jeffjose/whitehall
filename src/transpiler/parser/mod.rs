@@ -689,11 +689,22 @@ impl Parser {
                 } else {
                     break; // End of function parameter list
                 }
-            } else if c == '<' && paren_depth == 0 {
-                // Don't consume < unless we're inside parentheses (function types)
-                // This prevents consuming markup like <Text>
-                break;
             } else if c == '<' {
+                // Check if this is the start of markup or a generic type
+                // Markup starts with <UppercaseLetter (like <Text>, <Column>)
+                // Generic types are like List<Type>
+                let next_pos = self.pos + 1;
+                if paren_depth == 0 && next_pos < self.source.len() {
+                    let next_char = self.source[next_pos..].chars().next();
+                    // If next char is uppercase and we're not in a type context with angle brackets,
+                    // this might be markup. But we need to be careful - it could also be a generic.
+                    // The key: if we haven't seen any type text yet and angle_depth == 0, it's markup.
+                    // If we have seen type text (start < pos), it's a generic.
+                    if next_char.map_or(false, |ch| ch.is_uppercase()) && self.pos == start {
+                        // This looks like markup at the start
+                        break;
+                    }
+                }
                 angle_depth += 1;
                 self.advance();
             } else if c == '>' && angle_depth > 0 {
