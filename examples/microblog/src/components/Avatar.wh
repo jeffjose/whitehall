@@ -1,10 +1,8 @@
 // Avatar component - displays user avatar
 
-<script>
   @prop val url: String
   @prop val size: Int = 48
   @prop val onClick: (() -> Unit)? = null
-</script>
 
 <AsyncImage
   url={url}

@@ -1,16 +1,14 @@
 // Settings screen
-// Route: /settings → Routes.Settings
+// Route: /settings → $routes.settings
 
-<script>
   var notificationsEnabled = true
   var darkModeEnabled = false
   var autoPlayVideos = true
 
   fun handleLogout() {
     // Clear auth and navigate to login
-    navigate(Routes.Login)
+    navigate($routes.login)
   }
-</script>
 
 <Scaffold
   topBar={
@@ -28,7 +26,7 @@
         ACCOUNT
       </Text>
 
-      <Card onClick={() => navigate(Routes.Profile(id = "current_user"))}>
+      <Card onClick={() => navigate($routes.profile(id = "current_user"))}>
         <Row padding={16} spacing={12}>
           <Icon name="person" size={24} />
           <Text fill>My Profile</Text>

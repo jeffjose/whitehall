@@ -1,13 +1,11 @@
 // Post detail screen with comments
-// Route: /post/:id → Routes.Post.Detail(id)
+// Route: /post/:id → $routes.post.detail(id)
 
 import $components.{ Avatar, CommentItem }
 import $lib.api.ApiClient
 import $models.{ Post, Comment }
 import kotlinx.coroutines.launch
 
-<script>
-  @prop val id: String  // Route parameter
 
   var post: Post? = null
   var comments: List<Comment> = emptyList()
@@ -18,8 +16,8 @@ import kotlinx.coroutines.launch
 
   onMount {
     launch {
-      val postResult = ApiClient.getPost(id)
-      val commentsResult = ApiClient.getComments(id)
+      val postResult = ApiClient.getPost($screen.params.id)
+      val commentsResult = ApiClient.getComments($screen.params.id)
 
       post = postResult.getOrNull()
       comments = commentsResult.getOrNull() ?: emptyList()
@@ -33,7 +31,7 @@ import kotlinx.coroutines.launch
     isPostingComment = true
 
     launch {
-      ApiClient.postComment(id, commentText)
+      ApiClient.postComment($screen.params.id, commentText)
         .onSuccess { newComment ->
           comments = listOf(newComment) + comments
           commentText = ""
@@ -57,7 +55,6 @@ import kotlinx.coroutines.launch
       else -> "${days / 7}w ago"
     }
   }
-</script>
 
 <Scaffold
   topBar={
@@ -78,7 +75,7 @@ import kotlinx.coroutines.launch
       <Column padding={12} spacing={8}>
         <Row
           spacing={8}
-          onClick={() => navigate(Routes.Profile(id = post.authorId))}
+          onClick={() => navigate($routes.profile(id = post.authorId))}
         >
           <Avatar url={post.authorAvatar} size={48} />
 

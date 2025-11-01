@@ -1,40 +1,36 @@
 // Profile screen
-// Route: /profile/:id → Routes.Profile(id)
+// Route: /profile/:id → $routes.profile(id)
 
 import $components.{ PostCard, Avatar }
 import $lib.api.ApiClient
 import $models.{ User, Post }
 import kotlinx.coroutines.launch
 
-<script>
-  @prop val id: String  // Route parameter
+var user: User? = null
+var posts: List<Post> = emptyList()
+var isLoading = true
 
-  var user: User? = null
-  var posts: List<Post> = emptyList()
-  var isLoading = true
+onMount {
+  launch {
+    val userResult = ApiClient.getUser($screen.params.id)
+    val postsResult = ApiClient.getFeed()  // In real app: getPostsByUser(id)
 
-  onMount {
-    launch {
-      val userResult = ApiClient.getUser(id)
-      val postsResult = ApiClient.getFeed()  // In real app: getPostsByUser(id)
-
-      user = userResult.getOrNull()
-      posts = postsResult.getOrNull() ?: emptyList()
-      isLoading = false
-    }
+    user = userResult.getOrNull()
+    posts = postsResult.getOrNull() ?: emptyList()
+    isLoading = false
   }
+}
 
-  fun handleFollow() {
-    // Toggle follow state
-    user = user?.copy(
-      isFollowing = !user.isFollowing,
-      followersCount = if (user.isFollowing)
-        user.followersCount - 1
-      else
-        user.followersCount + 1
-    )
-  }
-</script>
+fun handleFollow() {
+  // Toggle follow state
+  user = user?.copy(
+    isFollowing = !user.isFollowing,
+    followersCount = if (user.isFollowing)
+      user.followersCount - 1
+    else
+      user.followersCount + 1
+  )
+}
 
 <Scaffold
   topBar={
@@ -109,7 +105,7 @@ import kotlinx.coroutines.launch
         @for (post in posts, key = { it.id }) {
           <PostCard
             post={post}
-            onPostClick={(postId) => navigate(Routes.Post.Detail(id = postId))}
+            onPostClick={(postId) => navigate($routes.post.detail(id = postId))}
           />
         } empty {
           <Column center padding={32}>

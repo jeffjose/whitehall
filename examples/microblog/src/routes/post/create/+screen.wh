@@ -1,10 +1,9 @@
 // Create post screen
-// Route: /post/create → Routes.Post.Create
+// Route: /post/create → $routes.post.create
 
 import $lib.api.ApiClient
 import kotlinx.coroutines.launch
 
-<script>
   var content = ""
   var isPosting = false
 
@@ -30,7 +29,6 @@ import kotlinx.coroutines.launch
         }
     }
   }
-</script>
 
 <Scaffold
   topBar={

@@ -1,48 +1,46 @@
 // Home feed screen
-// Route: / → Routes.Home
+// Route: / → $routes.home
 
 import $components.PostCard
 import $lib.api.ApiClient
 import $models.Post
 import kotlinx.coroutines.launch
 
-<script>
-  var posts: List<Post> = emptyList()
-  var isLoading = true
-  var isRefreshing = false
+var posts: List<Post> = emptyList()
+var isLoading = true
+var isRefreshing = false
 
-  onMount {
-    loadFeed()
-  }
+onMount {
+  loadFeed()
+}
 
-  fun loadFeed() {
-    launch {
-      ApiClient.getFeed()
-        .onSuccess { data ->
-          posts = data
-          isLoading = false
-          isRefreshing = false
-        }
-        .onFailure {
-          isLoading = false
-          isRefreshing = false
-        }
-    }
+fun loadFeed() {
+  launch {
+    ApiClient.getFeed()
+      .onSuccess { data ->
+        posts = data
+        isLoading = false
+        isRefreshing = false
+      }
+      .onFailure {
+        isLoading = false
+        isRefreshing = false
+      }
   }
+}
 
-  fun handleRefresh() {
-    isRefreshing = true
-    loadFeed()
-  }
+fun handleRefresh() {
+  isRefreshing = true
+  loadFeed()
+}
 
-  fun handleUserClick(userId: String) {
-    navigate(Routes.Profile(id = userId))
-  }
+fun handleUserClick(userId: String) {
+  navigate($routes.profile(id = userId))
+}
 
-  fun handlePostClick(postId: String) {
-    navigate(Routes.Post.Detail(id = postId))
-  }
-</script>
+fun handlePostClick(postId: String) {
+  navigate($routes.post.detail(id = postId))
+}
 
 <Scaffold
   topBar={
@@ -51,7 +49,7 @@ import kotlinx.coroutines.launch
   floatingActionButton={
     <FloatingActionButton
       icon="add"
-      onClick={() => navigate(Routes.Post.Create)}
+      onClick={() => navigate($routes.post.create)}
     />
   }
 >
@@ -76,7 +74,7 @@ import kotlinx.coroutines.launch
             <Text color="secondary">No posts yet</Text>
             <Button
               text="Create First Post"
-              onClick={() => navigate(Routes.Post.Create)}
+              onClick={() => navigate($routes.post.create)}
             />
           </Column>
         }

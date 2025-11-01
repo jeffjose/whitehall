@@ -1,35 +1,33 @@
 // Login screen
-// Route: /login → Routes.Login
+// Route: /login → $routes.login
 
 import $lib.api.ApiClient
 import kotlinx.coroutines.launch
 
-<script>
-  var username = ""
-  var password = ""
-  var isLoading = false
-  var errorMessage: String? = null
+var username = ""
+var password = ""
+var isLoading = false
+var errorMessage: String? = null
 
-  val isValid = username.isNotEmpty() && password.length >= 6
+val isValid = username.isNotEmpty() && password.length >= 6
 
-  fun handleLogin() {
-    isLoading = true
-    errorMessage = null
+fun handleLogin() {
+  isLoading = true
+  errorMessage = null
 
-    launch {
-      ApiClient.login(username, password)
-        .onSuccess { token ->
-          // Store token and navigate to home
-          isLoading = false
-          navigate(Routes.Home)
-        }
-        .onFailure { error ->
-          errorMessage = error.message
-          isLoading = false
-        }
-    }
+  launch {
+    ApiClient.login(username, password)
+      .onSuccess { token ->
+        // Store token and navigate to home
+        isLoading = false
+        navigate($routes.home)
+      }
+      .onFailure { error ->
+        errorMessage = error.message
+        isLoading = false
+      }
   }
-</script>
+}
 
 <Scaffold>
   <Column
@@ -91,7 +89,7 @@ import kotlinx.coroutines.launch
       <Text color="secondary">Don't have an account?</Text>
       <TextButton
         text="Sign up"
-        onClick={() => navigate(Routes.Signup)}
+        onClick={() => navigate($routes.signup)}
       />
     </Row>
   </Column>

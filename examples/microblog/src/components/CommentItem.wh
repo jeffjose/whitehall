@@ -2,7 +2,6 @@
 
 import $models.Comment
 
-<script>
   @prop val comment: Comment
 
   fun formatTimestamp(timestamp: Long): String {
@@ -15,7 +14,6 @@ import $models.Comment
       else -> "${hours / 24}d ago"
     }
   }
-</script>
 
 <Row padding={12} spacing={8}>
   <Avatar url={comment.authorAvatar} size={32} />

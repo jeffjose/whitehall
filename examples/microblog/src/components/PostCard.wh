@@ -3,7 +3,6 @@
 import $models.Post
 import kotlinx.coroutines.launch
 
-<script>
   @prop val post: Post
   @prop val onUserClick: ((String) -> Unit)? = null
   @prop val onPostClick: ((String) -> Unit)? = null
@@ -37,7 +36,6 @@ import kotlinx.coroutines.launch
       else -> "${days / 7}w ago"
     }
   }
-</script>
 
 <Card onClick={() => onPostClick?.invoke(post.id)}>
   <Column padding={12} spacing={8}>

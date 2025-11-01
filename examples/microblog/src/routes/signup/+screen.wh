@@ -1,10 +1,9 @@
 // Signup screen
-// Route: /signup → Routes.Signup
+// Route: /signup → $routes.signup
 
 import $lib.api.ApiClient
 import kotlinx.coroutines.launch
 
-<script>
   var username = ""
   var email = ""
   var password = ""
@@ -79,7 +78,7 @@ import kotlinx.coroutines.launch
       ApiClient.signup(username, email, password)
         .onSuccess { token ->
           isLoading = false
-          navigate(Routes.Home)
+          navigate($routes.home)
         }
         .onFailure { error ->
           isLoading = false
@@ -87,7 +86,6 @@ import kotlinx.coroutines.launch
         }
     }
   }
-</script>
 
 <Scaffold
   topBar={
@@ -161,7 +159,7 @@ import kotlinx.coroutines.launch
       <Text color="secondary">Already have an account?</Text>
       <TextButton
         text="Login"
-        onClick={() => navigate(Routes.Login)}
+        onClick={() => navigate($routes.login)}
       />
     </Row>
   </Column>
