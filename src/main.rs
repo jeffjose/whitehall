@@ -1,7 +1,6 @@
 use clap::{Parser, Subcommand};
 use anyhow::Result;
-
-mod commands;
+use whitehall::commands;
 
 #[derive(Parser)]
 #[command(name = "whitehall")]
