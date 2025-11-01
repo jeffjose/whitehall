@@ -165,20 +165,17 @@ mod tests {
                     component_name
                 };
 
-                match transpile(&test.input, "com.example.app.components", &component_name) {
-                    Ok(actual_output) => {
-                        if normalize_whitespace(&actual_output) != normalize_whitespace(&test.expected_output) {
-                            eprintln!("\n⚠️  Formatting mismatch in {} (transpiler works, output differs)", $file);
-                            eprintln!("   Run: cargo test {} -- --nocapture  to see diff\n", stringify!($test_name));
-                        }
-                        // Don't fail - just warn
-                    }
-                    Err(e) => {
-                        eprintln!("\n❌ Transpilation error in {}: {}", $file, e);
-                        eprintln!("   This is a known issue. Run with --nocapture to see input\n");
-                        // Don't panic - just warn for now
-                    }
-                }
+                let actual_output = transpile(&test.input, "com.example.app.components", &component_name)
+                    .expect(&format!("Transpilation failed for {}", $file));
+
+                assert_eq!(
+                    normalize_whitespace(&actual_output),
+                    normalize_whitespace(&test.expected_output),
+                    "\n\n=== MISMATCH in {} ===\n\nExpected:\n{}\n\nActual:\n{}\n",
+                    $file,
+                    test.expected_output,
+                    actual_output
+                );
             }
         };
     }
