@@ -32,11 +32,27 @@ Demonstrates:
 
 ---
 
+### RegistrationForm.wh
+Demonstrates:
+- **Data binding** with `bind:value` and `bind:checked`
+- **Smart transpilation** for nested properties (`user.address.street`)
+- **Validation** with explicit handlers
+- Complex form state management
+- Nested data structures (User with Address)
+- Computed validation (isValid)
+- Multiple input types (text, password, slider, checkbox, switch)
+- Form submission flow
+
+**Use case:** User registration form with validation
+
+---
+
 ## Syntax Reference
 
 These examples showcase the **decided syntax** from:
 - [Decision 003: @prop Annotation](../decisions/003-prop-annotation.md)
 - [Decision 004: Control Flow](../decisions/004-control-flow.md)
+- [Decision 005: Data Binding](../decisions/005-data-binding.md)
 
 ### Control Flow Quick Reference
 
@@ -67,6 +83,30 @@ These examples showcase the **decided syntax** from:
 <!-- Short-circuit -->
 {condition && <Component />}
 {nullableValue?.property}
+```
+
+### Data Binding Quick Reference
+
+```whitehall
+<!-- Simple binding -->
+<Input bind:value={email} />
+<Checkbox bind:checked={agreed} />
+<Switch bind:checked={enabled} />
+<Slider bind:value={volume} />
+
+<!-- Nested property binding (smart transpilation) -->
+<Input bind:value={user.name} />
+<Input bind:value={user.address.street} />
+
+<!-- Explicit handlers (for validation, transforms) -->
+<Input
+  value={email}
+  onValueChange={(v) => {
+    email = v
+    emailError = validate(v)
+  }}
+  error={emailError}
+/>
 ```
 
 ### Component Structure Quick Reference

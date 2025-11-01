@@ -1,0 +1,247 @@
+// Example: Registration Form with Data Binding
+// Demonstrates bind:value, bind:checked, nested properties, and validation
+
+import com.example.models.User
+import com.example.models.Address
+import com.example.data.AuthRepository
+
+<script>
+  @prop val onSuccess: (User) -> Unit
+  @prop val onCancel: () -> Unit
+
+  // Form data with nested object
+  var user = User(
+    username = "",
+    email = "",
+    password = "",
+    age = 18,
+    address = Address(
+      street = "",
+      city = "",
+      zipCode = ""
+    )
+  )
+
+  // Form state
+  var confirmPassword = ""
+  var agreedToTerms = false
+  var subscribeNewsletter = false
+  var isSubmitting = false
+
+  // Validation errors
+  var usernameError: String? = null
+  var emailError: String? = null
+  var passwordError: String? = null
+  var confirmPasswordError: String? = null
+
+  // Validation functions
+  fun validateUsername(value: String) {
+    user = user.copy(username = value)
+    usernameError = when {
+      value.isEmpty() -> "Username required"
+      value.length < 3 -> "Username too short (min 3 chars)"
+      !value.matches(Regex("[a-zA-Z0-9_]+")) -> "Only letters, numbers, underscore"
+      else -> null
+    }
+  }
+
+  fun validateEmail(value: String) {
+    user = user.copy(email = value)
+    emailError = when {
+      value.isEmpty() -> "Email required"
+      !value.contains("@") -> "Invalid email format"
+      else -> null
+    }
+  }
+
+  fun validatePassword(value: String) {
+    user = user.copy(password = value)
+    passwordError = when {
+      value.isEmpty() -> "Password required"
+      value.length < 8 -> "Password too short (min 8 chars)"
+      else -> null
+    }
+
+    // Re-validate confirm password
+    if (confirmPassword.isNotEmpty()) {
+      confirmPasswordError = if (confirmPassword != value) {
+        "Passwords don't match"
+      } else null
+    }
+  }
+
+  fun validateConfirmPassword(value: String) {
+    confirmPassword = value
+    confirmPasswordError = when {
+      value.isEmpty() -> "Please confirm password"
+      value != user.password -> "Passwords don't match"
+      else -> null
+    }
+  }
+
+  val isValid =
+    usernameError == null &&
+    emailError == null &&
+    passwordError == null &&
+    confirmPasswordError == null &&
+    user.username.isNotEmpty() &&
+    user.email.isNotEmpty() &&
+    user.password.isNotEmpty() &&
+    confirmPassword.isNotEmpty() &&
+    agreedToTerms
+
+  fun handleSubmit() {
+    if (!isValid) return
+
+    isSubmitting = true
+    AuthRepository.register(user)
+      .onSuccess {
+        isSubmitting = false
+        onSuccess(user)
+      }
+      .onFailure { error ->
+        isSubmitting = false
+        // Show error
+      }
+  }
+</script>
+
+<Scaffold
+  topBar={
+    <TopAppBar title="Create Account" />
+  }
+>
+  <Column padding={16} spacing={16}>
+    <Text fontSize={20} fontWeight="bold">Personal Information</Text>
+
+    <!-- Username with validation -->
+    <Input
+      value={user.username}
+      onValueChange={validateUsername}
+      error={usernameError}
+      label="Username"
+      placeholder="Choose a username"
+      enabled={!isSubmitting}
+    />
+
+    <!-- Email with validation -->
+    <Input
+      value={user.email}
+      onValueChange={validateEmail}
+      error={emailError}
+      label="Email"
+      placeholder="your@email.com"
+      keyboardType="email"
+      enabled={!isSubmitting}
+    />
+
+    <!-- Password with validation -->
+    <Input
+      value={user.password}
+      onValueChange={validatePassword}
+      error={passwordError}
+      label="Password"
+      placeholder="Min 8 characters"
+      type="password"
+      enabled={!isSubmitting}
+    />
+
+    <!-- Confirm password with validation -->
+    <Input
+      value={confirmPassword}
+      onValueChange={validateConfirmPassword}
+      error={confirmPasswordError}
+      label="Confirm Password"
+      type="password"
+      enabled={!isSubmitting}
+    />
+
+    <!-- Age slider (simple bind) -->
+    <Column spacing={4}>
+      <Text>Age: {user.age}</Text>
+      <Slider
+        bind:value={user.age}
+        min={13}
+        max={120}
+        enabled={!isSubmitting}
+      />
+    </Column>
+
+    <Divider />
+
+    <Text fontSize={20} fontWeight="bold">Address</Text>
+
+    <!-- Address fields with nested property binding -->
+    <Input
+      bind:value={user.address.street}
+      label="Street Address"
+      enabled={!isSubmitting}
+    />
+
+    <Row spacing={8}>
+      <Input
+        bind:value={user.address.city}
+        label="City"
+        enabled={!isSubmitting}
+        fill
+      />
+      <Input
+        bind:value={user.address.zipCode}
+        label="ZIP"
+        enabled={!isSubmitting}
+        width={120}
+      />
+    </Row>
+
+    <Divider />
+
+    <!-- Checkboxes with bind:checked -->
+    <Checkbox
+      bind:checked={agreedToTerms}
+      enabled={!isSubmitting}
+    >
+      <Text>
+        I agree to the
+        <TextLink onClick={() => navigate("/terms")}>Terms of Service</TextLink>
+      </Text>
+    </Checkbox>
+
+    <Switch
+      bind:checked={subscribeNewsletter}
+      label="Subscribe to newsletter"
+      enabled={!isSubmitting}
+    />
+
+    <!-- Action buttons -->
+    <Row spacing={8}>
+      <Button
+        text="Cancel"
+        onClick={onCancel}
+        variant="outlined"
+        fill
+        enabled={!isSubmitting}
+      />
+      <Button
+        text={isSubmitting ? "Creating Account..." : "Create Account"}
+        onClick={handleSubmit}
+        disabled={!isValid || isSubmitting}
+        fill
+      />
+    </Row>
+
+    <!-- Form summary (development) -->
+    {!isSubmitting &&
+      <Card backgroundColor="surface" padding={12}>
+        <Text fontSize={12} color="secondary" fontFamily="monospace">
+          Valid: {isValid}
+          Username: {user.username}
+          Email: {user.email}
+          Age: {user.age}
+          Address: {user.address.street}, {user.address.city} {user.address.zipCode}
+          Terms: {agreedToTerms}
+          Newsletter: {subscribeNewsletter}
+        </Text>
+      </Card>
+    }
+  </Column>
+</Scaffold>
