@@ -330,7 +330,7 @@ impl Parser {
             self.expect("=")?;
             self.skip_whitespace();
             self.expect("{")?;
-            let expr = self.read_until('}').trim().to_string();
+            let expr = self.read_balanced_braces()?.trim().to_string();
             self.expect("}")?;
 
             return Ok(Prop {
@@ -346,7 +346,7 @@ impl Parser {
             if self.peek_char() == Some('{') {
                 // Expression: prop={expr}
                 self.advance();
-                let expr = self.read_until('}').trim().to_string();
+                let expr = self.read_balanced_braces()?.trim().to_string();
                 self.expect("}")?;
 
                 Ok(Prop {

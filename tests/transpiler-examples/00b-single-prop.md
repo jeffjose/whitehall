@@ -15,8 +15,8 @@ Tests a component with just one required prop.
 ```kotlin
 package com.example.app.components
 
-import androidx.compose.runtime.Composable
 import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
 
 @Composable
 fun SingleProp(

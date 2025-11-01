@@ -15,8 +15,8 @@ Tests string interpolation in text content.
 ```kotlin
 package com.example.app.components
 
-import androidx.compose.runtime.*
 import androidx.compose.material3.Text
+import androidx.compose.runtime.*
 
 @Composable
 fun TextWithInterpolation() {

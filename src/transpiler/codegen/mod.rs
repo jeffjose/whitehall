@@ -30,7 +30,7 @@ impl CodeGenerator {
 
         // Add imports
         output.push_str(&self.generate_imports(file));
-        output.push('\n');
+        output.push_str("\n\n");
 
         // Component function
         output.push_str("@Composable\n");
