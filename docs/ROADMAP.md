@@ -30,7 +30,23 @@
 
 ---
 
-## Phase 2: Compilation (v0.2)
+## Phase 2: Routing (v0.2)
+**Goal: File-based routing with type-safe navigation**
+
+- [ ] Scan `src/routes/` directory structure
+- [ ] Parse `+page.wh` files and `[param]` syntax
+- [ ] Generate @Serializable route objects (Navigation 2.8+ compatible)
+- [ ] Generate sealed interface Routes hierarchy
+- [ ] Generate NavHost with `composable<T>` calls
+- [ ] Type-safe navigation API in components
+- [ ] Support dynamic parameters `[id]`
+- [ ] Support nested routes
+
+**Success metric:** Can create routes by adding files, navigate with type safety
+
+---
+
+## Phase 3: Compilation (v0.3)
 **Goal: Generate working Android code**
 
 - [ ] AST → Kotlin transpiler
@@ -44,7 +60,7 @@
 
 ---
 
-## Phase 2.5: Single-File Mode (v0.2.5)
+## Phase 2.5: Single-File Mode (v0.25)
 **Goal: Enable zero-config single-file apps**
 
 - [ ] Parse frontmatter configuration (TOML-style comments)
@@ -59,7 +75,7 @@
 
 ---
 
-## Phase 3: Development Loop (v0.3)
+## Phase 4: Development Loop (v0.4)
 **Goal: Fast iteration**
 
 - [ ] `whitehall run` - Build + deploy to emulator/device
@@ -71,7 +87,7 @@
 
 ---
 
-## Phase 4: Dependencies (v0.4)
+## Phase 5: Dependencies (v0.5)
 **Goal: Reusable components**
 
 - [ ] `whitehall install <dependency>` - Add libraries
@@ -81,7 +97,7 @@
 
 ---
 
-## Phase 5: Release & Polish (v0.5)
+## Phase 6: Release & Polish (v0.6)
 **Goal: Production-ready**
 
 - [ ] `whitehall build --release` - Optimized builds
