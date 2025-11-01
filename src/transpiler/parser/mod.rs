@@ -86,7 +86,7 @@ impl Parser {
             self.skip_whitespace();
             Some(self.read_until('\n').trim().to_string())
         } else {
-            self.skip_until('\n');
+            // No default value - we're done (whitespace including newline already skipped)
             None
         };
 
@@ -689,6 +689,10 @@ impl Parser {
                 } else {
                     break; // End of function parameter list
                 }
+            } else if c == '<' && paren_depth == 0 {
+                // Don't consume < unless we're inside parentheses (function types)
+                // This prevents consuming markup like <Text>
+                break;
             } else if c == '<' {
                 angle_depth += 1;
                 self.advance();
@@ -702,9 +706,9 @@ impl Parser {
                 || c == '.'
                 || c == '?'
                 || c == ' '
-                || c == '>'
-                || c == '-'  // for '->' in function types
-                || c == ':' // for '::' in function references
+                || (c == '>' && angle_depth == 0)  // Only consume > if we're closing angle brackets
+                || (c == '-' && paren_depth > 0)  // for '->' in function types
+                || (c == ':' && paren_depth > 0) // for '::' in function references
             {
                 self.advance();
             } else {
