@@ -1,5 +1,40 @@
 # UI/View DSL Syntax
 
+**Status:** 🔄 Partially Decided - See [Decision 004: Control Flow](./decisions/004-control-flow.md)
+
+## Decided Elements
+
+### Control Flow ✅
+
+**See [Decision 004](./decisions/004-control-flow.md) for full details.**
+
+```whitehall
+<!-- Conditionals -->
+@if (condition) {
+  <ComponentA />
+} else {
+  <ComponentB />
+}
+
+<!-- When expressions -->
+@when (state) {
+  State.Loading -> <Spinner />
+  State.Success -> <Content />
+}
+
+<!-- Iteration with keys -->
+@for (item in items, key = { it.id }) {
+  <ItemCard item={item} />
+} empty {
+  <EmptyState />
+}
+
+<!-- Short-circuit -->
+{isLoading && <Spinner />}
+```
+
+---
+
 ## Context
 
 The UI DSL is where developers spend most of their time. Goals:

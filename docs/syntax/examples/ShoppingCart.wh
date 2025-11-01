@@ -1,0 +1,159 @@
+// Example: Shopping Cart
+// Demonstrates complex control flow, computed values, and nested @for
+
+import com.example.models.CartItem
+import com.example.data.CartRepository
+
+<script>
+  @prop val onCheckout: (List<CartItem>) -> Unit
+
+  var items: List<CartItem> = emptyList()
+  var isLoading = true
+  var promoCode = ""
+  var isPromoValid = false
+
+  onMount {
+    items = CartRepository.getCartItems()
+    isLoading = false
+  }
+
+  val subtotal = items.sumOf { it.price * it.quantity }
+  val discount = if (isPromoValid) subtotal * 0.1 else 0.0
+  val tax = (subtotal - discount) * 0.08
+  val total = subtotal - discount + tax
+
+  fun removeItem(item: CartItem) {
+    items = items.filter { it.id != item.id }
+  }
+
+  fun updateQuantity(item: CartItem, newQuantity: Int) {
+    items = items.map {
+      if (it.id == item.id) it.copy(quantity = newQuantity) else it
+    }
+  }
+
+  fun applyPromo() {
+    isPromoValid = promoCode == "SAVE10"
+  }
+</script>
+
+<Scaffold
+  topBar={
+    <TopAppBar title="Shopping Cart" />
+  }
+>
+  <Column padding={16} spacing={16}>
+    @if (isLoading) {
+      <LoadingSpinner />
+    } else {
+      <!-- Cart items -->
+      @for (item in items, key = { it.id }) {
+        <Card>
+          <Row padding={12} spacing={12}>
+            <AsyncImage
+              url={item.imageUrl}
+              size={80}
+              cornerRadius={8}
+            />
+
+            <Column fill spacing={4}>
+              <Text fontSize={16} fontWeight="bold">{item.name}</Text>
+              <Text color="secondary" fontSize={14}>{item.description}</Text>
+              <Text fontSize={18} fontWeight="bold" color="primary">
+                ${item.price}
+              </Text>
+            </Column>
+
+            <!-- Quantity controls -->
+            <Row spacing={4}>
+              <IconButton
+                icon="remove"
+                onClick={() => updateQuantity(item, item.quantity - 1)}
+                disabled={item.quantity <= 1}
+              />
+              <Text fontSize={16}>{item.quantity}</Text>
+              <IconButton
+                icon="add"
+                onClick={() => updateQuantity(item, item.quantity + 1)}
+              />
+            </Row>
+
+            <IconButton
+              icon="delete"
+              onClick={() => removeItem(item)}
+            />
+          </Row>
+        </Card>
+      } empty {
+        <Card padding={32}>
+          <Column center spacing={16}>
+            <Icon name="shopping_cart" size={64} color="secondary" />
+            <Text fontSize={18} color="secondary">Your cart is empty</Text>
+            <Button text="Start Shopping" onClick={() => navigate("/shop")} />
+          </Column>
+        </Card>
+      }
+
+      <!-- Promo code (only show if cart has items) -->
+      @if (items.isNotEmpty()) {
+        <Divider />
+
+        <Row spacing={8}>
+          <Input
+            bind:value={promoCode}
+            placeholder="Promo code"
+            fill
+          />
+          <Button text="Apply" onClick={applyPromo} />
+        </Row>
+
+        {isPromoValid &&
+          <Card backgroundColor="successContainer">
+            <Text color="success" padding={12}>
+              Promo code applied! 10% discount
+            </Text>
+          </Card>
+        }
+
+        <!-- Price summary -->
+        <Card padding={16}>
+          <Column spacing={8}>
+            <Row spaceBetween>
+              <Text>Subtotal:</Text>
+              <Text>${subtotal.format(2)}</Text>
+            </Row>
+
+            {discount > 0 &&
+              <Row spaceBetween>
+                <Text color="success">Discount:</Text>
+                <Text color="success">-${discount.format(2)}</Text>
+              </Row>
+            }
+
+            <Row spaceBetween>
+              <Text>Tax:</Text>
+              <Text>${tax.format(2)}</Text>
+            </Row>
+
+            <Divider />
+
+            <Row spaceBetween>
+              <Text fontSize={18} fontWeight="bold">Total:</Text>
+              <Text fontSize={18} fontWeight="bold" color="primary">
+                ${total.format(2)}
+              </Text>
+            </Row>
+          </Column>
+        </Card>
+
+        <!-- Checkout button -->
+        <Button
+          text="Proceed to Checkout"
+          onClick={() => onCheckout(items)}
+          fill
+          size="large"
+        />
+      }
+    }
+  </Column>
+</Scaffold>

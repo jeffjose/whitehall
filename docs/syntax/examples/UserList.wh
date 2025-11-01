@@ -1,0 +1,94 @@
+// Example: User List with Control Flow
+// Demonstrates @if, @for with keys, empty state, and @when
+
+import com.example.models.User
+import com.example.data.UserRepository
+
+<script>
+  @prop val onUserClick: (User) -> Unit
+
+  var users: List<User>? = null
+  var isLoading = true
+  var error: String? = null
+  var filter = "all" // "all", "active", "inactive"
+
+  onMount {
+    UserRepository.fetchUsers()
+      .onSuccess { data ->
+        users = data
+        isLoading = false
+      }
+      .onFailure { e ->
+        error = e.message
+        isLoading = false
+      }
+  }
+
+  val filteredUsers = users?.filter { user ->
+    when (filter) {
+      "active" -> user.isActive
+      "inactive" -> !user.isActive
+      else -> true
+    }
+  } ?: emptyList()
+</script>
+
+<Column padding={16} spacing={16}>
+  <Text fontSize={24} fontWeight="bold">Users</Text>
+
+  <!-- Filter buttons -->
+  <Row spacing={8}>
+    <FilterButton
+      text="All"
+      active={filter == "all"}
+      onClick={() => filter = "all"}
+    />
+    <FilterButton
+      text="Active"
+      active={filter == "active"}
+      onClick={() => filter = "active"}
+    />
+    <FilterButton
+      text="Inactive"
+      active={filter == "inactive"}
+      onClick={() => filter = "inactive"}
+    />
+  </Row>
+
+  <!-- Loading/Error/Content states -->
+  @when {
+    isLoading -> <LoadingSpinner />
+    error != null -> <ErrorCard message={error!!} />
+    else -> {
+      @for (user in filteredUsers, key = { it.id }) {
+        <UserCard
+          user={user}
+          onClick={() => onUserClick(user)}
+        />
+      } empty {
+        <Card padding={24}>
+          <Column center spacing={8}>
+            <Icon name="person_off" size={48} color="secondary" />
+            <Text color="secondary" textAlign="center">
+              @when (filter) {
+                "active" -> "No active users"
+                "inactive" -> "No inactive users"
+                else -> "No users found"
+              }
+            </Text>
+          </Column>
+        </Card>
+      }
+    }
+  }
+
+  <!-- Summary footer (only show when loaded) -->
+  {!isLoading && users != null &&
+    <Divider />
+  }
+  {!isLoading && users != null &&
+    <Text color="secondary" fontSize={14}>
+      Total: {users.size} users ({filteredUsers.size} shown)
+    </Text>
+  }
+</Column>
