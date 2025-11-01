@@ -1,7 +1,6 @@
 // Profile route: /profile/:id
-// Generated as: Routes.Profile(id: String)
+// Generated as: $routes.profile(id: String)
 
-<script>
   @prop val id: String
 
   var user: User? = null
@@ -16,7 +15,6 @@
     posts = postsResult.getOrNull() ?: emptyList()
     isLoading = false
   }
-</script>
 
 <Scaffold
   topBar={

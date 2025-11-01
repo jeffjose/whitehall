@@ -286,7 +286,7 @@ src/
 │   ├── Home.wh
 │   └── Profile.wh
 └── routes/
-    └── +page.wh
+    └── +screen.wh
 ```
 
 **Imports:**

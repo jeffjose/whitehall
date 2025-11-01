@@ -34,7 +34,7 @@
 **Goal: File-based routing with type-safe navigation**
 
 - [ ] Scan `src/routes/` directory structure
-- [ ] Parse `+page.wh` files and `[param]` syntax
+- [ ] Parse `+screen.wh` files and `[param]` syntax
 - [ ] Generate @Serializable route objects (Navigation 2.8+ compatible)
 - [ ] Generate sealed interface Routes hierarchy
 - [ ] Generate NavHost with `composable<T>` calls

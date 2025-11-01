@@ -1,10 +1,8 @@
-<script>
-  var message = "Hello, Whitehall!"
+var message = "Hello, Whitehall!"
 
-  fun handleClick() {
-    message = "Button clicked!"
-  }
-</script>
+fun handleClick() {
+  message = "Button clicked!"
+}
 
 <Column padding={16} spacing={8}>
   <Text fontSize={24} fontWeight="bold">

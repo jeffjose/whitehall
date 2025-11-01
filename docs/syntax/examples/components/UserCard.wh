@@ -5,11 +5,9 @@
 import $shared.Avatar
 import $app.models.User
 
-<script>
   @prop val user: User
   @prop val onClick: (() -> Unit)? = null
   @prop val showEmail: Boolean = true
-</script>
 
 <Card onClick={onClick}>
   <Row padding={12} spacing={12}>

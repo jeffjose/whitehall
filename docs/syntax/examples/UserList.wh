@@ -4,7 +4,6 @@
 import com.example.models.User
 import com.example.data.UserRepository
 
-<script>
   @prop val onUserClick: (User) -> Unit
 
   var users: List<User>? = null
@@ -31,7 +30,6 @@ import com.example.data.UserRepository
       else -> true
     }
   } ?: emptyList()
-</script>
 
 <Column padding={16} spacing={16}>
   <Text fontSize={24} fontWeight="bold">Users</Text>

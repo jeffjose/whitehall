@@ -18,27 +18,27 @@ Routing is critical for developer experience. The question: **File-based magic**
 ```
 src/
 ├── routes/
-│   ├── +page.wh              # / (home screen)
+│   ├── +screen.wh              # / (home screen)
 │   ├── +layout.wh            # Root layout (optional)
 │   ├── login/
-│   │   └── +page.wh          # /login
+│   │   └── +screen.wh          # /login
 │   ├── profile/
-│   │   ├── +page.wh          # /profile
+│   │   ├── +screen.wh          # /profile
 │   │   └── [id]/
-│   │       └── +page.wh      # /profile/:id
+│   │       └── +screen.wh      # /profile/:id
 │   └── settings/
-│       ├── +page.wh          # /settings
+│       ├── +screen.wh          # /settings
 │       ├── account/
-│       │   └── +page.wh      # /settings/account
+│       │   └── +screen.wh      # /settings/account
 │       └── privacy/
-│           └── +page.wh      # /settings/privacy
+│           └── +screen.wh      # /settings/privacy
 └── components/
     └── Header.wh
 ```
 
 ### File Contents:
 
-**`src/routes/+page.wh`** (Home):
+**`src/routes/+screen.wh`** (Home):
 ```whitehall
 component HomePage() {
   render {
@@ -52,7 +52,7 @@ component HomePage() {
 }
 ```
 
-**`src/routes/profile/[id]/+page.wh`** (Dynamic route):
+**`src/routes/profile/[id]/+screen.wh`** (Dynamic route):
 ```whitehall
 component ProfilePage(id: String) {  // Route param automatically injected
   state {
@@ -228,10 +228,10 @@ fun AppNavigation() {
 ### File structure (same as Option A):
 ```
 src/routes/
-├── +page.wh              # Home
+├── +screen.wh              # Home
 ├── profile/
 │   └── [id]/
-│       └── +page.wh      # Profile with ID param
+│       └── +screen.wh      # Profile with ID param
 ```
 
 ### Generated API:
@@ -268,7 +268,7 @@ Button("View Profile", onClick: () => {
 ## Deep Linking
 
 ### Option A (Automatic from routes):
-File `src/routes/product/[id]/+page.wh` automatically handles:
+File `src/routes/product/[id]/+screen.wh` automatically handles:
 - `myapp://product/123`
 - `https://myapp.com/product/123`
 
@@ -328,11 +328,11 @@ src/routes/
 ├── (tabs)/            # Route group (doesn't affect URL)
 │   ├── +layout.wh     # Tabs layout
 │   ├── home/
-│   │   └── +page.wh
+│   │   └── +screen.wh
 │   ├── search/
-│   │   └── +page.wh
+│   │   └── +screen.wh
 │   └── profile/
-│       └── +page.wh
+│       └── +screen.wh
 ```
 
 **`(tabs)/+layout.wh`:**
@@ -368,22 +368,22 @@ component TabsLayout() {
 ### Option A (File-based):
 ```
 src/routes/
-├── +page.wh                    # Welcome/splash
+├── +screen.wh                    # Welcome/splash
 ├── (auth)/
-│   ├── login/+page.wh
-│   └── signup/+page.wh
+│   ├── login/+screen.wh
+│   └── signup/+screen.wh
 ├── (app)/
 │   ├── +layout.wh              # Bottom tabs
 │   ├── home/
-│   │   ├── +page.wh
-│   │   └── product/[id]/+page.wh
-│   ├── search/+page.wh
+│   │   ├── +screen.wh
+│   │   └── product/[id]/+screen.wh
+│   ├── search/+screen.wh
 │   └── profile/
-│       ├── +page.wh
+│       ├── +screen.wh
 │       └── settings/
-│           ├── +page.wh
-│           ├── account/+page.wh
-│           └── privacy/+page.wh
+│           ├── +screen.wh
+│           ├── account/+screen.wh
+│           └── privacy/+screen.wh
 ```
 
 ### Option D (Hybrid):
@@ -454,7 +454,7 @@ navigate(Routes.app.profile.settings.account())
    ```
    src/routes/
    ├── product/[id]/
-   │   ├── +page.wh
+   │   ├── +screen.wh
    │   └── @modal/        # Modal over product page?
-   │       └── share/+page.wh
+   │       └── share/+screen.wh
    ```

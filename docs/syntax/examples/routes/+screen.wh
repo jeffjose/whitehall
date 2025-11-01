@@ -1,13 +1,11 @@
 // Home route: /
-// Generated as: Routes.Home (object)
+// Generated as: $routes.home (object)
 
-<script>
   var recentPosts: List<Post> = emptyList()
 
   onMount {
     recentPosts = BlogRepository.getRecentPosts(limit = 5)
   }
-</script>
 
 <Scaffold
   topBar={

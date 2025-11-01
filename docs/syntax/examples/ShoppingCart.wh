@@ -4,7 +4,6 @@
 import com.example.models.CartItem
 import com.example.data.CartRepository
 
-<script>
   @prop val onCheckout: (List<CartItem>) -> Unit
 
   var items: List<CartItem> = emptyList()
@@ -35,7 +34,6 @@ import com.example.data.CartRepository
   fun applyPromo() {
     isPromoValid = promoCode == "SAVE10"
   }
-</script>
 
 <Scaffold
   topBar={

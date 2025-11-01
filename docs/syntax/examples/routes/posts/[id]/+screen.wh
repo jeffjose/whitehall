@@ -1,7 +1,6 @@
 // Post detail route: /posts/:id
 // Generated as: Routes.Posts.Detail(id: String)
 
-<script>
   @prop val id: String  // Route parameter auto-injected
 
   var post: Post? = null
@@ -17,7 +16,6 @@
         isLoading = false
       }
   }
-</script>
 
 <Scaffold
   topBar={
@@ -49,7 +47,7 @@
 
         <Button
           text="View Author Profile"
-          onClick={() => navigate(Routes.Profile(id = post.authorId))}
+          onClick={() => navigate($routes.profile(id = post.authorId))}
           variant="outlined"
         />
       </Column>

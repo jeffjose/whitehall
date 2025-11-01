@@ -5,7 +5,6 @@ import com.example.models.User
 import com.example.models.Address
 import com.example.data.AuthRepository
 
-<script>
   @prop val onSuccess: (User) -> Unit
   @prop val onCancel: () -> Unit
 
@@ -104,7 +103,6 @@ import com.example.data.AuthRepository
         // Show error
       }
   }
-</script>
 
 <Scaffold
   topBar={

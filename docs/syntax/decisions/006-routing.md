@@ -46,24 +46,24 @@ navController.navigate("profile/123")  // ❌ No type safety
 
 ```
 src/routes/
-├── +page.wh              # / (home)
+├── +screen.wh              # / (home)
 ├── login/
-│   └── +page.wh          # /login
+│   └── +screen.wh          # /login
 ├── profile/
-│   ├── +page.wh          # /profile
+│   ├── +screen.wh          # /profile
 │   └── [id]/
-│       └── +page.wh      # /profile/:id
+│       └── +screen.wh      # /profile/:id
 └── settings/
-    ├── +page.wh          # /settings
+    ├── +screen.wh          # /settings
     ├── account/
-    │   └── +page.wh      # /settings/account
+    │   └── +screen.wh      # /settings/account
     └── privacy/
-        └── +page.wh      # /settings/privacy
+        └── +screen.wh      # /settings/privacy
 ```
 
 ### Route File
 
-**`src/routes/profile/[id]/+page.wh`:**
+**`src/routes/profile/[id]/+screen.wh`:**
 ```whitehall
 <script>
   @prop val id: String  // Route parameter automatically injected
@@ -202,18 +202,18 @@ navigate(Route.Settings.Account)
 
 ```
 src/routes/
-├── +page.wh              # / → Routes.Home
+├── +screen.wh              # / → $routes.home
 ├── login/
-│   └── +page.wh          # /login → Routes.Login
+│   └── +screen.wh          # /login → $routes.login
 ├── profile/
 │   └── [id]/
-│       └── +page.wh      # /profile/:id → Routes.Profile(id)
+│       └── +screen.wh      # /profile/:id → $routes.profile(id)
 └── settings/
-    ├── +page.wh          # /settings → Routes.Settings.Index
+    ├── +screen.wh          # /settings → $routes.settings.Index
     ├── account/
-    │   └── +page.wh      # /settings/account → Routes.Settings.Account
+    │   └── +screen.wh      # /settings/account → $routes.settings.Account
     └── privacy/
-        └── +page.wh      # /settings/privacy → Routes.Settings.Privacy
+        └── +screen.wh      # /settings/privacy → $routes.settings.Privacy
 ```
 
 ### Generated Type-Safe API (Navigation 2.8+ Compatible)
@@ -240,29 +240,29 @@ sealed interface Routes {
 ### Generated NavHost
 
 ```kotlin
-NavHost(navController, startDestination = Routes.Home) {
-  composable<Routes.Home> {
+NavHost(navController, startDestination = $routes.home) {
+  composable<$routes.home> {
     HomePage()
   }
 
-  composable<Routes.Login> {
+  composable<$routes.login> {
     LoginPage()
   }
 
-  composable<Routes.Profile> { backStackEntry ->
-    val route = backStackEntry.toRoute<Routes.Profile>()
+  composable<$routes.profile> { backStackEntry ->
+    val route = backStackEntry.toRoute<$routes.profile>()
     ProfilePage(id = route.id)
   }
 
-  composable<Routes.Settings.Index> {
+  composable<$routes.settings.Index> {
     SettingsPage()
   }
 
-  composable<Routes.Settings.Account> {
+  composable<$routes.settings.Account> {
     SettingsAccountPage()
   }
 
-  composable<Routes.Settings.Privacy> {
+  composable<$routes.settings.Privacy> {
     SettingsPrivacyPage()
   }
 }
@@ -273,15 +273,15 @@ NavHost(navController, startDestination = Routes.Home) {
 ```whitehall
 <script>
   fun goToProfile(userId: String) {
-    navigate(Routes.Profile(id = userId))  // Type-safe!
+    navigate($routes.profile(id = userId))  // Type-safe!
   }
 </script>
 
 <Column>
-  <Button text="Home" onClick={() => navigate(Routes.Home)} />
-  <Button text="Login" onClick={() => navigate(Routes.Login)} />
+  <Button text="Home" onClick={() => navigate($routes.home)} />
+  <Button text="Login" onClick={() => navigate($routes.login)} />
   <Button text="Profile" onClick={() => goToProfile("123")} />
-  <Button text="Settings" onClick={() => navigate(Routes.Settings.Account)} />
+  <Button text="Settings" onClick={() => navigate($routes.settings.Account)} />
 </Column>
 ```
 
@@ -304,7 +304,7 @@ NavHost(navController, startDestination = Routes.Home) {
 
 ### Dynamic Segments
 
-**File:** `src/routes/post/[id]/+page.wh`
+**File:** `src/routes/post/[id]/+screen.wh`
 
 ```whitehall
 <script>
@@ -332,7 +332,7 @@ navigate(Routes.post("123"))
 
 ### Multiple Parameters
 
-**File:** `src/routes/users/[userId]/posts/[postId]/+page.wh`
+**File:** `src/routes/users/[userId]/posts/[postId]/+screen.wh`
 
 ```whitehall
 <script>
@@ -355,7 +355,7 @@ navigate(Routes.users.posts(userId = "42", postId = "123"))
 
 ### Optional Parameters
 
-**File:** `src/routes/search/[[query]]/+page.wh`
+**File:** `src/routes/search/[[query]]/+screen.wh`
 
 Double brackets = optional
 
@@ -382,7 +382,7 @@ navigate(Routes.search("android"))  // /search/android
 
 ### Catch-All Routes
 
-**File:** `src/routes/docs/[...path]/+page.wh`
+**File:** `src/routes/docs/[...path]/+screen.wh`
 
 ```whitehall
 <script>
@@ -450,17 +450,17 @@ src/routes/
 ├── (app)/
 │   ├── +layout.wh        # Layout for app routes
 │   ├── home/
-│   │   └── +page.wh
+│   │   └── +screen.wh
 │   ├── profile/
-│   │   └── +page.wh
+│   │   └── +screen.wh
 │   └── settings/
-│       └── +page.wh
+│       └── +screen.wh
 └── (auth)/
     ├── +layout.wh        # Different layout for auth
     ├── login/
-    │   └── +page.wh
+    │   └── +screen.wh
     └── signup/
-        └── +page.wh
+        └── +screen.wh
 ```
 
 **`(app)/+layout.wh`:**
@@ -527,7 +527,7 @@ guards {
 
 Every route automatically supports deep linking:
 
-**File:** `src/routes/product/[id]/+page.wh`
+**File:** `src/routes/product/[id]/+screen.wh`
 
 Automatically handles:
 - `myapp://product/123`
@@ -597,33 +597,33 @@ popTo(Routes.home())
 
 ```
 src/routes/
-├── +page.wh                          # Home / splash
+├── +screen.wh                          # Home / splash
 ├── (auth)/
-│   ├── login/+page.wh
-│   └── signup/+page.wh
+│   ├── login/+screen.wh
+│   └── signup/+screen.wh
 ├── (shop)/
 │   ├── +layout.wh                    # Bottom nav layout
-│   ├── home/+page.wh
+│   ├── home/+screen.wh
 │   ├── search/
-│   │   └── [[query]]/+page.wh
+│   │   └── [[query]]/+screen.wh
 │   ├── categories/
-│   │   ├── +page.wh
-│   │   └── [categoryId]/+page.wh
+│   │   ├── +screen.wh
+│   │   └── [categoryId]/+screen.wh
 │   ├── products/
 │   │   └── [productId]/
-│   │       ├── +page.wh
-│   │       └── reviews/+page.wh
-│   └── cart/+page.wh
+│   │       ├── +screen.wh
+│   │       └── reviews/+screen.wh
+│   └── cart/+screen.wh
 └── (account)/
     ├── +layout.wh                    # Account layout
-    ├── profile/+page.wh
+    ├── profile/+screen.wh
     ├── orders/
-    │   ├── +page.wh
-    │   └── [orderId]/+page.wh
+    │   ├── +screen.wh
+    │   └── [orderId]/+screen.wh
     └── settings/
-        ├── +page.wh
-        ├── account/+page.wh
-        └── privacy/+page.wh
+        ├── +screen.wh
+        ├── account/+screen.wh
+        └── privacy/+screen.wh
 ```
 
 ### Generated Routes API
@@ -704,7 +704,7 @@ Our approach **fully compatible** with Navigation 2.8+/3.0:
 | File-based routes | @Serializable route objects |
 | `[id]` parameters | `data class Route(val id: String)` |
 | Generated Routes | Kotlin sealed interfaces |
-| `navigate(Routes.Profile(id))` | `navController.navigate(Profile(id))` |
+| `navigate($routes.profile(id))` | `navController.navigate(Profile(id))` |
 | Auto-generated NavHost | `composable<RouteType>` |
 
 **Dependencies auto-added:**
@@ -738,7 +738,7 @@ plugins {
 
 ### Phase 1 Features
 
-- File-based routes with `+page.wh`
+- File-based routes with `+screen.wh`
 - Dynamic parameters `[id]`
 - Nested routes
 - Generated Routes object
@@ -762,30 +762,30 @@ plugins {
 
 ### What This Means
 
-1. **File structure defines routes** - Create `src/routes/profile/[id]/+page.wh` → Route exists
+1. **File structure defines routes** - Create `src/routes/profile/[id]/+screen.wh` → Route exists
 2. **Compiler generates @Serializable objects** - Following Navigation 2.8+ patterns
-3. **Type-safe navigation** - `navigate(Routes.Profile(id = "123"))`
+3. **Type-safe navigation** - `navigate($routes.profile(id = "123"))`
 4. **Standard Compose Navigation** - Uses official `composable<T>` API
 5. **Auto-generated NavHost** - No manual route configuration
 
 ### Example Generated Code
 
-**From file:** `src/routes/profile/[id]/+page.wh`
+**From file:** `src/routes/profile/[id]/+screen.wh`
 
 **Generates:**
 ```kotlin
 @Serializable
 data class Profile(val id: String) : Routes
 
-composable<Routes.Profile> { backStackEntry ->
-  val route = backStackEntry.toRoute<Routes.Profile>()
+composable<$routes.profile> { backStackEntry ->
+  val route = backStackEntry.toRoute<$routes.profile>()
   ProfilePage(id = route.id)
 }
 ```
 
 ### Phase 1 Implementation
 
-- File-based routes with `+page.wh`
+- File-based routes with `+screen.wh`
 - Dynamic parameters `[id]`
 - Nested routes
 - Generated @Serializable Routes sealed interface
@@ -807,7 +807,7 @@ composable<Routes.Profile> { backStackEntry ->
 ## Open Questions for Future
 
 1. **Route naming convention?**
-   - Decision: `+page.wh` (SvelteKit-style) for Phase 1
+   - Decision: `+screen.wh` (SvelteKit-style) for Phase 1
    - Consider `index.wh` as alternative
 
 2. **Special files?**
@@ -819,9 +819,9 @@ composable<Routes.Profile> { backStackEntry ->
    Phase 2 consideration:
    ```
    products/[id]/
-   ├── +page.wh
+   ├── +screen.wh
    └── @modal/
-       └── share/+page.wh  # Modal overlay
+       └── share/+screen.wh  # Modal overlay
    ```
 
 4. **Tab navigation?**
