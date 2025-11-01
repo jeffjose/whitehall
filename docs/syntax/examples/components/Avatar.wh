@@ -1,0 +1,18 @@
+// Shared Avatar component
+// Location: src/shared/Avatar.wh
+// Import as: import $shared.Avatar
+
+<script>
+  @prop val url: String
+  @prop val size: Int = 48
+  @prop val onClick: (() -> Unit)? = null
+</script>
+
+<AsyncImage
+  url={url}
+  width={size}
+  height={size}
+  cornerRadius={size / 2}
+  onClick={onClick}
+  contentDescription="Avatar"
+/>
