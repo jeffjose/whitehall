@@ -44,6 +44,21 @@
 
 ---
 
+## Phase 2.5: Single-File Mode (v0.2.5)
+**Goal: Enable zero-config single-file apps**
+
+- [ ] Parse frontmatter configuration (TOML-style comments)
+- [ ] Extract inline dependencies from frontmatter
+- [ ] `whitehall run <file.wh>` - Single-file execution
+- [ ] `whitehall build <file.wh>` - Build APK from single file
+- [ ] Temporary project generation in `.whitehall/tmp/`
+- [ ] Build caching for single-file apps
+- [ ] `whitehall split <file.wh>` - Convert single-file to project
+
+**Success metric:** Can write a complete app in one `.wh` file and run it instantly
+
+---
+
 ## Phase 3: Development Loop (v0.3)
 **Goal: Fast iteration**
 

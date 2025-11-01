@@ -32,7 +32,79 @@
 └─────────────────────────────────────┘
 ```
 
-### 3. Project Structure
+### 3. Execution Modes: Single-File vs Project
+
+Whitehall supports two distinct execution modes, inspired by the `rustc` vs `cargo` distinction:
+
+#### Single-File Mode
+
+For learning, prototyping, and sharing. A complete Android app in one `.wh` file.
+
+**Example: `counter.wh`**
+```whitehall
+/// [app]
+/// name = "Counter"
+/// package = "com.example.counter"
+/// minSdk = 24
+///
+/// [dependencies]
+/// androidx.compose.material3 = "1.2.0"
+
+component App()
+
+<script>
+  state { count = 0 }
+</script>
+
+<Column>
+  <Text>{count}</Text>
+  <Button onClick={() => count++}>Increment</Button>
+</Column>
+```
+
+**Usage:**
+```bash
+whitehall run counter.wh        # Compile & run
+whitehall build counter.wh      # Build APK
+```
+
+**How it works:**
+1. Parse TOML frontmatter (lines starting with `///`)
+2. Extract app config and dependencies
+3. Generate temporary project structure in `.whitehall/tmp/<hash>/`
+4. Create synthetic `Whitehall.toml` from frontmatter
+5. Compile using normal project pipeline
+6. Cache builds for fast re-runs
+7. Clean up on completion (keep cache)
+
+**Frontmatter format (uv-style):**
+- Lines starting with `///` are frontmatter
+- Must be at the top of the file
+- TOML format: `/// key = "value"`
+- Supports `[app]` and `[dependencies]` sections
+
+#### Project Mode
+
+For production apps with multiple screens, shared components, and team development.
+
+**Usage:**
+```bash
+whitehall init my-app           # Create project
+cd my-app
+whitehall run                   # Build & run
+```
+
+**When to use each:**
+- **Single-file:** Tutorials, examples, quick experiments, sharing code snippets
+- **Project:** Real apps, multiple screens, shared state, team collaboration
+
+**Transition path:**
+```bash
+whitehall split counter.wh      # Convert to project
+# Creates counter/ directory with proper structure
+```
+
+### 4. Project Structure
 
 A Whitehall project looks like:
 
@@ -55,7 +127,7 @@ my-app/
     └── settings.gradle
 ```
 
-### 4. Compilation Pipeline
+### 5. Compilation Pipeline
 
 ```
 .wh files → Lexer → Tokens → Parser → AST → Analyzer → IR → Kotlin Generator → .kt files
@@ -69,7 +141,7 @@ my-app/
 - **Incremental:** Only recompile changed files
 - **Cached:** Store compilation artifacts
 
-### 5. The .whitehall File Format
+### 6. The .whitehall File Format
 
 Initial concept (subject to evolution):
 
@@ -102,7 +174,7 @@ component LoginScreen {
 
 This transpiles to idiomatic Kotlin with Jetpack Compose.
 
-### 6. Scaling Considerations
+### 7. Scaling Considerations
 
 **From the start:**
 - Modular crate structure (workspace)
@@ -115,7 +187,7 @@ This transpiles to idiomatic Kotlin with Jetpack Compose.
 - Custom optimization passes
 - Alternative backends (Swift for iOS?)
 
-### 7. Configuration: Whitehall.toml
+### 8. Configuration: Whitehall.toml
 
 Inspired by `Cargo.toml`:
 
@@ -138,7 +210,7 @@ package = "com.example.myapp"
 optimize_level = "default"  # or "aggressive"
 ```
 
-### 8. Error Handling Philosophy
+### 9. Error Handling Philosophy
 
 Learn from Rust compiler:
 - Precise error locations

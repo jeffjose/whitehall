@@ -19,6 +19,11 @@ Web developers have `npm`/`pnpm` + bundlers. Rust has `cargo`. iOS has Swift Pac
 A single Rust-based CLI that handles everything:
 
 ```bash
+# Single-file mode (like rustc or Python's uv)
+whitehall run app.wh            # Run a complete app from one file
+whitehall build app.wh          # Build APK from single file
+
+# Project mode (like cargo)
 whitehall init my-app           # Scaffold new project
 whitehall build                 # Compile .whitehall → Kotlin/Java
 whitehall build --release       # Production builds
@@ -27,6 +32,20 @@ whitehall test                  # Run tests
 whitehall install <dependency>  # Add dependencies
 whitehall publish               # Publish to Play Store
 ```
+
+### Two Modes, One Tool
+
+**Single-file mode** - Perfect for learning, prototyping, and sharing:
+- Complete Android apps in a single `.wh` file
+- Inline dependency declarations (like Python's uv)
+- Zero boilerplate - just write your app
+- Instant sharing - paste a file, run it
+
+**Project mode** - For production apps:
+- Structured file organization
+- File-based routing
+- Shared components and assets
+- Team-ready architecture
 
 ## Core Principles
 
