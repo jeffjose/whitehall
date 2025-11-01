@@ -6,7 +6,7 @@
 
 ## Context
 
-Single-file apps need a way to specify configuration (app name, package, dependencies) without a separate `Whitehall.toml` file.
+Single-file apps need a way to specify configuration (app name, package, dependencies) without a separate `whitehall.toml` file.
 
 ## Options Considered
 
@@ -49,7 +49,7 @@ Single-file apps need a way to specify configuration (app name, package, depende
 - Standard TOML syntax (no new format to learn)
 - Easy to parse (just strip `///` prefix and parse as TOML)
 - Visually distinct from code
-- Can be copy-pasted to/from `Whitehall.toml`
+- Can be copy-pasted to/from `whitehall.toml`
 - Triple-slash comments are not commonly used in other contexts
 
 ## Implementation Notes
@@ -58,7 +58,7 @@ Single-file apps need a way to specify configuration (app name, package, depende
 - Only lines starting with `///` (exactly three slashes) are frontmatter
 - Empty frontmatter lines: `///` (no space needed)
 - Parsing stops at first non-frontmatter line
-- Use `toml` crate for parsing (same as `Whitehall.toml`)
+- Use `toml` crate for parsing (same as `whitehall.toml`)
 
 ## Examples
 

@@ -1,0 +1,168 @@
+// Signup screen
+// Route: /signup → Routes.Signup
+
+import $lib.api.ApiClient
+import kotlinx.coroutines.launch
+
+<script>
+  var username = ""
+  var email = ""
+  var password = ""
+  var confirmPassword = ""
+  var isLoading = false
+
+  var usernameError: String? = null
+  var emailError: String? = null
+  var passwordError: String? = null
+  var confirmPasswordError: String? = null
+
+  fun validateUsername(value: String) {
+    username = value
+    usernameError = when {
+      value.isEmpty() -> "Username required"
+      value.length < 3 -> "Username too short (min 3 chars)"
+      !value.matches(Regex("[a-zA-Z0-9_]+")) -> "Only letters, numbers, underscore"
+      else -> null
+    }
+  }
+
+  fun validateEmail(value: String) {
+    email = value
+    emailError = when {
+      value.isEmpty() -> "Email required"
+      !value.contains("@") -> "Invalid email format"
+      else -> null
+    }
+  }
+
+  fun validatePassword(value: String) {
+    password = value
+    passwordError = when {
+      value.isEmpty() -> "Password required"
+      value.length < 6 -> "Password too short (min 6 chars)"
+      else -> null
+    }
+
+    // Re-validate confirm password
+    if (confirmPassword.isNotEmpty()) {
+      confirmPasswordError = if (confirmPassword != value) {
+        "Passwords don't match"
+      } else null
+    }
+  }
+
+  fun validateConfirmPassword(value: String) {
+    confirmPassword = value
+    confirmPasswordError = when {
+      value.isEmpty() -> "Please confirm password"
+      value != password -> "Passwords don't match"
+      else -> null
+    }
+  }
+
+  val isValid =
+    usernameError == null &&
+    emailError == null &&
+    passwordError == null &&
+    confirmPasswordError == null &&
+    username.isNotEmpty() &&
+    email.isNotEmpty() &&
+    password.isNotEmpty() &&
+    confirmPassword.isNotEmpty()
+
+  fun handleSignup() {
+    if (!isValid) return
+
+    isLoading = true
+
+    launch {
+      ApiClient.signup(username, email, password)
+        .onSuccess { token ->
+          isLoading = false
+          navigate(Routes.Home)
+        }
+        .onFailure { error ->
+          isLoading = false
+          // Show error
+        }
+    }
+  }
+</script>
+
+<Scaffold
+  topBar={
+    <TopAppBar
+      title="Create Account"
+      navigationIcon="back"
+      onNavigationClick={() => goBack()}
+    />
+  }
+>
+  <Column padding={16} spacing={16}>
+    <Text fontSize={20} fontWeight="bold">
+      Join Microblog
+    </Text>
+
+    <!-- Username -->
+    <Input
+      value={username}
+      onValueChange={validateUsername}
+      error={usernameError}
+      label="Username"
+      placeholder="Choose a username"
+      enabled={!isLoading}
+      fill
+    />
+
+    <!-- Email -->
+    <Input
+      value={email}
+      onValueChange={validateEmail}
+      error={emailError}
+      label="Email"
+      placeholder="your@email.com"
+      keyboardType="email"
+      enabled={!isLoading}
+      fill
+    />
+
+    <!-- Password -->
+    <Input
+      value={password}
+      onValueChange={validatePassword}
+      error={passwordError}
+      label="Password"
+      placeholder="Min 6 characters"
+      type="password"
+      enabled={!isLoading}
+      fill
+    />
+
+    <!-- Confirm Password -->
+    <Input
+      value={confirmPassword}
+      onValueChange={validateConfirmPassword}
+      error={confirmPasswordError}
+      label="Confirm Password"
+      type="password"
+      enabled={!isLoading}
+      fill
+    />
+
+    <Button
+      text={isLoading ? "Creating Account..." : "Sign Up"}
+      onClick={handleSignup}
+      disabled={!isValid || isLoading}
+      fill
+    />
+
+    <!-- Login link -->
+    <Row center spacing={4}>
+      <Text color="secondary">Already have an account?</Text>
+      <TextButton
+        text="Login"
+        onClick={() => navigate(Routes.Login)}
+      />
+    </Row>
+  </Column>
+</Scaffold>

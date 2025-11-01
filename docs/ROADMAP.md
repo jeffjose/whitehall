@@ -6,10 +6,10 @@
 - [x] Basic CLI structure with `clap`
 - [x] `whitehall init` - Project scaffolding
   - [x] Create project directory structure
-  - [x] Generate `Whitehall.toml` manifest
+  - [x] Generate `whitehall.toml` manifest
   - [x] Create sample `.wh` file
   - [x] Generate `.gitignore`
-- [x] Define initial `Whitehall.toml` schema
+- [x] Define initial `whitehall.toml` schema
 - [x] Documentation structure (VISION, ROADMAP, ARCHITECTURE)
 
 **Success metric:** ✓ Can run `whitehall init my-app` and get a valid project structure

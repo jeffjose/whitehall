@@ -1,0 +1,153 @@
+// Post detail screen with comments
+// Route: /post/:id → Routes.Post.Detail(id)
+
+import $components.{ Avatar, CommentItem }
+import $lib.api.ApiClient
+import $models.{ Post, Comment }
+import kotlinx.coroutines.launch
+
+<script>
+  @prop val id: String  // Route parameter
+
+  var post: Post? = null
+  var comments: List<Comment> = emptyList()
+  var isLoading = true
+
+  var commentText = ""
+  var isPostingComment = false
+
+  onMount {
+    launch {
+      val postResult = ApiClient.getPost(id)
+      val commentsResult = ApiClient.getComments(id)
+
+      post = postResult.getOrNull()
+      comments = commentsResult.getOrNull() ?: emptyList()
+      isLoading = false
+    }
+  }
+
+  fun handlePostComment() {
+    if (commentText.trim().isEmpty()) return
+
+    isPostingComment = true
+
+    launch {
+      ApiClient.postComment(id, commentText)
+        .onSuccess { newComment ->
+          comments = listOf(newComment) + comments
+          commentText = ""
+          isPostingComment = false
+        }
+        .onFailure {
+          isPostingComment = false
+        }
+    }
+  }
+
+  fun formatTimestamp(timestamp: Long): String {
+    val diff = System.currentTimeMillis() - timestamp
+    val hours = diff / 3600000
+    val days = hours / 24
+
+    return when {
+      hours < 1 -> "just now"
+      hours < 24 -> "${hours}h ago"
+      days < 7 -> "${days}d ago"
+      else -> "${days / 7}w ago"
+    }
+  }
+</script>
+
+<Scaffold
+  topBar={
+    <TopAppBar
+      title="Post"
+      navigationIcon="back"
+      onNavigationClick={() => goBack()}
+    />
+  }
+>
+  @if (isLoading) {
+    <LoadingSpinner center />
+  } else if (post == null) {
+    <ErrorView message="Post not found" />
+  } else {
+    <Column fill>
+      <!-- Post content -->
+      <Column padding={12} spacing={8}>
+        <Row
+          spacing={8}
+          onClick={() => navigate(Routes.Profile(id = post.authorId))}
+        >
+          <Avatar url={post.authorAvatar} size={48} />
+
+          <Column>
+            <Text fontSize={16} fontWeight="bold">
+              {post.authorName}
+            </Text>
+            <Text fontSize={12} color="secondary">
+              @{post.authorId} · {formatTimestamp(post.timestamp)}
+            </Text>
+          </Column>
+        </Row>
+
+        <Text fontSize={16}>
+          {post.content}
+        </Text>
+
+        <!-- Stats -->
+        <Row spacing={16} padding={8}>
+          <Row spacing={4}>
+            <Icon name="favorite" size={20} color="secondary" />
+            <Text fontSize={14} color="secondary">
+              {post.likesCount}
+            </Text>
+          </Row>
+
+          <Row spacing={4}>
+            <Icon name="comment" size={20} color="secondary" />
+            <Text fontSize={14} color="secondary">
+              {post.commentsCount}
+            </Text>
+          </Row>
+        </Row>
+      </Column>
+
+      <Divider />
+
+      <!-- Comment input -->
+      <Row padding={12} spacing={8}>
+        <Input
+          bind:value={commentText}
+          placeholder="Add a comment..."
+          enabled={!isPostingComment}
+          fill
+        />
+
+        <IconButton
+          icon="send"
+          onClick={handlePostComment}
+          disabled={commentText.trim().isEmpty() || isPostingComment}
+        />
+      </Row>
+
+      <Divider />
+
+      <!-- Comments list -->
+      <LazyColumn fill>
+        @for (comment in comments, key = { it.id }) {
+          <CommentItem comment={comment} />
+          <Divider />
+        } empty {
+          <Column center padding={32}>
+            <Text color="secondary">No comments yet</Text>
+            <Text color="secondary" fontSize={14}>
+              Be the first to comment!
+            </Text>
+          </Column>
+        }
+      </LazyColumn>
+    </Column>
+  }
+</Scaffold>

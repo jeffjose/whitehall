@@ -162,7 +162,7 @@ src/
     └── Avatar.wh          # Package: com.example.shared
 ```
 
-**In Whitehall.toml:**
+**In whitehall.toml:**
 ```toml
 [project]
 name = "my-app"
@@ -443,7 +443,7 @@ import com.example.components.*
 ### Syntax
 
 ```whitehall
-// Using $ aliases (configured in Whitehall.toml)
+// Using $ aliases (configured in whitehall.toml)
 import $app.components.Button
 import $shared.Avatar
 import $lib.utils.Helper
@@ -465,7 +465,7 @@ import $app.ui.Button as UIButton
 import com.material.Button as MaterialButton
 ```
 
-### Configuration (Whitehall.toml)
+### Configuration (whitehall.toml)
 
 ```toml
 [project]
@@ -495,7 +495,7 @@ src/lib/utils/Helper.wh      → {package}.lib.utils.Helper
 src/screens/Home.wh          → {package}.screens.Home
 ```
 
-Where `{package}` = base package from Whitehall.toml
+Where `{package}` = base package from whitehall.toml
 
 ### Benefits
 
@@ -680,7 +680,7 @@ import androidx.compose.material3.Card
 ```
 
 The compiler:
-1. Reads `Whitehall.toml` for alias mappings
+1. Reads `whitehall.toml` for alias mappings
 2. Expands `$` aliases to full package paths
 3. Generates standard Kotlin imports
 

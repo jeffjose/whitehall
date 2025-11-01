@@ -25,8 +25,8 @@ fn test_init_creates_project_structure() {
 
     // Verify files exist
     assert!(
-        project_path.join("Whitehall.toml").exists(),
-        "Whitehall.toml should exist"
+        project_path.join("whitehall.toml").exists(),
+        "whitehall.toml should exist"
     );
     assert!(
         project_path.join("src").exists(),
@@ -60,8 +60,8 @@ fn test_init_substitutes_project_name() {
     // Execute init command
     init::execute(project_name).unwrap();
 
-    // Read Whitehall.toml
-    let manifest_content = fs::read_to_string(project_path.join("Whitehall.toml")).unwrap();
+    // Read whitehall.toml
+    let manifest_content = fs::read_to_string(project_path.join("whitehall.toml")).unwrap();
 
     // Verify project name substitution
     assert!(
@@ -94,7 +94,7 @@ fn test_init_handles_different_naming_conventions() {
 
         init::execute(input_name).unwrap();
 
-        let manifest_content = fs::read_to_string(project_path.join("Whitehall.toml")).unwrap();
+        let manifest_content = fs::read_to_string(project_path.join("whitehall.toml")).unwrap();
 
         assert!(
             manifest_content.contains(&format!("package = \"com.example.{}\"", expected_snake)),

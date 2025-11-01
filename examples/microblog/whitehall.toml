@@ -1,0 +1,20 @@
+[project]
+name = "microblog"
+version = "0.1.0"
+package = "com.example.microblog"
+
+[android]
+min_sdk = 26
+target_sdk = 34
+
+[imports.aliases]
+# Define $ prefix aliases for imports
+app = "com.example.microblog"
+components = "com.example.microblog.components"
+models = "com.example.microblog.models"
+lib = "com.example.microblog.lib"
+
+[dependencies]
+# These will be added to generated build.gradle
+# androidx.compose.material3 = "1.2.0"
+# coil = "2.5.0"  # For image loading

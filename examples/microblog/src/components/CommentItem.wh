@@ -1,0 +1,37 @@
+// CommentItem component - displays a single comment
+
+import $models.Comment
+
+<script>
+  @prop val comment: Comment
+
+  fun formatTimestamp(timestamp: Long): String {
+    val diff = System.currentTimeMillis() - timestamp
+    val hours = diff / 3600000
+
+    return when {
+      hours < 1 -> "just now"
+      hours < 24 -> "${hours}h ago"
+      else -> "${hours / 24}d ago"
+    }
+  }
+</script>
+
+<Row padding={12} spacing={8}>
+  <Avatar url={comment.authorAvatar} size={32} />
+
+  <Column fill spacing={4}>
+    <Row spacing={4}>
+      <Text fontSize={14} fontWeight="bold">
+        {comment.authorName}
+      </Text>
+      <Text fontSize={12} color="secondary">
+        {formatTimestamp(comment.timestamp)}
+      </Text>
+    </Row>
+
+    <Text fontSize={14}>
+      {comment.content}
+    </Text>
+  </Column>
+</Row>

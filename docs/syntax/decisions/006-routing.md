@@ -536,7 +536,7 @@ Automatically handles:
 ### Custom Deep Link Configuration
 
 ```whitehall
-// Whitehall.toml
+// whitehall.toml
 [android]
 deepLinks = [
   { scheme = "myapp", host = "product" },

@@ -1,0 +1,86 @@
+// Home feed screen
+// Route: / → Routes.Home
+
+import $components.PostCard
+import $lib.api.ApiClient
+import $models.Post
+import kotlinx.coroutines.launch
+
+<script>
+  var posts: List<Post> = emptyList()
+  var isLoading = true
+  var isRefreshing = false
+
+  onMount {
+    loadFeed()
+  }
+
+  fun loadFeed() {
+    launch {
+      ApiClient.getFeed()
+        .onSuccess { data ->
+          posts = data
+          isLoading = false
+          isRefreshing = false
+        }
+        .onFailure {
+          isLoading = false
+          isRefreshing = false
+        }
+    }
+  }
+
+  fun handleRefresh() {
+    isRefreshing = true
+    loadFeed()
+  }
+
+  fun handleUserClick(userId: String) {
+    navigate(Routes.Profile(id = userId))
+  }
+
+  fun handlePostClick(postId: String) {
+    navigate(Routes.Post.Detail(id = postId))
+  }
+</script>
+
+<Scaffold
+  topBar={
+    <TopAppBar title="Microblog" />
+  }
+  floatingActionButton={
+    <FloatingActionButton
+      icon="add"
+      onClick={() => navigate(Routes.Post.Create)}
+    />
+  }
+>
+  @if (isLoading) {
+    <LoadingSpinner center />
+  } else {
+    <Column fill>
+      <!-- Pull to refresh indicator -->
+      {isRefreshing && <LinearProgressIndicator />}
+
+      <!-- Feed -->
+      <LazyColumn fill>
+        @for (post in posts, key = { it.id }) {
+          <PostCard
+            post={post}
+            onUserClick={handleUserClick}
+            onPostClick={handlePostClick}
+          />
+        } empty {
+          <Column center padding={32} spacing={16}>
+            <Icon name="article" size={64} color="secondary" />
+            <Text color="secondary">No posts yet</Text>
+            <Button
+              text="Create First Post"
+              onClick={() => navigate(Routes.Post.Create)}
+            />
+          </Column>
+        }
+      </LazyColumn>
+    </Column>
+  }
+</Scaffold>

@@ -1,0 +1,98 @@
+// Login screen
+// Route: /login → Routes.Login
+
+import $lib.api.ApiClient
+import kotlinx.coroutines.launch
+
+<script>
+  var username = ""
+  var password = ""
+  var isLoading = false
+  var errorMessage: String? = null
+
+  val isValid = username.isNotEmpty() && password.length >= 6
+
+  fun handleLogin() {
+    isLoading = true
+    errorMessage = null
+
+    launch {
+      ApiClient.login(username, password)
+        .onSuccess { token ->
+          // Store token and navigate to home
+          isLoading = false
+          navigate(Routes.Home)
+        }
+        .onFailure { error ->
+          errorMessage = error.message
+          isLoading = false
+        }
+    }
+  }
+</script>
+
+<Scaffold>
+  <Column
+    padding={16}
+    spacing={16}
+    fill
+    verticalArrangement="Center"
+  >
+    <Column spacing={8} center>
+      <Icon name="microblog" size={64} color="primary" />
+      <Text fontSize={32} fontWeight="bold">
+        Microblog
+      </Text>
+      <Text color="secondary">
+        Welcome back!
+      </Text>
+    </Column>
+
+    <Spacer height={32} />
+
+    <!-- Username input -->
+    <Input
+      bind:value={username}
+      label="Username"
+      leadingIcon="person"
+      enabled={!isLoading}
+      fill
+    />
+
+    <!-- Password input -->
+    <Input
+      bind:value={password}
+      label="Password"
+      type="password"
+      leadingIcon="lock"
+      enabled={!isLoading}
+      fill
+    />
+
+    <!-- Error message -->
+    @if (errorMessage != null) {
+      <Card backgroundColor="errorContainer">
+        <Text color="error" padding={12}>
+          {errorMessage}
+        </Text>
+      </Card>
+    }
+
+    <!-- Login button -->
+    <Button
+      text={isLoading ? "Logging in..." : "Login"}
+      onClick={handleLogin}
+      disabled={!isValid || isLoading}
+      fill
+    />
+
+    <!-- Sign up link -->
+    <Row center spacing={4}>
+      <Text color="secondary">Don't have an account?</Text>
+      <TextButton
+        text="Sign up"
+        onClick={() => navigate(Routes.Signup)}
+      />
+    </Row>
+  </Column>
+</Scaffold>

@@ -1,0 +1,122 @@
+// Profile screen
+// Route: /profile/:id → Routes.Profile(id)
+
+import $components.{ PostCard, Avatar }
+import $lib.api.ApiClient
+import $models.{ User, Post }
+import kotlinx.coroutines.launch
+
+<script>
+  @prop val id: String  // Route parameter
+
+  var user: User? = null
+  var posts: List<Post> = emptyList()
+  var isLoading = true
+
+  onMount {
+    launch {
+      val userResult = ApiClient.getUser(id)
+      val postsResult = ApiClient.getFeed()  // In real app: getPostsByUser(id)
+
+      user = userResult.getOrNull()
+      posts = postsResult.getOrNull() ?: emptyList()
+      isLoading = false
+    }
+  }
+
+  fun handleFollow() {
+    // Toggle follow state
+    user = user?.copy(
+      isFollowing = !user.isFollowing,
+      followersCount = if (user.isFollowing)
+        user.followersCount - 1
+      else
+        user.followersCount + 1
+    )
+  }
+</script>
+
+<Scaffold
+  topBar={
+    <TopAppBar
+      title="Profile"
+      navigationIcon="back"
+      onNavigationClick={() => goBack()}
+    />
+  }
+>
+  @if (isLoading) {
+    <LoadingSpinner center />
+  } else if (user == null) {
+    <ErrorView message="User not found" />
+  } else {
+    <Column fill>
+      <!-- Profile header -->
+      <Column padding={16} spacing={12}>
+        <Row center>
+          <Avatar url={user.avatarUrl} size={80} />
+        </Row>
+
+        <Column center spacing={4}>
+          <Text fontSize={24} fontWeight="bold">
+            {user.displayName}
+          </Text>
+          <Text color="secondary">
+            @{user.username}
+          </Text>
+        </Column>
+
+        @if (user.bio.isNotEmpty()) {
+          <Text textAlign="center">
+            {user.bio}
+          </Text>
+        }
+
+        <!-- Stats -->
+        <Row center spacing={24}>
+          <Column center>
+            <Text fontSize={20} fontWeight="bold">
+              {user.followersCount}
+            </Text>
+            <Text fontSize={12} color="secondary">
+              Followers
+            </Text>
+          </Column>
+
+          <Column center>
+            <Text fontSize={20} fontWeight="bold">
+              {user.followingCount}
+            </Text>
+            <Text fontSize={12} color="secondary">
+              Following
+            </Text>
+          </Column>
+        </Row>
+
+        <!-- Follow button -->
+        <Button
+          text={user.isFollowing ? "Unfollow" : "Follow"}
+          onClick={handleFollow}
+          variant={user.isFollowing ? "outlined" : "filled"}
+          fill
+        />
+      </Column>
+
+      <Divider />
+
+      <!-- User's posts -->
+      <LazyColumn fill>
+        @for (post in posts, key = { it.id }) {
+          <PostCard
+            post={post}
+            onPostClick={(postId) => navigate(Routes.Post.Detail(id = postId))}
+          />
+        } empty {
+          <Column center padding={32}>
+            <Text color="secondary">No posts yet</Text>
+          </Column>
+        }
+      </LazyColumn>
+    </Column>
+  }
+</Scaffold>

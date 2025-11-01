@@ -72,7 +72,7 @@ whitehall build counter.wh      # Build APK
 1. Parse TOML frontmatter (lines starting with `///`)
 2. Extract app config and dependencies
 3. Generate temporary project structure in `.whitehall/tmp/<hash>/`
-4. Create synthetic `Whitehall.toml` from frontmatter
+4. Create synthetic `whitehall.toml` from frontmatter
 5. Compile using normal project pipeline
 6. Cache builds for fast re-runs
 7. Clean up on completion (keep cache)
@@ -110,7 +110,7 @@ A Whitehall project looks like:
 
 ```
 my-app/
-├── Whitehall.toml          # Project manifest
+├── whitehall.toml          # Project manifest
 ├── src/
 │   ├── main.wh             # Entry point
 │   └── components/         # Reusable components
@@ -201,7 +201,7 @@ This transpiles to idiomatic Kotlin with Jetpack Compose.
 - Custom optimization passes
 - Alternative backends (Swift for iOS?)
 
-### 8. Configuration: Whitehall.toml
+### 8. Configuration: whitehall.toml
 
 Inspired by `Cargo.toml`:
 

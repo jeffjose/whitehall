@@ -1,0 +1,97 @@
+// PostCard component - displays a single post in the feed
+
+import $models.Post
+import kotlinx.coroutines.launch
+
+<script>
+  @prop val post: Post
+  @prop val onUserClick: ((String) -> Unit)? = null
+  @prop val onPostClick: ((String) -> Unit)? = null
+
+  var isLiked = post.isLiked
+  var likesCount = post.likesCount
+
+  fun handleLike() {
+    launch {
+      if (isLiked) {
+        ApiClient.unlikePost(post.id)
+        isLiked = false
+        likesCount--
+      } else {
+        ApiClient.likePost(post.id)
+        isLiked = true
+        likesCount++
+      }
+    }
+  }
+
+  fun formatTimestamp(timestamp: Long): String {
+    val diff = System.currentTimeMillis() - timestamp
+    val hours = diff / 3600000
+    val days = hours / 24
+
+    return when {
+      hours < 1 -> "just now"
+      hours < 24 -> "${hours}h ago"
+      days < 7 -> "${days}d ago"
+      else -> "${days / 7}w ago"
+    }
+  }
+</script>
+
+<Card onClick={() => onPostClick?.invoke(post.id)}>
+  <Column padding={12} spacing={8}>
+    <!-- Author header -->
+    <Row
+      spacing={8}
+      onClick={(e) => {
+        e.stopPropagation()
+        onUserClick?.invoke(post.authorId)
+      }}
+    >
+      <Avatar url={post.authorAvatar} size={40} />
+
+      <Column fill>
+        <Text fontSize={16} fontWeight="bold">
+          {post.authorName}
+        </Text>
+        <Text fontSize={12} color="secondary">
+          @{post.authorId} · {formatTimestamp(post.timestamp)}
+        </Text>
+      </Column>
+    </Row>
+
+    <!-- Post content -->
+    <Text fontSize={15}>
+      {post.content}
+    </Text>
+
+    <!-- Actions -->
+    <Row spacing={16}>
+      <Row spacing={4} onClick={(e) => {
+        e.stopPropagation()
+        handleLike()
+      }}>
+        <Icon
+          name={isLiked ? "favorite" : "favorite_border"}
+          size={20}
+          color={isLiked ? "error" : "secondary"}
+        />
+        <Text fontSize={14} color={isLiked ? "error" : "secondary"}>
+          {likesCount}
+        </Text>
+      </Row>
+
+      <Row spacing={4}>
+        <Icon name="comment" size={20} color="secondary" />
+        <Text fontSize={14} color="secondary">
+          {post.commentsCount}
+        </Text>
+      </Row>
+
+      <Row spacing={4}>
+        <Icon name="share" size={20} color="secondary" />
+      </Row>
+    </Row>
+  </Column>
+</Card>

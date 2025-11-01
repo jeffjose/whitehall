@@ -1,0 +1,96 @@
+// Create post screen
+// Route: /post/create → Routes.Post.Create
+
+import $lib.api.ApiClient
+import kotlinx.coroutines.launch
+
+<script>
+  var content = ""
+  var isPosting = false
+
+  val charLimit = 280
+  val charsRemaining = charLimit - content.length
+  val isValid = content.trim().isNotEmpty() && content.length <= charLimit
+
+  fun handlePost() {
+    if (!isValid) return
+
+    isPosting = true
+
+    launch {
+      ApiClient.createPost(content)
+        .onSuccess { newPost ->
+          isPosting = false
+          // Navigate back to home with new post
+          goBack()
+        }
+        .onFailure { error ->
+          isPosting = false
+          // Show error
+        }
+    }
+  }
+</script>
+
+<Scaffold
+  topBar={
+    <TopAppBar
+      title="Create Post"
+      navigationIcon="close"
+      onNavigationClick={() => goBack()}
+      actions={
+        <TextButton
+          text={isPosting ? "Posting..." : "Post"}
+          onClick={handlePost}
+          disabled={!isValid || isPosting}
+        />
+      }
+    />
+  }
+>
+  <Column padding={16} spacing={16} fill>
+    <MultilineInput
+      bind:value={content}
+      placeholder="What's on your mind?"
+      minLines={6}
+      maxLines={12}
+      enabled={!isPosting}
+      fill
+    />
+
+    <Row spaceBetween>
+      <Text
+        fontSize={14}
+        color={charsRemaining < 0 ? "error" : "secondary"}
+      >
+        {charsRemaining} characters remaining
+      </Text>
+
+      @if (content.isNotEmpty()) {
+        <TextButton
+          text="Clear"
+          onClick={() => content = ""}
+          disabled={isPosting}
+        />
+      }
+    </Row>
+
+    <Spacer weight={1} />
+
+    @if (charsRemaining < 0) {
+      <Card backgroundColor="errorContainer">
+        <Text color="error" padding={12}>
+          Post is too long. Please shorten your message.
+        </Text>
+      </Card>
+    }
+
+    <Button
+      text={isPosting ? "Posting..." : "Publish"}
+      onClick={handlePost}
+      disabled={!isValid || isPosting}
+      fill
+      size="large"
+    />
+  </Column>
+</Scaffold>
