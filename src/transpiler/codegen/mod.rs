@@ -106,9 +106,17 @@ impl CodeGenerator {
 
             output.push_str(" {\n");
             self.indent_level += 1;
-            output.push_str(&self.indent());
-            output.push_str(&func.body);
-            output.push('\n');
+
+            // Process function body lines and indent them properly
+            for line in func.body.lines() {
+                let trimmed = line.trim();
+                if !trimmed.is_empty() {
+                    output.push_str(&self.indent());
+                    output.push_str(trimmed);
+                    output.push('\n');
+                }
+            }
+
             self.indent_level -= 1;
             output.push_str(&self.indent());
             output.push_str("}\n\n");
@@ -132,10 +140,18 @@ impl CodeGenerator {
                         output.push_str(&self.indent());
                         output.push_str("LaunchedEffect(Unit) {\n");
                         self.indent_level += 1;
-                        output.push_str(&self.indent());
-                        output.push_str("coroutineScope.");
-                        output.push_str(body);
-                        output.push('\n');
+
+                        // Process lifecycle body lines and indent them properly
+                        for line in body.lines() {
+                            let trimmed = line.trim();
+                            if !trimmed.is_empty() {
+                                output.push_str(&self.indent());
+                                output.push_str("coroutineScope.");
+                                output.push_str(trimmed);
+                                output.push('\n');
+                            }
+                        }
+
                         self.indent_level -= 1;
                         output.push_str(&self.indent());
                         output.push_str("}\n\n");
