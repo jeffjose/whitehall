@@ -560,9 +560,110 @@ Consider using `prettyplease` for final Kotlin code formatting.
 
 ## Testing Strategy
 
+### Markdown-Based Integration Tests (Primary Approach)
+
+We use **markdown files** as test cases that serve dual purposes:
+1. **Executable tests**: Validated by the test harness
+2. **Living documentation**: Quick reference showing input → output transformations
+
+#### Test File Format
+
+Each test is a markdown file in `tests/transpiler-examples/`:
+
+```markdown
+# Test Name
+
+Brief description of what this test validates.
+
+## Input
+
+```whitehall
+// Whitehall source code
+```
+
+## Output
+
+```kotlin
+// Expected Kotlin output
+```
+```
+
+#### Benefits
+
+- **Easy Review**: Side-by-side input/output comparison in readable format
+- **Maintainable**: Plain text, easy to edit and review in PRs
+- **Documentation**: Tests serve as examples that never get stale
+- **Quick Reference**: Developers can browse examples to learn syntax
+
+#### Test Organization
+
+Tests are numbered and organized by feature:
+
+- `01-basic-component.md` - Simple component with props
+- `02-control-flow-if.md` - `@if/@else` conditional rendering
+- `03-control-flow-for.md` - `@for` loops with keys and empty blocks
+- `04-control-flow-when.md` - `@when` expressions
+- `05-data-binding.md` - `bind:value` two-way binding
+- `06-lifecycle-hooks.md` - `onMount` and lifecycle hooks
+- `07-routing-simple.md` - Basic `$routes` navigation
+- `08-routing-params.md` - Route parameters via `$screen.params`
+- `09-imports.md` - Import aliases (`$lib`, `$models`, etc.)
+- `10-nested-components.md` - Deep component trees
+- ... and more as needed
+
+#### Test Runner Implementation
+
+The test harness (`tests/transpiler_examples_test.rs`) performs:
+
+1. **Parse markdown files**: Extract Whitehall input and expected Kotlin output
+2. **Run transpiler**: Convert input `.wh` code to Kotlin
+3. **Compare output**: Validate actual vs expected (with normalized whitespace)
+4. **Report failures**: Show diff with line numbers for debugging
+
+```rust
+#[test]
+fn test_transpile_all_examples() {
+    let test_files = load_test_files();
+
+    for (filename, content) in test_files {
+        let test = parse_test_file(&content, &filename)
+            .expect("Failed to parse test file");
+
+        let actual_output = transpile(&test.input)
+            .expect("Transpilation failed");
+
+        assert_eq!(
+            normalize_whitespace(&actual_output),
+            normalize_whitespace(&test.expected_output),
+            "Transpilation mismatch in {}", filename
+        );
+    }
+}
+```
+
+The test runner handles:
+- Loading all `.md` files from `tests/transpiler-examples/`
+- Parsing markdown to extract code blocks
+- Running transpilation (once implemented)
+- Comparing with normalized whitespace (ignores minor formatting)
+- Providing detailed error messages on mismatch
+
+#### Running Tests
+
+```bash
+# Run all transpiler tests
+cargo test transpiler_examples
+
+# Run specific test validation
+cargo test test_basic_component_structure
+
+# Test with output
+cargo test transpiler_examples -- --nocapture
+```
+
 ### Unit Tests
 
-Test each phase independently:
+Test individual components and phases:
 
 ```rust
 #[test]
@@ -573,44 +674,31 @@ fn test_parse_prop_declaration() {
     assert_eq!(result.prop_type, "String");
     assert_eq!(result.mutable, false);
 }
-```
 
-### Integration Tests
-
-Test full transpilation:
-
-```rust
 #[test]
-fn test_transpile_avatar_component() {
-    let wh_source = include_str!("fixtures/Avatar.wh");
-    let result = transpile(wh_source);
-
-    assert!(result.is_ok());
-    let kotlin = result.unwrap();
-    assert!(kotlin.contains("@Composable"));
-    assert!(kotlin.contains("fun Avatar("));
-}
-```
-
-### Snapshot Tests
-
-Use `insta` for snapshot testing:
-
-```rust
-#[test]
-fn test_generate_home_screen() {
-    let ast = parse_file("fixtures/home/+screen.wh").unwrap();
-    let kotlin = generate_code(&ast);
-    insta::assert_snapshot!(kotlin);
+fn test_lexer_tokenize_component() {
+    let input = "<Text>{count}</Text>";
+    let tokens = tokenize(input);
+    assert_eq!(tokens[0], Token::LessThan);
+    assert_eq!(tokens[1], Token::Identifier("Text".to_string()));
 }
 ```
 
 ### End-to-End Tests
 
 Transpile full Microblog app and verify:
-- Generated Kotlin compiles
+- All `.wh` files transpile successfully
+- Generated Kotlin compiles without errors
 - App runs without crashes
-- Functionality matches expected behavior
+- Navigation and routing work correctly
+
+### Adding New Tests
+
+1. Create `tests/transpiler-examples/NN-feature-name.md`
+2. Add `## Input` section with Whitehall code
+3. Add `## Output` section with expected Kotlin
+4. Run `cargo test transpiler_examples`
+5. Test serves as both validation and documentation
 
 ## File Organization
 
@@ -644,8 +732,13 @@ src/transpiler/
   error/
     mod.rs           # Error types and formatting
 tests/
-  fixtures/          # Test .wh files
-  snapshots/         # Expected Kotlin output
+  transpiler-examples/  # Markdown-based test cases
+    README.md           # Test format documentation
+    01-basic-component.md
+    02-control-flow-if.md
+    03-control-flow-for.md
+    ... (more test cases)
+  transpiler_examples_test.rs  # Test harness
 ```
 
 ## Next Steps
