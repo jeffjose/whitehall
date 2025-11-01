@@ -1,0 +1,18 @@
+component App {
+  state {
+    message: String = "Hello, Whitehall!"
+  }
+
+  view {
+    Column(padding = 16) {
+      Text(text = message)
+
+      Button(
+        text = "Click Me",
+        onClick = () => {
+          message = "Button clicked!"
+        }
+      )
+    }
+  }
+}

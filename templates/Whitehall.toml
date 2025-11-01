@@ -1,0 +1,11 @@
+[project]
+name = "{{PROJECT_NAME}}"
+version = "0.1.0"
+
+[android]
+min_sdk = 24
+target_sdk = 34
+package = "com.example.{{PROJECT_NAME_SNAKE}}"
+
+[build]
+optimize_level = "default"

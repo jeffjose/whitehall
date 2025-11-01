@@ -1,18 +1,18 @@
 # Roadmap
 
-## Phase 0: Foundation (Current)
+## Phase 0: Foundation (✓ Completed)
 **Goal: Prove the concept**
 
-- [ ] Basic CLI structure with `clap`
-- [ ] `whitehall init` - Project scaffolding
-  - [ ] Create project directory structure
-  - [ ] Generate `Whitehall.toml` manifest
-  - [ ] Create sample `.wh` file
-  - [ ] Generate `.gitignore`
-- [ ] Define initial `Whitehall.toml` schema
-- [ ] Documentation structure (VISION, ROADMAP, ARCHITECTURE)
+- [x] Basic CLI structure with `clap`
+- [x] `whitehall init` - Project scaffolding
+  - [x] Create project directory structure
+  - [x] Generate `Whitehall.toml` manifest
+  - [x] Create sample `.wh` file
+  - [x] Generate `.gitignore`
+- [x] Define initial `Whitehall.toml` schema
+- [x] Documentation structure (VISION, ROADMAP, ARCHITECTURE)
 
-**Success metric:** Can run `whitehall init my-app` and get a valid project structure
+**Success metric:** ✓ Can run `whitehall init my-app` and get a valid project structure
 
 ---
 
