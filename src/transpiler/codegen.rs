@@ -534,6 +534,17 @@ impl CodeGenerator {
                             self.add_import_if_missing(prop_imports, "androidx.compose.foundation.layout.padding");
                             self.add_import_if_missing(prop_imports, "androidx.compose.ui.unit.dp");
                         }
+                        ("Row", "spacing") => {
+                            // spacing → horizontalArrangement = Arrangement.spacedBy(N.dp)
+                            self.add_import_if_missing(prop_imports, "androidx.compose.foundation.layout.Arrangement");
+                            self.add_import_if_missing(prop_imports, "androidx.compose.ui.unit.dp");
+                        }
+                        ("Row", "padding") => {
+                            // padding → modifier = Modifier.padding(N.dp)
+                            self.add_import_if_missing(prop_imports, "androidx.compose.ui.Modifier");
+                            self.add_import_if_missing(prop_imports, "androidx.compose.foundation.layout.padding");
+                            self.add_import_if_missing(prop_imports, "androidx.compose.ui.unit.dp");
+                        }
                         ("Text", "fontSize") => {
                             // fontSize → fontSize = N.sp
                             self.add_import_if_missing(prop_imports, "androidx.compose.ui.unit.sp");
@@ -584,6 +595,24 @@ impl CodeGenerator {
                     }
                     "Scaffold" => {
                         let import = "androidx.compose.material3.Scaffold".to_string();
+                        if !component_imports.contains(&import) {
+                            component_imports.push(import);
+                        }
+                    }
+                    "TopAppBar" => {
+                        let import = "androidx.compose.material3.TopAppBar".to_string();
+                        if !component_imports.contains(&import) {
+                            component_imports.push(import);
+                        }
+                    }
+                    "Row" => {
+                        let import = "androidx.compose.foundation.layout.Row".to_string();
+                        if !component_imports.contains(&import) {
+                            component_imports.push(import);
+                        }
+                    }
+                    "Icon" => {
+                        let import = "androidx.compose.material3.Icon".to_string();
                         if !component_imports.contains(&import) {
                             component_imports.push(import);
                         }
@@ -743,6 +772,14 @@ impl CodeGenerator {
             }
             // Column padding → modifier = Modifier.padding(N.dp)
             ("Column", "padding") => {
+                vec![format!("modifier = Modifier.padding({}.dp)", value)]
+            }
+            // Row spacing → horizontalArrangement = Arrangement.spacedBy(N.dp)
+            ("Row", "spacing") => {
+                vec![format!("horizontalArrangement = Arrangement.spacedBy({}.dp)", value)]
+            }
+            // Row padding → modifier = Modifier.padding(N.dp)
+            ("Row", "padding") => {
                 vec![format!("modifier = Modifier.padding({}.dp)", value)]
             }
             // Text fontSize → fontSize = N.sp
