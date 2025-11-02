@@ -23,13 +23,37 @@ impl CodeGenerator {
         // Package declaration
         output.push_str(&format!("package {}\n\n", self.package));
 
-        // Imports
-        output.push_str("import androidx.compose.material3.Text\n");
+        // Collect all imports in proper order:
+        // 1. Component imports (Text, AsyncImage, etc.)
+        // 2. Composable import
+        // 3. User imports
+        // 4. Runtime imports (if state present)
+
+        let mut imports = Vec::new();
+
+        // Collect component imports from markup
+        self.collect_imports_from_markup(&file.markup, &mut imports);
+
+        // Add Composable or runtime imports depending on whether we have state
         if !file.state.is_empty() {
-            output.push_str("import androidx.compose.runtime.*\n");
+            // If we have state, use runtime.* which includes Composable
+            imports.push("androidx.compose.runtime.*".to_string());
         } else {
-            output.push_str("import androidx.compose.runtime.Composable\n");
+            // Otherwise just import Composable
+            imports.push("androidx.compose.runtime.Composable".to_string());
         }
+
+        // User imports (resolve $ aliases)
+        for import in &file.imports {
+            let resolved = self.resolve_import(&import.path);
+            imports.push(resolved);
+        }
+
+        // Write all imports
+        for import in imports {
+            output.push_str(&format!("import {}\n", import));
+        }
+
         output.push('\n');
 
         // Component function
@@ -92,10 +116,24 @@ impl CodeGenerator {
                 output.push_str(&comp.name);
                 output.push('(');
 
-                // For Text component, build text parameter from children
+                let mut has_params = false;
+
+                // For Text component with children, add text parameter
                 if comp.name == "Text" && !comp.children.is_empty() {
                     output.push_str("text = ");
                     output.push_str(&self.build_text_expression(&comp.children)?);
+                    has_params = true;
+                }
+
+                // Add component props
+                for (i, prop) in comp.props.iter().enumerate() {
+                    if has_params || i > 0 {
+                        output.push_str(", ");
+                    }
+                    output.push_str(&prop.name);
+                    output.push_str(" = ");
+                    output.push_str(&prop.value);
+                    has_params = true;
                 }
 
                 output.push_str(")\n");
@@ -112,6 +150,73 @@ impl CodeGenerator {
                 }
                 Ok(output)
             }
+        }
+    }
+
+    fn resolve_import(&self, path: &str) -> String {
+        // Resolve $ aliases to actual package paths
+        if path.starts_with('$') {
+            // $models -> com.example.app.models
+            // $lib -> com.example.app.lib
+            // $components -> com.example.app.components
+            let rest = &path[1..]; // Remove $
+            let base_package = self.package.rsplit('.').nth(1)
+                .and_then(|parent| self.package.strip_suffix(&format!(".{}", self.package.rsplit('.').next().unwrap_or(""))))
+                .unwrap_or(&self.package);
+
+            format!("{}.{}", base_package, rest.replace('.', "."))
+        } else {
+            path.to_string()
+        }
+    }
+
+    fn collect_imports_from_markup(&self, markup: &Markup, imports: &mut Vec<String>) {
+        match markup {
+            Markup::Component(comp) => {
+                // Add imports for known components
+                match comp.name.as_str() {
+                    "Text" => {
+                        let import = "androidx.compose.material3.Text".to_string();
+                        if !imports.contains(&import) {
+                            imports.push(import);
+                        }
+                    }
+                    "AsyncImage" => {
+                        let import = "coil.compose.AsyncImage".to_string();
+                        if !imports.contains(&import) {
+                            imports.push(import);
+                        }
+                    }
+                    _ => {}
+                }
+
+                // Check if we need Modifier and clickable imports from props
+                for prop in &comp.props {
+                    if prop.value.contains("Modifier") {
+                        let import = "androidx.compose.ui.Modifier".to_string();
+                        if !imports.contains(&import) {
+                            imports.push(import);
+                        }
+                    }
+                    if prop.value.contains("clickable") {
+                        let import = "androidx.compose.foundation.clickable".to_string();
+                        if !imports.contains(&import) {
+                            imports.push(import);
+                        }
+                    }
+                }
+
+                // Recurse into children
+                for child in &comp.children {
+                    self.collect_imports_from_markup(child, imports);
+                }
+            }
+            Markup::Sequence(items) => {
+                for item in items {
+                    self.collect_imports_from_markup(item, imports);
+                }
+            }
+            _ => {}
         }
     }
 

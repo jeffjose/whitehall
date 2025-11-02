@@ -1,6 +1,8 @@
 /// Parser for Whitehall syntax
 
-use crate::transpiler::ast::{Component, Markup, PropDeclaration, StateDeclaration, WhitehallFile};
+use crate::transpiler::ast::{
+    Component, ComponentProp, Import, Markup, PropDeclaration, StateDeclaration, WhitehallFile,
+};
 
 pub struct Parser {
     input: String,
@@ -16,13 +18,16 @@ impl Parser {
     }
 
     pub fn parse(&mut self) -> Result<WhitehallFile, String> {
+        let mut imports = Vec::new();
         let mut props = Vec::new();
         let mut state = Vec::new();
 
-        // Parse props and state declarations (before markup)
+        // Parse imports, props, and state declarations (before markup)
         loop {
             self.skip_whitespace();
-            if self.consume_word("@prop") {
+            if self.consume_word("import") {
+                imports.push(self.parse_import()?);
+            } else if self.consume_word("@prop") {
                 props.push(self.parse_prop_declaration()?);
             } else if self.peek_word() == Some("var") || self.peek_word() == Some("val") {
                 state.push(self.parse_state_declaration()?);
@@ -33,10 +38,28 @@ impl Parser {
 
         let markup = self.parse_markup()?;
         Ok(WhitehallFile {
+            imports,
             props,
             state,
             markup,
         })
+    }
+
+    fn parse_import(&mut self) -> Result<Import, String> {
+        // Parse: import $models.User or import androidx.compose.ui.Modifier
+        self.skip_whitespace();
+        let start = self.pos;
+
+        // Parse import path (until newline)
+        while let Some(ch) = self.peek_char() {
+            if ch == '\n' {
+                break;
+            }
+            self.pos += 1;
+        }
+
+        let path = self.input[start..self.pos].trim().to_string();
+        Ok(Import { path })
     }
 
     fn parse_prop_declaration(&mut self) -> Result<PropDeclaration, String> {
@@ -168,28 +191,91 @@ impl Parser {
     }
 
     fn parse_component(&mut self) -> Result<Markup, String> {
-        // Parse opening tag: <ComponentName>
+        // Parse opening tag: <ComponentName ...>
         self.expect_char('<')?;
         let name = self.parse_identifier()?;
-        self.expect_char('>')?;
+        self.skip_whitespace();
 
-        // Parse children (text with potential interpolation)
-        let children = self.parse_text_with_interpolation_until('<')?;
-
-        // Parse closing tag: </ComponentName>
-        self.expect_char('<')?;
-        self.expect_char('/')?;
-        let closing_name = self.parse_identifier()?;
-        self.expect_char('>')?;
-
-        if name != closing_name {
-            return Err(format!(
-                "Mismatched tags: opening <{}> vs closing </{}>",
-                name, closing_name
-            ));
+        // Parse component props
+        let mut props = Vec::new();
+        while self.peek_char() != Some('>') && self.peek_char() != Some('/') {
+            let prop = self.parse_component_prop()?;
+            props.push(prop);
+            self.skip_whitespace();
         }
 
-        Ok(Markup::Component(Component { name, children }))
+        // Check for self-closing tag
+        let self_closing = if self.peek_char() == Some('/') {
+            self.expect_char('/')?;
+            self.expect_char('>')?;
+            true
+        } else {
+            self.expect_char('>')?;
+            false
+        };
+
+        let children = if self_closing {
+            Vec::new()
+        } else {
+            // Parse children (text with potential interpolation)
+            let children = self.parse_text_with_interpolation_until('<')?;
+
+            // Parse closing tag: </ComponentName>
+            self.expect_char('<')?;
+            self.expect_char('/')?;
+            let closing_name = self.parse_identifier()?;
+            self.expect_char('>')?;
+
+            if name != closing_name {
+                return Err(format!(
+                    "Mismatched tags: opening <{}> vs closing </{}>",
+                    name, closing_name
+                ));
+            }
+
+            children
+        };
+
+        Ok(Markup::Component(Component {
+            name,
+            props,
+            children,
+            self_closing,
+        }))
+    }
+
+    fn parse_component_prop(&mut self) -> Result<ComponentProp, String> {
+        // Parse: propName={expression}
+        let name = self.parse_identifier()?;
+        self.skip_whitespace();
+        self.expect_char('=')?;
+        self.skip_whitespace();
+        self.expect_char('{')?;
+
+        // Parse expression until closing brace (handle nested braces)
+        let mut value = String::new();
+        let mut depth = 1;
+
+        while let Some(ch) = self.peek_char() {
+            if ch == '{' {
+                depth += 1;
+                value.push(ch);
+                self.pos += 1;
+            } else if ch == '}' {
+                depth -= 1;
+                if depth == 0 {
+                    self.pos += 1;
+                    break;
+                }
+                value.push(ch);
+                self.pos += 1;
+            } else {
+                value.push(ch);
+                self.pos += 1;
+            }
+        }
+
+        Ok(ComponentProp { name, value })
     }
 
     fn parse_text_with_interpolation_until(&mut self, delimiter: char) -> Result<Vec<Markup>, String> {
@@ -281,7 +367,9 @@ impl Parser {
 
     fn peek_word(&self) -> Option<&str> {
         let remaining = &self.input[self.pos..];
-        if remaining.starts_with("var ") || remaining.starts_with("var\n") {
+        if remaining.starts_with("import ") {
+            Some("import")
+        } else if remaining.starts_with("var ") || remaining.starts_with("var\n") {
             Some("var")
         } else if remaining.starts_with("val ") || remaining.starts_with("val\n") {
             Some("val")

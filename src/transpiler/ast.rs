@@ -2,9 +2,15 @@
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct WhitehallFile {
+    pub imports: Vec<Import>,
     pub props: Vec<PropDeclaration>,
     pub state: Vec<StateDeclaration>,
     pub markup: Markup,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct Import {
+    pub path: String, // e.g., "$models.User" or "androidx.compose.ui.Modifier"
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -32,12 +38,21 @@ pub enum Markup {
 #[derive(Debug, Clone, PartialEq)]
 pub struct Component {
     pub name: String,
+    pub props: Vec<ComponentProp>,
     pub children: Vec<Markup>,
+    pub self_closing: bool,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct ComponentProp {
+    pub name: String,
+    pub value: String, // Expression value
 }
 
 impl WhitehallFile {
     pub fn new() -> Self {
         WhitehallFile {
+            imports: Vec::new(),
             props: Vec::new(),
             state: Vec::new(),
             markup: Markup::Text(String::new()),
