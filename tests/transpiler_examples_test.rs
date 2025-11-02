@@ -249,7 +249,10 @@ mod tests {
 
     #[test]
     fn test_transpile_all_examples() {
+        use whitehall::transpiler::transpile;
+
         let test_files = load_test_files();
+        let mut failures = Vec::new();
 
         for (filename, content) in test_files {
             let test = parse_test_file(&content, &filename).expect("Failed to parse test file");
@@ -257,31 +260,33 @@ mod tests {
             // Derive component name from metadata.file
             let component_name = test.metadata.file.trim_end_matches(".wh");
 
-            // TODO: Call the actual transpiler once implemented
-            // let actual_output = transpile(
-            //     &test.input,
-            //     &test.metadata.package,
-            //     component_name
-            // ).expect("Transpilation failed");
+            println!("Testing: {} ({})", test.name, filename);
 
-            // For now, just verify the test structure
-            println!("Would transpile: {} ({}) -> {}::{}",
-                test.name,
-                test.metadata.file,
-                test.metadata.package,
-                component_name
-            );
+            // Call the transpiler
+            match transpile(&test.input, &test.metadata.package, component_name) {
+                Ok(actual_output) => {
+                    if normalize_whitespace(&actual_output) != normalize_whitespace(&test.expected_output) {
+                        println!("\n=== MISMATCH in {} ===", filename);
+                        println!("Expected:\n{}", test.expected_output);
+                        println!("\nActual:\n{}", actual_output);
+                        println!("=========================\n");
+                        failures.push(filename.clone());
+                    } else {
+                        println!("✓ {}", filename);
+                    }
+                }
+                Err(e) => {
+                    println!("\n=== TRANSPILATION ERROR in {} ===", filename);
+                    println!("Error: {}", e);
+                    println!("Input:\n{}", test.input);
+                    println!("=========================\n");
+                    failures.push(filename.clone());
+                }
+            }
+        }
 
-            // TODO: Enable this assertion once transpiler exists:
-            // assert_eq!(
-            //     normalize_whitespace(&actual_output),
-            //     normalize_whitespace(&test.expected_output),
-            //     "Transpilation mismatch in {}:\n\nInput:\n{}\n\nExpected:\n{}\n\nActual:\n{}",
-            //     filename,
-            //     test.input,
-            //     test.expected_output,
-            //     actual_output
-            // );
+        if !failures.is_empty() {
+            panic!("\n\n{} tests failed:\n{}\n", failures.len(), failures.join("\n"));
         }
     }
 
