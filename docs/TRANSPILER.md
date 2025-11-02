@@ -485,9 +485,208 @@ object routes {
 4. Commit `e1ecf0a` is clean slate: tests exist, no broken code
 5. Better to build correctly once than patch forever
 
+## Actual Implementation Architecture
+
+The implemented transpiler follows a simplified, pragmatic architecture optimized for Whitehall's specific needs.
+
+### Module Structure
+
+```
+src/transpiler/
+├── mod.rs       # Public API: transpile(input, package, component_name) -> Result<String, String>
+├── ast.rs       # Abstract Syntax Tree definitions
+├── parser.rs    # Lexer-free recursive descent parser
+└── codegen.rs   # Kotlin/Compose code generation with transformations
+```
+
+### Parser Architecture (parser.rs)
+
+**Approach**: Lexer-free recursive descent parser
+- **No separate lexer**: Parser consumes characters directly from input string
+- **Position tracking**: Single `pos: usize` cursor through input
+- **Recursive descent**: Each grammar rule is a method (parse_component, parse_if_else, etc.)
+- **Lookahead**: `peek_char()` and `peek_ahead(n)` for decision-making
+
+**Key Methods**:
+```rust
+pub fn parse(&mut self) -> Result<WhitehallFile, String>
+  ├─ parse_imports()          // import $models.User
+  ├─ parse_props()            // @prop val name: Type
+  ├─ parse_state()            // var/val declarations
+  └─ parse_component()        // <Component>...</Component>
+       ├─ parse_component_prop()    // prop={value} or prop="string"
+       ├─ parse_children()          // Recursive markup parsing
+       │    ├─ parse_control_flow() // @if, @for, @when
+       │    ├─ parse_component()    // Nested components
+       │    └─ parse_text_with_interpolation_until_markup()
+       └─ parse_markup_block()      // For control flow bodies
+```
+
+**Design Decisions**:
+1. **Lexer-free**: Simpler for Whitehall's hybrid Kotlin/XML syntax
+2. **String-based types**: Parser outputs `String` for types, expressions (no complex Expr AST)
+3. **Minimal lookahead**: Most decisions made with 1-2 character peek
+4. **Depth tracking**: For nested braces/parens/brackets in complex types
+5. **Position-based errors**: Include position in error messages for debugging
+6. **Infinite loop guards**: Track position before parsing, error if no progress made
+
+### AST Design (ast.rs)
+
+**Philosophy**: Simple, focused on transpilation needs (not full semantic analysis)
+
+```rust
+pub struct WhitehallFile {
+    pub imports: Vec<Import>,
+    pub props: Vec<PropDeclaration>,
+    pub state: Vec<StateDeclaration>,
+    pub markup: Markup,
+}
+
+pub enum Markup {
+    Component(Component),
+    Text(String),
+    Interpolation(String),
+    Sequence(Vec<Markup>),
+    IfElse(IfElseBlock),
+    ForLoop(ForLoopBlock),
+}
+```
+
+**Key Features**:
+- **Flat prop/state collections**: No scoping needed (single-component files)
+- **String expressions**: No expression AST, just capture strings for codegen
+- **Markup enum**: Unified representation of all renderable content
+- **Recursive children**: Components and control flow contain `Vec<Markup>`
+
+### Code Generator Architecture (codegen.rs)
+
+**Structure**:
+```rust
+pub struct CodeGenerator {
+    package: String,
+    component_name: String,
+    indent_level: usize,
+}
+
+impl CodeGenerator {
+    pub fn generate(&mut self, file: &WhitehallFile) -> Result<String, String>
+      ├─ collect_imports_recursive()   // Scan AST for needed imports
+      ├─ transform_prop()              // Apply Compose idiom transformations
+      ├─ generate_markup()             // Convert Markup to Kotlin code
+      └─ build_text_expression()       // Handle text + interpolation
+}
+```
+
+**Prop Transformation System**:
+
+Component-specific transformations for Compose idioms:
+```rust
+match (component, prop_name) {
+    ("Column", "spacing") => "verticalArrangement = Arrangement.spacedBy({value}.dp)",
+    ("Column", "padding") => "modifier = Modifier.padding({value}.dp)",
+    ("Text", "fontSize") => "fontSize = {value}.sp",
+    ("Text", "fontWeight") => "fontWeight = FontWeight.{Capitalized}",
+    ("Text", "color") => "color = MaterialTheme.colorScheme.{value}",
+    ...
+}
+```
+
+**Value Transformations**:
+- Lambda arrows: `() => expr` → `{ expr }`
+- Route aliases: `$routes.post.detail` → `Routes.Post.Detail`
+- String literals: `"bold"` → `FontWeight.Bold`
+- Numbers: `16` → `16.dp` or `16.sp` (context-dependent)
+
+**Import Management**:
+1. **Detection**: Scan AST for components, prop values, transformations
+2. **Transformation imports**: Add imports for Arrangement, Modifier, dp, sp, FontWeight, etc.
+3. **Component imports**: Map known components (Text, Column, Card) to androidx/material3
+4. **Alphabetical sorting**: Standard Kotlin convention
+5. **Deduplication**: Track imports in Vec, check before adding
+
+## Design Principles
+
+These principles emerged from building the transpiler incrementally:
+
+### 1. Depth-First, Not Breadth-First
+- **Complete each test fully** before moving to the next
+- Don't implement partial features across multiple tests
+- Build proper infrastructure when needed, not minimal hacks
+- *Example*: Test 03 required full prop transformation system, so we built it properly
+
+### 2. Test-Driven Development (TDD)
+- **One test at a time**, commit after each passes
+- Let test expectations guide implementation
+- Tests serve as both validation and documentation
+- **Atomic commits**: Each commit represents one working test
+
+### 3. No Overfitting to Examples
+- Write **general solutions**, not test-specific code
+- Transformation rules should be extensible
+- Don't hard-code test values
+- *Example*: Prop transformation system handles any component/prop combo, not just test 03's specific props
+
+### 4. Reasonable Output Over Spec Compliance
+- Test expectations are **guidelines, not gospel**
+- Update test files if transpiler output is more reasonable
+- Follow Kotlin/Compose conventions (alphabetical imports, idiomatic formatting)
+- *Example*: We changed import ordering to alphabetical sorting (better than arbitrary)
+
+### 5. Build for Readability
+- Generated Kotlin should be **clean and debuggable**
+- Proper indentation and formatting
+- Meaningful variable names in output
+- Idiomatic Compose patterns
+
+### 6. Commit Often, Document Changes
+- **Commit after each test passes**
+- Write detailed commit messages explaining what was added
+- Update docs/TRANSPILER.md with progress
+- Commits form an audit trail of development decisions
+
+### 7. Error Detection Over Undefined Behavior
+- **Fail fast** with clear error messages
+- Add safeguards (infinite loop detection, position tracking)
+- Better to error than produce wrong code
+- Include position information in parser errors
+
+## Technical Decisions
+
+### Why Lexer-Free Parser?
+**Decision**: Single-pass parser without separate tokenization
+**Rationale**:
+- Whitehall mixes Kotlin and XML syntax (hard to tokenize cleanly)
+- Recursive descent handles nested structures naturally
+- Lookahead of 1-2 characters sufficient for decision-making
+- Simpler codebase (~600 LOC parser vs. lexer + parser)
+
+### Why String-Based Expression Handling?
+**Decision**: Capture expressions as strings, not full AST
+**Rationale**:
+- Transpiler doesn't need to understand expression semantics
+- Pass-through most Kotlin expressions unchanged
+- Simpler than building full expression AST
+- Transformation can happen on strings (route aliases, lambda arrows)
+
+### Why Component-Specific Transformations?
+**Decision**: Match on `(component, prop)` pairs for transformations
+**Rationale**:
+- Compose components have component-specific prop semantics
+- `padding` means different things on Column vs Text
+- Allows context-aware transformations (spacing → verticalArrangement on Column)
+- Extensible pattern: just add more match arms
+
+### Why Alphabetical Import Sorting?
+**Decision**: Always sort imports alphabetically
+**Rationale**:
+- Standard Kotlin convention
+- Deterministic output (no order dependencies)
+- Easier to read and diff
+- Simpler than complex ordering heuristics
+
 ### Implementation Strategy: Test-Driven Development
 
-Unlike the previous attempt (all code at once), we'll build **incrementally**, one test at a time:
+Unlike the previous attempt (all code at once), we built **incrementally**, one test at a time:
 
 #### Phase 1: Foundation (Tests 00-00b) ✅ COMPLETE
 
