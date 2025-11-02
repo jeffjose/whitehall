@@ -527,14 +527,17 @@ src/transpiler/
 
 **Goal**: Full component with multiple props and defaults
 
+**Status**: Infrastructure added, parser debugging needed (commit: `4e95178`)
+
 **Test 01: Basic Component** (`01-basic-component.md`)
 - Input: Avatar component with url, size, onClick props
-- Need to implement:
-  - Import statements (`import $models.User`)
-  - Multiple props with defaults (size = 48)
-  - Optional/nullable types (`(() -> Unit)?`)
-  - Self-closing tags (`<AsyncImage />`)
-  - Props on child components (`url={url}`)
+- Implemented (but not yet working):
+  - ✅ Import statements parsing (`import $models.User`)
+  - ✅ Import resolution (`$models` → `com.example.app.models`)
+  - ✅ Self-closing tags (`<AsyncImage />`)
+  - ✅ Component props with expressions (`url={url}`, `modifier={...}`)
+  - ✅ Nested brace handling in expressions
+  - ❌ Parser issue: not finding component after imports/props (to debug)
 - Target: 4/14 tests passing
 
 **Checkpoint**: Real components can be defined and used.
