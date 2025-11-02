@@ -128,24 +128,32 @@ impl CodeGenerator {
                 output.push_str(&comp.name);
                 output.push('(');
 
-                let mut has_params = false;
+                let mut params = Vec::new();
 
                 // For Text component with children, add text parameter
                 if comp.name == "Text" && !comp.children.is_empty() {
-                    output.push_str("text = ");
-                    output.push_str(&self.build_text_expression(&comp.children)?);
-                    has_params = true;
+                    let text_expr = self.build_text_expression(&comp.children)?;
+                    params.push(format!("text = {}", text_expr));
                 }
 
                 // Add component props
-                for (i, prop) in comp.props.iter().enumerate() {
-                    if has_params || i > 0 {
-                        output.push_str(", ");
+                for prop in &comp.props {
+                    params.push(format!("{} = {}", prop.name, prop.value));
+                }
+
+                // If multiple params or any long param, use multiline format
+                if params.len() > 1 || params.iter().any(|p| p.len() > 40) {
+                    output.push('\n');
+                    for (i, param) in params.iter().enumerate() {
+                        output.push_str(&format!("{}    {}", self.indent(), param));
+                        if i < params.len() - 1 {
+                            output.push(',');
+                        }
+                        output.push('\n');
                     }
-                    output.push_str(&prop.name);
-                    output.push_str(" = ");
-                    output.push_str(&prop.value);
-                    has_params = true;
+                    output.push_str(&self.indent());
+                } else if !params.is_empty() {
+                    output.push_str(&params[0]);
                 }
 
                 output.push_str(")\n");
