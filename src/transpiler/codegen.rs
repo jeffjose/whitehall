@@ -163,6 +163,64 @@ impl CodeGenerator {
                 output.push('\n');
                 Ok(output)
             }
+            Markup::ForLoop(for_loop) => {
+                let mut output = String::new();
+                let indent_str = "    ".repeat(indent);
+
+                // If there's an empty block, wrap in if/else
+                if let Some(empty_body) = &for_loop.empty_block {
+                    // if (collection.isEmpty()) { empty block } else { forEach }
+                    output.push_str(&format!("{}if ({}.isEmpty()) {{\n", indent_str, for_loop.collection));
+                    for child in empty_body {
+                        output.push_str(&self.generate_markup_with_indent(child, indent + 1)?);
+                    }
+                    output.push_str(&format!("{}}}", indent_str));
+                    output.push_str(" else {\n");
+
+                    // forEach block
+                    output.push_str(&format!("{}    {}.forEach {{ {} ->\n",
+                        indent_str, for_loop.collection, for_loop.item));
+
+                    // If there's a key, wrap in key() block
+                    if let Some(key_expr) = &for_loop.key_expr {
+                        // Replace 'it' with actual loop variable name
+                        let transformed_key = key_expr.replace("it", &for_loop.item);
+                        output.push_str(&format!("{}        key({}) {{\n", indent_str, transformed_key));
+                        for child in &for_loop.body {
+                            output.push_str(&self.generate_markup_with_indent(child, indent + 3)?);
+                        }
+                        output.push_str(&format!("{}        }}\n", indent_str));
+                    } else {
+                        for child in &for_loop.body {
+                            output.push_str(&self.generate_markup_with_indent(child, indent + 2)?);
+                        }
+                    }
+
+                    output.push_str(&format!("{}    }}\n", indent_str));
+                    output.push_str(&format!("{}}}\n", indent_str));
+                } else {
+                    // Just forEach without empty check
+                    output.push_str(&format!("{}{}.forEach {{ {} ->\n",
+                        indent_str, for_loop.collection, for_loop.item));
+
+                    if let Some(key_expr) = &for_loop.key_expr {
+                        let transformed_key = key_expr.replace("it", &for_loop.item);
+                        output.push_str(&format!("{}    key({}) {{\n", indent_str, transformed_key));
+                        for child in &for_loop.body {
+                            output.push_str(&self.generate_markup_with_indent(child, indent + 2)?);
+                        }
+                        output.push_str(&format!("{}    }}\n", indent_str));
+                    } else {
+                        for child in &for_loop.body {
+                            output.push_str(&self.generate_markup_with_indent(child, indent + 1)?);
+                        }
+                    }
+
+                    output.push_str(&format!("{}}}\n", indent_str));
+                }
+
+                Ok(output)
+            }
             Markup::Component(comp) => {
                 let mut output = String::new();
                 let indent_str = "    ".repeat(indent);
@@ -293,6 +351,12 @@ impl CodeGenerator {
                             component_imports.push(import);
                         }
                     }
+                    "Card" => {
+                        let import = "androidx.compose.material3.Card".to_string();
+                        if !component_imports.contains(&import) {
+                            component_imports.push(import);
+                        }
+                    }
                     "AsyncImage" => {
                         let import = "coil.compose.AsyncImage".to_string();
                         if !component_imports.contains(&import) {
@@ -326,6 +390,18 @@ impl CodeGenerator {
                 // Recurse into else branch
                 if let Some(else_branch) = &if_block.else_branch {
                     for item in else_branch {
+                        self.collect_imports_recursive(item, prop_imports, component_imports);
+                    }
+                }
+            }
+            Markup::ForLoop(for_loop) => {
+                // Recurse into loop body
+                for item in &for_loop.body {
+                    self.collect_imports_recursive(item, prop_imports, component_imports);
+                }
+                // Recurse into empty block
+                if let Some(empty_block) = &for_loop.empty_block {
+                    for item in empty_block {
                         self.collect_imports_recursive(item, prop_imports, component_imports);
                     }
                 }

@@ -34,6 +34,7 @@ pub enum Markup {
     Interpolation(String), // {variable} expression
     Sequence(Vec<Markup>), // Multiple markup items
     IfElse(IfElseBlock),   // @if/@else control flow
+    ForLoop(ForLoopBlock), // @for loop with key and empty block
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -48,6 +49,15 @@ pub struct IfElseBlock {
 pub struct ElseIfBranch {
     pub condition: String,
     pub body: Vec<Markup>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct ForLoopBlock {
+    pub item: String,         // e.g., "post"
+    pub collection: String,   // e.g., "posts"
+    pub key_expr: Option<String>, // e.g., "it.id" or "post.id"
+    pub body: Vec<Markup>,    // Loop body content
+    pub empty_block: Option<Vec<Markup>>, // Optional empty block
 }
 
 #[derive(Debug, Clone, PartialEq)]

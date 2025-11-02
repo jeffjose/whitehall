@@ -1,8 +1,8 @@
 /// Parser for Whitehall syntax
 
 use crate::transpiler::ast::{
-    Component, ComponentProp, ElseIfBranch, IfElseBlock, Import, Markup, PropDeclaration,
-    StateDeclaration, WhitehallFile,
+    Component, ComponentProp, ElseIfBranch, ForLoopBlock, IfElseBlock, Import, Markup,
+    PropDeclaration, StateDeclaration, WhitehallFile,
 };
 
 pub struct Parser {
@@ -269,35 +269,64 @@ impl Parser {
     }
 
     fn parse_component_prop(&mut self) -> Result<ComponentProp, String> {
-        // Parse: propName={expression}
+        // Parse: propName={expression} or propName="string"
         let name = self.parse_identifier()?;
         self.skip_whitespace();
         self.expect_char('=')?;
         self.skip_whitespace();
-        self.expect_char('{')?;
 
-        // Parse expression until closing brace (handle nested braces)
-        let mut value = String::new();
-        let mut depth = 1;
-
-        while let Some(ch) = self.peek_char() {
-            if ch == '{' {
-                depth += 1;
-                value.push(ch);
-                self.pos += 1;
-            } else if ch == '}' {
-                depth -= 1;
-                if depth == 0 {
-                    self.pos += 1;
+        let value = if self.peek_char() == Some('"') {
+            // String literal: prop="value"
+            self.expect_char('"')?;
+            let mut str_value = String::new();
+            while let Some(ch) = self.peek_char() {
+                if ch == '"' {
+                    self.expect_char('"')?;
                     break;
+                } else if ch == '\\' {
+                    // Handle escape sequences
+                    self.pos += 1;
+                    if let Some(escaped) = self.peek_char() {
+                        str_value.push('\\');
+                        str_value.push(escaped);
+                        self.pos += 1;
+                    }
+                } else {
+                    str_value.push(ch);
+                    self.pos += 1;
                 }
-                value.push(ch);
-                self.pos += 1;
-            } else {
-                value.push(ch);
-                self.pos += 1;
             }
-        }
+            format!("\"{}\"", str_value)
+        } else if self.peek_char() == Some('{') {
+            // Expression: prop={value}
+            self.expect_char('{')?;
+
+            // Parse expression until closing brace (handle nested braces)
+            let mut expr_value = String::new();
+            let mut depth = 1;
+
+            while let Some(ch) = self.peek_char() {
+                if ch == '{' {
+                    depth += 1;
+                    expr_value.push(ch);
+                    self.pos += 1;
+                } else if ch == '}' {
+                    depth -= 1;
+                    if depth == 0 {
+                        self.pos += 1;
+                        break;
+                    }
+                    expr_value.push(ch);
+                    self.pos += 1;
+                } else {
+                    expr_value.push(ch);
+                    self.pos += 1;
+                }
+            }
+            expr_value
+        } else {
+            return Err(format!("Expected prop value (either {{expr}} or \"string\")"));
+        };
 
         Ok(ComponentProp { name, value })
     }
@@ -361,6 +390,8 @@ impl Parser {
 
         if self.consume_word("if") {
             self.parse_if_else()
+        } else if self.consume_word("for") {
+            self.parse_for_loop()
         } else {
             Err("Unknown control flow construct".to_string())
         }
@@ -411,6 +442,80 @@ impl Parser {
             then_branch,
             else_ifs,
             else_branch,
+        }))
+    }
+
+    fn parse_for_loop(&mut self) -> Result<Markup, String> {
+        // Parse: @for (item in collection, key = { expr }) { ... } [empty { ... }]
+        self.skip_whitespace();
+        self.expect_char('(')?;
+
+        // Parse item name
+        let item = self.parse_identifier()?;
+
+        self.skip_whitespace();
+        if !self.consume_word("in") {
+            return Err("Expected 'in' after loop variable".to_string());
+        }
+
+        self.skip_whitespace();
+        // Parse collection name (up to comma or closing paren)
+        let mut collection = String::new();
+        while let Some(ch) = self.peek_char() {
+            if ch == ',' || ch == ')' {
+                break;
+            }
+            collection.push(ch);
+            self.pos += 1;
+        }
+        let collection = collection.trim().to_string();
+
+        // Check for optional key
+        let mut key_expr = None;
+        self.skip_whitespace();
+        if self.peek_char() == Some(',') {
+            self.expect_char(',')?;
+            self.skip_whitespace();
+
+            // Expect "key"
+            if !self.consume_word("key") {
+                return Err("Expected 'key' after comma in for loop".to_string());
+            }
+
+            self.skip_whitespace();
+            self.expect_char('=')?;
+            self.skip_whitespace();
+
+            // Parse key expression (should be a lambda like { it.id })
+            self.expect_char('{')?;
+            let key_body = self.parse_until_char('}')?;
+            self.expect_char('}')?;
+            key_expr = Some(key_body.trim().to_string());
+        }
+
+        self.skip_whitespace();
+        self.expect_char(')')?;
+        self.skip_whitespace();
+        self.expect_char('{')?;
+
+        // Parse loop body
+        let body = self.parse_markup_block()?;
+
+        // Check for optional empty block
+        let mut empty_block = None;
+        self.skip_whitespace();
+        if self.consume_word("empty") {
+            self.skip_whitespace();
+            self.expect_char('{')?;
+            empty_block = Some(self.parse_markup_block()?);
+        }
+
+        Ok(Markup::ForLoop(ForLoopBlock {
+            item,
+            collection,
+            key_expr,
+            body,
+            empty_block,
         }))
     }
 
