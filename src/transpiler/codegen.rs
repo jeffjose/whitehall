@@ -119,6 +119,21 @@ impl CodeGenerator {
             output.push('\n');
         }
 
+        // Generate function declarations
+        for func in &file.functions {
+            output.push_str(&self.indent());
+            output.push_str(&format!("fun {}() {{\n", func.name));
+            // Output function body with proper indentation
+            for line in func.body.lines() {
+                output.push_str(&self.indent());
+                output.push_str("    ");
+                output.push_str(line);
+                output.push('\n');
+            }
+            output.push_str(&self.indent());
+            output.push_str("}\n\n");
+        }
+
         // Generate markup
         output.push_str(&self.generate_markup(&file.markup)?);
 
@@ -262,6 +277,22 @@ impl CodeGenerator {
                     params.push(format!("text = {}", text_expr));
                 }
 
+                // Check if Button has text prop (convert to child later)
+                let button_text = if comp.name == "Button" {
+                    comp.props.iter()
+                        .find(|p| p.name == "text")
+                        .map(|p| {
+                            // Extract text value (remove quotes if present)
+                            if p.value.starts_with('"') && p.value.ends_with('"') {
+                                p.value[1..p.value.len()-1].to_string()
+                            } else {
+                                p.value.clone()
+                            }
+                        })
+                } else {
+                    None
+                };
+
                 // Add component props (with transformations)
                 for prop in &comp.props {
                     let transformed = self.transform_prop(&comp.name, &prop.name, &prop.value);
@@ -269,7 +300,9 @@ impl CodeGenerator {
                 }
 
                 // Determine if this component has a trailing lambda (children block)
-                let has_children = !comp.children.is_empty() && comp.name != "Text";
+                // Button with text prop also gets a trailing lambda
+                let has_children = (!comp.children.is_empty() && comp.name != "Text")
+                    || button_text.is_some();
 
                 // Only add parens if we have params OR no trailing lambda
                 if !params.is_empty() || !has_children {
@@ -296,6 +329,13 @@ impl CodeGenerator {
                 // Generate children if any (but not for Text, which uses children for text parameter)
                 if has_children {
                     output.push_str(" {\n");
+
+                    // If Button with text prop, generate Text child
+                    if let Some(text) = button_text {
+                        output.push_str(&format!("{}    Text(\"{}\")\n", indent_str, text));
+                    }
+
+                    // Generate regular children
                     for child in &comp.children {
                         output.push_str(&self.generate_markup_with_indent(child, indent + 1)?);
                     }
@@ -414,6 +454,18 @@ impl CodeGenerator {
                             component_imports.push(import);
                         }
                     }
+                    "TextField" => {
+                        let import = "androidx.compose.material3.TextField".to_string();
+                        if !component_imports.contains(&import) {
+                            component_imports.push(import);
+                        }
+                    }
+                    "Button" => {
+                        let import = "androidx.compose.material3.Button".to_string();
+                        if !component_imports.contains(&import) {
+                            component_imports.push(import);
+                        }
+                    }
                     "AsyncImage" => {
                         let import = "coil.compose.AsyncImage".to_string();
                         if !component_imports.contains(&import) {
@@ -509,6 +561,15 @@ impl CodeGenerator {
     }
 
     fn transform_prop(&self, component: &str, prop_name: &str, prop_value: &str) -> Vec<String> {
+        // Handle bind:value special syntax
+        if prop_name == "bind:value" {
+            let var_name = prop_value.trim();
+            return vec![
+                format!("value = {}", var_name),
+                format!("onValueChange = {{ {} = it }}", var_name),
+            ];
+        }
+
         // Transform route aliases first: $routes → Routes (before adding braces)
         let value = self.transform_route_aliases(prop_value);
 
@@ -517,6 +578,28 @@ impl CodeGenerator {
 
         // Component-specific transformations
         match (component, prop_name) {
+            // TextField label → label = { Text("...") }
+            ("TextField", "label") => {
+                let label_text = if value.starts_with('"') && value.ends_with('"') {
+                    value[1..value.len()-1].to_string()
+                } else {
+                    value
+                };
+                vec![format!("label = {{ Text(\"{}\") }}", label_text)]
+            }
+            // Button text is handled differently - it becomes a child, not a prop
+            ("Button", "text") => {
+                // Return empty vec - text will be handled as child in generate_markup
+                vec![]
+            }
+            // Button onClick needs braces
+            ("Button", "onClick") => {
+                if !value.starts_with('{') {
+                    vec![format!("onClick = {{ {}() }}", value)]
+                } else {
+                    vec![format!("onClick = {}", value)]
+                }
+            }
             // Column spacing → verticalArrangement = Arrangement.spacedBy(N.dp)
             ("Column", "spacing") => {
                 vec![format!("verticalArrangement = Arrangement.spacedBy({}.dp)", value)]

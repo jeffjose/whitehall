@@ -5,6 +5,7 @@ pub struct WhitehallFile {
     pub imports: Vec<Import>,
     pub props: Vec<PropDeclaration>,
     pub state: Vec<StateDeclaration>,
+    pub functions: Vec<FunctionDeclaration>,
     pub markup: Markup,
 }
 
@@ -25,6 +26,12 @@ pub struct StateDeclaration {
     pub name: String,
     pub mutable: bool, // var vs val
     pub initial_value: String,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct FunctionDeclaration {
+    pub name: String,
+    pub body: String, // Just capture the whole function body as a string
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -92,6 +99,7 @@ impl WhitehallFile {
             imports: Vec::new(),
             props: Vec::new(),
             state: Vec::new(),
+            functions: Vec::new(),
             markup: Markup::Text(String::new()),
         }
     }

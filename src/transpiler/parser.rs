@@ -1,8 +1,8 @@
 /// Parser for Whitehall syntax
 
 use crate::transpiler::ast::{
-    Component, ComponentProp, ElseIfBranch, ForLoopBlock, IfElseBlock, Import, Markup,
-    PropDeclaration, StateDeclaration, WhenBlock, WhenBranch, WhitehallFile,
+    Component, ComponentProp, ElseIfBranch, ForLoopBlock, FunctionDeclaration, IfElseBlock,
+    Import, Markup, PropDeclaration, StateDeclaration, WhenBlock, WhenBranch, WhitehallFile,
 };
 
 pub struct Parser {
@@ -22,8 +22,9 @@ impl Parser {
         let mut imports = Vec::new();
         let mut props = Vec::new();
         let mut state = Vec::new();
+        let mut functions = Vec::new();
 
-        // Parse imports, props, and state declarations (before markup)
+        // Parse imports, props, state, and functions (before markup)
         loop {
             self.skip_whitespace();
             if self.consume_word("import") {
@@ -32,6 +33,8 @@ impl Parser {
                 props.push(self.parse_prop_declaration()?);
             } else if self.peek_word() == Some("var") || self.peek_word() == Some("val") {
                 state.push(self.parse_state_declaration()?);
+            } else if self.consume_word("fun") {
+                functions.push(self.parse_function_declaration()?);
             } else {
                 break;
             }
@@ -42,6 +45,7 @@ impl Parser {
             imports,
             props,
             state,
+            functions,
             markup,
         })
     }
@@ -178,6 +182,56 @@ impl Parser {
             name,
             mutable,
             initial_value,
+        })
+    }
+
+    fn parse_function_declaration(&mut self) -> Result<FunctionDeclaration, String> {
+        // Parse: fun name() { body }
+        self.skip_whitespace();
+        let name = self.parse_identifier()?;
+        self.skip_whitespace();
+
+        // Expect '(' and skip params (we just capture everything)
+        self.expect_char('(')?;
+        while self.peek_char() != Some(')') {
+            if self.peek_char().is_none() {
+                return Err("Unexpected EOF in function params".to_string());
+            }
+            self.pos += 1;
+        }
+        self.expect_char(')')?;
+        self.skip_whitespace();
+
+        // Parse body (everything between { and })
+        self.expect_char('{')?;
+        let mut body = String::new();
+        let mut depth = 1;
+
+        while depth > 0 {
+            match self.peek_char() {
+                Some('{') => {
+                    body.push('{');
+                    depth += 1;
+                    self.pos += 1;
+                }
+                Some('}') => {
+                    if depth > 1 {
+                        body.push('}');
+                    }
+                    depth -= 1;
+                    self.pos += 1;
+                }
+                Some(ch) => {
+                    body.push(ch);
+                    self.pos += 1;
+                }
+                None => return Err("Unexpected EOF in function body".to_string()),
+            }
+        }
+
+        Ok(FunctionDeclaration {
+            name,
+            body: body.trim().to_string(),
         })
     }
 
