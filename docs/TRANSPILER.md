@@ -794,6 +794,18 @@ src/transpiler/
 #### Phase 4: Advanced Features (Tests 05-06)
 **Goal**: Data binding and lifecycle hooks
 
+**Test 05: Data Binding** ✅ (`05-data-binding.md`)
+- Input: bind:value syntax, functions, Button/TextField components
+- Implemented:
+  - ✅ Function declarations: `fun name() { body }`
+  - ✅ Colon-based prop names: `bind:value`, `on:click`, etc.
+  - ✅ `bind:value` transformation → `value + onValueChange`
+  - ✅ Button `text` prop → child `Text` component
+  - ✅ TextField `label` → `label = { Text(...) }`
+  - ✅ Button `onClick` wrapping in braces
+  - ✅ TextField and Button component imports
+- Progress: **8/14 tests passing!** (commits: `d116c52`, `c5aa78b`)
+
 **Test 05: Data Binding** (`05-data-binding.md`)
 - Implement: `bind:value={var}` transformation
 - Verify: 8/14 tests passing
