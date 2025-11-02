@@ -6,7 +6,6 @@ mod ast;
 mod codegen;
 mod parser;
 
-use ast::WhitehallFile;
 use codegen::CodeGenerator;
 use parser::Parser;
 
