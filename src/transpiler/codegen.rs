@@ -749,22 +749,80 @@ impl CodeGenerator {
                     // Handle AsyncImage special props
                     if comp.name == "AsyncImage" {
                         let has_modifier = comp.props.iter().any(|p| p.name == "modifier");
+                        let placeholder = comp.props.iter().find(|p| p.name == "placeholder")
+                            .map(|p| self.get_prop_expr(&p.value));
+                        let error = comp.props.iter().find(|p| p.name == "error")
+                            .map(|p| self.get_prop_expr(&p.value));
+                        let crossfade = comp.props.iter().find(|p| p.name == "crossfade")
+                            .map(|p| self.get_prop_expr(&p.value));
 
                         // Only transform if there's NO explicit modifier prop
                         if !has_modifier {
-                            // url → model
-                            if let Some(url_val) = url {
-                                params.push(format!("model = {}", url_val));
-                            }
+                            // Check if we need ImageRequest.Builder pattern
+                            let needs_builder = placeholder.is_some() || error.is_some() || crossfade.is_some();
 
-                            // Add contentDescription
-                            if content_desc.is_none() {
-                                params.push("contentDescription = null".to_string());
-                            }
+                            if needs_builder && url.is_some() {
+                                // Generate ImageRequest.Builder pattern
+                                let mut builder_lines = vec![
+                                    "model = ImageRequest.Builder(LocalContext.current)".to_string(),
+                                    format!("            .data({})", url.unwrap()),
+                                ];
 
-                            // width/height → modifier = Modifier.size()
-                            if let (Some(w), Some(h)) = (width, height) {
-                                params.push(format!("modifier = Modifier.size({}.dp)", w));
+                                if let Some(cf) = crossfade {
+                                    builder_lines.push(format!("            .crossfade({})", cf));
+                                }
+                                if let Some(ph) = placeholder {
+                                    let drawable = if ph.starts_with('"') && ph.ends_with('"') {
+                                        let name = &ph[1..ph.len()-1];
+                                        format!("R.drawable.{}", name)
+                                    } else {
+                                        ph.to_string()
+                                    };
+                                    builder_lines.push(format!("            .placeholder({})", drawable));
+                                }
+                                if let Some(err) = error {
+                                    let drawable = if err.starts_with('"') && err.ends_with('"') {
+                                        let name = &err[1..err.len()-1];
+                                        format!("R.drawable.{}", name)
+                                    } else {
+                                        err.to_string()
+                                    };
+                                    builder_lines.push(format!("            .error({})", drawable));
+                                }
+                                builder_lines.push("            .build()".to_string());
+
+                                params.push(builder_lines.join("\n"));
+
+                                // Add contentDescription param (will be filled from props or default)
+                                if let Some(cd) = content_desc {
+                                    let cd_expr = self.get_prop_expr(&cd.value);
+                                    params.push(format!("contentDescription = {}", cd_expr));
+                                } else {
+                                    // Don't add here, let it come from props naturally
+                                }
+
+                                // width/height → modifier = Modifier.size() (before contentScale)
+                                if let (Some(w), Some(h)) = (width, height) {
+                                    params.push(format!("modifier = Modifier.size({}.dp)", w));
+                                }
+
+                                // Add contentScale for advanced images
+                                params.push("contentScale = ContentScale.Crop".to_string());
+                            } else {
+                                // Simple url → model
+                                if let Some(url_val) = url {
+                                    params.push(format!("model = {}", url_val));
+                                }
+
+                                // Add contentDescription
+                                if content_desc.is_none() {
+                                    params.push("contentDescription = null".to_string());
+                                }
+
+                                // width/height → modifier = Modifier.size() (simple case)
+                                if let (Some(w), Some(h)) = (width, height) {
+                                    params.push(format!("modifier = Modifier.size({}.dp)", w));
+                                }
                             }
                         }
                     }
@@ -778,7 +836,10 @@ impl CodeGenerator {
                         if comp.name == "Box" && (prop.name == "width" || prop.name == "height" || prop.name == "backgroundColor" || prop.name == "alignment") {
                             continue; // Box props handled above
                         }
-                        if comp.name == "AsyncImage" && !has_async_image_modifier && (prop.name == "url" || prop.name == "width" || prop.name == "height") {
+                        if comp.name == "AsyncImage" && !has_async_image_modifier &&
+                            (prop.name == "url" || prop.name == "width" || prop.name == "height" ||
+                             prop.name == "placeholder" || prop.name == "error" || prop.name == "crossfade" ||
+                             prop.name == "contentDescription") {
                             continue; // AsyncImage props handled above (only if no explicit modifier)
                         }
                         let prop_expr = self.get_prop_expr(&prop.value);
@@ -823,8 +884,13 @@ impl CodeGenerator {
 
                 // Generate children if any (but not for Text, which uses children for text parameter)
                 if has_children {
-                    // Scaffold children need paddingValues lambda parameter
-                    if comp.name == "Scaffold" {
+                    // Scaffold children need paddingValues lambda parameter only if first child is layout component
+                    let scaffold_needs_padding = comp.name == "Scaffold" &&
+                        comp.children.first().map_or(false, |child| {
+                            matches!(child, Markup::Component(c) if c.name == "Column" || c.name == "Row" || c.name == "Box")
+                        });
+
+                    if scaffold_needs_padding {
                         output.push_str(" { paddingValues ->\n");
                     } else {
                         output.push_str(" {\n");
@@ -837,8 +903,8 @@ impl CodeGenerator {
 
                     // Generate regular children (pass component name as parent for context-aware generation)
                     for (i, child) in comp.children.iter().enumerate() {
-                        // For Scaffold, mark first child to add paddingValues to modifier
-                        if comp.name == "Scaffold" && i == 0 {
+                        // For Scaffold with layout child, mark first child to add paddingValues to modifier
+                        if scaffold_needs_padding && i == 0 {
                             output.push_str(&self.generate_scaffold_child(child, indent + 1)?);
                         } else {
                             output.push_str(&self.generate_markup_with_context(child, indent + 1, Some(&comp.name))?);
@@ -976,6 +1042,18 @@ impl CodeGenerator {
                                 self.add_import_if_missing(prop_imports, "androidx.compose.ui.Modifier");
                                 self.add_import_if_missing(prop_imports, "androidx.compose.foundation.layout.size");
                                 self.add_import_if_missing(prop_imports, "androidx.compose.ui.unit.dp");
+                            }
+                        }
+                        ("AsyncImage", "placeholder") | ("AsyncImage", "error") | ("AsyncImage", "crossfade") => {
+                            // ImageRequest.Builder pattern needed
+                            let has_modifier = comp.props.iter().any(|p| p.name == "modifier");
+                            if !has_modifier {
+                                self.add_import_if_missing(prop_imports, "androidx.compose.ui.Modifier");
+                                self.add_import_if_missing(prop_imports, "androidx.compose.ui.layout.ContentScale");
+                                self.add_import_if_missing(prop_imports, "androidx.compose.ui.unit.dp");
+                                self.add_import_if_missing(prop_imports, "coil.request.ImageRequest");
+                                self.add_import_if_missing(prop_imports, "androidx.compose.ui.platform.LocalContext");
+                                self.add_import_if_missing(prop_imports, "coil.compose.rememberAsyncImagePainter");
                             }
                         }
                         ("LazyColumn", "spacing") => {
@@ -1541,9 +1619,9 @@ impl CodeGenerator {
                     };
                     modified_comp.props[mod_prop_idx].value = PropValue::Expression(new_modifier);
                 } else {
-                    // No modifier - create one
+                    // No modifier - create one and insert at beginning so it comes first
                     let modifier_str = format!("Modifier\n                {}", modifier_parts.join("\n                "));
-                    modified_comp.props.push(crate::transpiler::ast::ComponentProp {
+                    modified_comp.props.insert(0, crate::transpiler::ast::ComponentProp {
                         name: "modifier".to_string(),
                         value: PropValue::Expression(modifier_str),
                     });
