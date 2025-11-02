@@ -74,8 +74,11 @@ impl CodeGenerator {
             imports.extend(component_imports);
         }
 
-        // Add kotlinx.coroutines.launch if there are lifecycle hooks
-        if !file.lifecycle_hooks.is_empty() {
+        // Add kotlinx.coroutines.launch if there are onMount hooks with launch calls
+        let has_on_mount_with_launch = file.lifecycle_hooks.iter().any(|h| {
+            h.hook_type == "onMount" && (h.body.contains("launch ") || h.body.contains("launch{"))
+        });
+        if has_on_mount_with_launch {
             imports.push("kotlinx.coroutines.launch".to_string());
         }
 
@@ -248,39 +251,98 @@ impl CodeGenerator {
             }
         }
 
-        // Generate coroutineScope if there are lifecycle hooks
-        if !file.lifecycle_hooks.is_empty() {
+        // Check if we have both onMount and onDispose hooks
+        let has_on_mount = file.lifecycle_hooks.iter().any(|h| h.hook_type == "onMount");
+        let has_on_dispose = file.lifecycle_hooks.iter().any(|h| h.hook_type == "onDispose");
+        let use_disposable_effect = has_on_mount && has_on_dispose;
+
+        // Check if onMount body contains launch calls
+        let has_launch_in_on_mount = file.lifecycle_hooks.iter().any(|h| {
+            h.hook_type == "onMount" && (h.body.contains("launch ") || h.body.contains("launch{"))
+        });
+
+        // Generate coroutineScope if there are onMount hooks with launch calls
+        if has_launch_in_on_mount {
             output.push_str(&self.indent());
             output.push_str("val coroutineScope = rememberCoroutineScope()\n\n");
         }
 
         // Generate lifecycle hooks
-        for hook in &file.lifecycle_hooks {
+        if use_disposable_effect {
+            // Use DisposableEffect when both onMount and onDispose are present
             output.push_str(&self.indent());
-            match hook.hook_type.as_str() {
-                "onMount" => {
+            output.push_str("DisposableEffect(Unit) {\n");
+
+            // Generate onMount body
+            if let Some(mount_hook) = file.lifecycle_hooks.iter().find(|h| h.hook_type == "onMount") {
+                for line in mount_hook.body.lines() {
+                    if line.trim().is_empty() {
+                        continue;
+                    }
+
+                    output.push_str(&self.indent());
+                    output.push_str("    ");
+
+                    let original_indent = line.len() - line.trim_start().len();
+                    if original_indent > 0 {
+                        output.push_str(&"  ".repeat(original_indent / 2));
+                    }
+
+                    let mut transformed_line = line.trim_start().replace("$screen.params.", "");
+                    if transformed_line.trim().starts_with("launch ") || transformed_line.trim().starts_with("launch{") {
+                        output.push_str("coroutineScope.");
+                        output.push_str(transformed_line.trim());
+                    } else {
+                        output.push_str(&transformed_line);
+                    }
+                    output.push('\n');
+                }
+                output.push('\n');
+            }
+
+            // Generate onDispose block
+            if let Some(dispose_hook) = file.lifecycle_hooks.iter().find(|h| h.hook_type == "onDispose") {
+                output.push_str(&self.indent());
+                output.push_str("    onDispose {\n");
+
+                for line in dispose_hook.body.lines() {
+                    if line.trim().is_empty() {
+                        continue;
+                    }
+
+                    output.push_str(&self.indent());
+                    output.push_str("        ");
+                    output.push_str(line.trim());
+                    output.push('\n');
+                }
+
+                output.push_str(&self.indent());
+                output.push_str("    }\n");
+            }
+
+            output.push_str(&self.indent());
+            output.push_str("}\n\n");
+        } else {
+            // Use LaunchedEffect for onMount only (current behavior)
+            for hook in &file.lifecycle_hooks {
+                if hook.hook_type == "onMount" {
+                    output.push_str(&self.indent());
                     output.push_str("LaunchedEffect(Unit) {\n");
-                    // Indent hook body preserving original indentation structure
+
                     for line in hook.body.lines() {
-                        // Skip empty lines
                         if line.trim().is_empty() {
                             continue;
                         }
 
-                        // Apply base indentation (one level in from LaunchedEffect)
                         output.push_str(&self.indent());
                         output.push_str("    ");
 
-                        // Preserve additional indentation for nested blocks
                         let original_indent = line.len() - line.trim_start().len();
                         if original_indent > 0 {
                             output.push_str(&"  ".repeat(original_indent / 2));
                         }
 
-                        // Transform $screen.params.{name} → {name}
                         let mut transformed_line = line.trim_start().replace("$screen.params.", "");
-
-                        // Add coroutineScope. prefix to launch calls
                         if transformed_line.trim().starts_with("launch ") || transformed_line.trim().starts_with("launch{") {
                             output.push_str("coroutineScope.");
                             output.push_str(transformed_line.trim());
@@ -292,9 +354,6 @@ impl CodeGenerator {
 
                     output.push_str(&self.indent());
                     output.push_str("}\n\n");
-                }
-                _ => {
-                    // Other hooks can be added later
                 }
             }
         }

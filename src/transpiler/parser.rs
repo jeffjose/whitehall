@@ -39,6 +39,8 @@ impl Parser {
                 functions.push(self.parse_function_declaration()?);
             } else if self.consume_word("onMount") {
                 lifecycle_hooks.push(self.parse_lifecycle_hook("onMount")?);
+            } else if self.consume_word("onDispose") {
+                lifecycle_hooks.push(self.parse_lifecycle_hook("onDispose")?);
             } else {
                 break;
             }
