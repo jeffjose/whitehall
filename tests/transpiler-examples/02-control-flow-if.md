@@ -30,7 +30,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.material3.Text
 
 @Composable
-fun DataView(
+fun StatusView(
     isLoading: Boolean,
     error: String? = null,
     data: String? = null

@@ -325,6 +325,8 @@ impl Parser {
                 break;
             }
 
+            let pos_before = self.pos;
+
             // Check for control flow (@if, @for, @when)
             if self.peek_char() == Some('@') {
                 children.push(self.parse_control_flow()?);
@@ -336,6 +338,15 @@ impl Parser {
             // Parse text/interpolation
             else if self.peek_char().is_some() {
                 let text_children = self.parse_text_with_interpolation_until_markup()?;
+                if text_children.is_empty() && self.pos == pos_before {
+                    // No progress made - this shouldn't happen normally
+                    return Err(format!(
+                        "Infinite loop detected at position {} while parsing children of <{}>: unexpected character '{}'",
+                        self.pos,
+                        parent_name,
+                        self.peek_char().unwrap_or('\0')
+                    ));
+                }
                 children.extend(text_children);
             } else {
                 return Err(format!("Unexpected end while parsing children of <{}>", parent_name));
@@ -415,6 +426,8 @@ impl Parser {
                 break;
             }
 
+            let pos_before = self.pos;
+
             // Check for control flow
             if self.peek_char() == Some('@') {
                 items.push(self.parse_control_flow()?);
@@ -426,6 +439,15 @@ impl Parser {
             // Text/interpolation
             else if self.peek_char().is_some() {
                 let text_items = self.parse_text_with_interpolation_until_markup()?;
+                if text_items.is_empty() && self.pos == pos_before {
+                    // No progress made - this shouldn't happen normally
+                    // Skip the current character to avoid infinite loop
+                    return Err(format!(
+                        "Infinite loop detected at position {}: unexpected character '{}'",
+                        self.pos,
+                        self.peek_char().unwrap_or('\0')
+                    ));
+                }
                 items.extend(text_items);
             } else {
                 return Err("Unexpected end in markup block".to_string());

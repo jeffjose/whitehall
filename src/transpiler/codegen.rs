@@ -29,14 +29,16 @@ impl CodeGenerator {
         self.collect_imports_recursive(&file.markup, &mut prop_imports, &mut component_imports);
 
         // Import ordering:
-        // If there are NO prop imports and NO user imports, put component imports first
+        // If there's exactly one component import, no props, no state, no user imports: component first
         // Otherwise: Composable, prop imports, user imports, component imports
         let mut imports = Vec::new();
 
-        let has_other_imports = !prop_imports.is_empty() || !file.imports.is_empty();
+        let is_simple_case = component_imports.len() == 1
+            && prop_imports.is_empty()
+            && file.imports.is_empty();
 
-        if !has_other_imports {
-            // Simple case: component imports first (e.g., Text before Composable)
+        if is_simple_case {
+            // Very simple case: single component import before Composable (e.g., Text before Composable)
             imports.extend(component_imports.clone());
         }
 
@@ -56,8 +58,8 @@ impl CodeGenerator {
             imports.push(resolved);
         }
 
-        // Add component imports (if not already added)
-        if has_other_imports {
+        // Add component imports (if not already added in simple case)
+        if !is_simple_case {
             imports.extend(component_imports);
         }
 
@@ -83,6 +85,9 @@ impl CodeGenerator {
                 if let Some(default) = &prop.default_value {
                     output.push_str(" = ");
                     output.push_str(default);
+                } else if prop.prop_type.ends_with('?') {
+                    // Nullable types without explicit default get = null
+                    output.push_str(" = null");
                 }
                 if i < file.props.len() - 1 {
                     output.push(',');
@@ -163,7 +168,6 @@ impl CodeGenerator {
                 let indent_str = "    ".repeat(indent);
                 output.push_str(&indent_str);
                 output.push_str(&comp.name);
-                output.push('(');
 
                 let mut params = Vec::new();
 
@@ -178,25 +182,33 @@ impl CodeGenerator {
                     params.push(format!("{} = {}", prop.name, prop.value));
                 }
 
-                // If multiple params or any long param, use multiline format
-                if params.len() > 1 || params.iter().any(|p| p.len() > 40) {
-                    output.push('\n');
-                    for (i, param) in params.iter().enumerate() {
-                        output.push_str(&format!("{}    {}", indent_str, param));
-                        if i < params.len() - 1 {
-                            output.push(',');
-                        }
+                // Determine if this component has a trailing lambda (children block)
+                let has_children = !comp.children.is_empty() && comp.name != "Text";
+
+                // Only add parens if we have params OR no trailing lambda
+                if !params.is_empty() || !has_children {
+                    output.push('(');
+
+                    // If multiple params or any long param, use multiline format
+                    if params.len() > 1 || params.iter().any(|p| p.len() > 40) {
                         output.push('\n');
+                        for (i, param) in params.iter().enumerate() {
+                            output.push_str(&format!("{}    {}", indent_str, param));
+                            if i < params.len() - 1 {
+                                output.push(',');
+                            }
+                            output.push('\n');
+                        }
+                        output.push_str(&indent_str);
+                    } else if !params.is_empty() {
+                        output.push_str(&params[0]);
                     }
-                    output.push_str(&indent_str);
-                } else if !params.is_empty() {
-                    output.push_str(&params[0]);
+
+                    output.push(')');
                 }
 
-                output.push(')');
-
                 // Generate children if any (but not for Text, which uses children for text parameter)
-                if !comp.children.is_empty() && comp.name != "Text" {
+                if has_children {
                     output.push_str(" {\n");
                     for child in &comp.children {
                         output.push_str(&self.generate_markup_with_indent(child, indent + 1)?);
@@ -275,6 +287,12 @@ impl CodeGenerator {
                             component_imports.push(import);
                         }
                     }
+                    "Column" => {
+                        let import = "androidx.compose.foundation.layout.Column".to_string();
+                        if !component_imports.contains(&import) {
+                            component_imports.push(import);
+                        }
+                    }
                     "AsyncImage" => {
                         let import = "coil.compose.AsyncImage".to_string();
                         if !component_imports.contains(&import) {
@@ -292,6 +310,24 @@ impl CodeGenerator {
             Markup::Sequence(items) => {
                 for item in items {
                     self.collect_imports_recursive(item, prop_imports, component_imports);
+                }
+            }
+            Markup::IfElse(if_block) => {
+                // Recurse into then branch
+                for item in &if_block.then_branch {
+                    self.collect_imports_recursive(item, prop_imports, component_imports);
+                }
+                // Recurse into else if branches
+                for else_if in &if_block.else_ifs {
+                    for item in &else_if.body {
+                        self.collect_imports_recursive(item, prop_imports, component_imports);
+                    }
+                }
+                // Recurse into else branch
+                if let Some(else_branch) = &if_block.else_branch {
+                    for item in else_branch {
+                        self.collect_imports_recursive(item, prop_imports, component_imports);
+                    }
                 }
             }
             _ => {}
