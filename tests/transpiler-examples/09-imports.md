@@ -24,14 +24,14 @@ import $components.PostCard
 ```kotlin
 package com.example.app.components
 
-import androidx.compose.runtime.Composable
 import androidx.compose.foundation.layout.Column
 import androidx.compose.material3.Text
-import com.example.app.lib.api.ApiClient
-import com.example.app.models.User
-import com.example.app.models.Post
+import androidx.compose.runtime.Composable
 import com.example.app.components.Avatar
 import com.example.app.components.PostCard
+import com.example.app.lib.api.ApiClient
+import com.example.app.models.Post
+import com.example.app.models.User
 
 @Composable
 fun UserHeader(
