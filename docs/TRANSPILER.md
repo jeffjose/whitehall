@@ -661,37 +661,176 @@ git commit -m "Implement test 00: minimal text component"
 
 **IMPORTANT**: Before resetting the transpiler, we need to fix the test markdown format.
 
-**Current Problem**:
-- Component names are implicit (filename `01-basic-component.md` but expected output shows `fun Avatar()`)
-- Package names vary (components vs screens) but are hardcoded in test harness
-- No way to specify the source filename (e.g., `Avatar.wh`)
+#### Current Problems
 
-**Solution**: Add metadata section to each test markdown file
+1. **Component Name is Implicit**:
+   - Test `01-basic-component.md` expects output `fun Avatar()` but filename would derive `BasicComponent`
+   - Test `07-routing-simple.md` expects output `fun WelcomeScreen()` but filename would derive `RoutingSimple`
 
-See **[TEST_FORMAT_PROPOSAL.md](./TEST_FORMAT_PROPOSAL.md)** for full details.
+2. **Package Name Varies**:
+   - Most tests use `com.example.app.components`
+   - Routing tests use `com.example.app.screens`
+   - No way to specify this per-test
 
-**Example Metadata Section**:
+3. **File Type Unknown**:
+   - Is this a `.wh` component file?
+   - Is this a `+screen.wh` screen file?
+   - Affects how transpiler should process it
+
+4. **Test Harness Logic**:
+   - Currently derives component name from markdown filename
+   - Hardcodes package as `com.example.app.components`
+   - No way to override or customize
+
+#### Solution: Metadata Section
+
+Add a `## Metadata` section to each test file with explicit configuration.
+
+**Format** (simple key-value, no YAML dependency):
+
 ```markdown
+# Test Name
+
+Description of what this test validates.
+
 ## Metadata
 
 ```
 file: Avatar.wh
 package: com.example.app.components
 ```
+
+## Input
+
+```whitehall
+// Whitehall code
 ```
 
-**Required Steps** (before transpiler reset):
-1. ✅ Review TEST_FORMAT_PROPOSAL.md
-2. ⏳ Add metadata sections to all 14 test files
-3. ⏳ Update test harness to parse and use metadata
-4. ⏳ Validate all tests parse correctly
-5. ⏳ Commit test infrastructure updates
+## Output
+
+```kotlin
+// Expected Kotlin code
+```
+```
+
+**Metadata Fields**:
+
+| Field | Type | Required | Description | Example |
+|-------|------|----------|-------------|---------|
+| `file` | string | Yes | Source filename (determines component name) | `Avatar.wh`, `WelcomeScreen.wh` |
+| `package` | string | Yes | Kotlin package for generated code | `com.example.app.components` |
+| `type` | enum | No | File type hint (`component`, `screen`) | `screen` |
+
+**Component Name Derivation**:
+- `Avatar.wh` → `fun Avatar()`
+- `MinimalText.wh` → `fun MinimalText()`
+- `WelcomeScreen.wh` → `fun WelcomeScreen()`
+
+**Benefits**:
+1. Explicit > Implicit: No guessing, all metadata clearly stated
+2. Flexible: Each test can specify different packages/names
+3. Maintainable: Easy to update metadata without changing code
+4. Self-Documenting: Reader immediately sees what file this represents
+
+#### Example: Updated Test File
+
+**Before** (`01-basic-component.md`):
+```markdown
+# Basic Component with Props
+
+Tests a component with required and optional props.
+
+## Input
+
+```whitehall
+import $models.User
+  @prop val url: String
+  ...
+```
+
+## Output
+
+```kotlin
+package com.example.app.components
+...
+fun Avatar(...) { ... }
+```
+```
+
+**After** (with metadata):
+```markdown
+# Basic Component with Props
+
+Tests a component with required and optional props.
+
+## Metadata
+
+```
+file: Avatar.wh
+package: com.example.app.components
+```
+
+## Input
+
+```whitehall
+import $models.User
+  @prop val url: String
+  ...
+```
+
+## Output
+
+```kotlin
+package com.example.app.components
+...
+fun Avatar(...) { ... }
+```
+```
+
+#### Test Harness Changes
+
+Update `tests/transpiler_examples_test.rs` to:
+
+1. Parse `## Metadata` section from markdown
+2. Extract key-value pairs: `file`, `package`, `type`
+3. Derive component name from `file` field (strip `.wh`)
+4. Pass metadata to transpiler function
+
+**Parsing Logic**:
+```rust
+#[derive(Debug)]
+struct TestMetadata {
+    file: String,
+    package: String,
+    type_hint: Option<String>,
+}
+
+fn parse_metadata(content: &str) -> Result<TestMetadata, String> {
+    // Find ## Metadata section
+    // Extract code block content
+    // Parse key:value lines
+    // Return TestMetadata struct
+}
+```
+
+**Transpiler Call**:
+```rust
+let component_name = metadata.file.trim_end_matches(".wh");
+let output = transpile(&test.input, &metadata.package, component_name)?;
+```
+
+#### Required Steps (before transpiler reset):
+
+1. ⏳ Add metadata sections to all 14 test files
+2. ⏳ Update test harness to parse and use metadata
+3. ⏳ Validate all tests parse correctly
+4. ⏳ Commit test infrastructure updates
 
 ### Next Immediate Steps
 
 1. ✅ Review TRANSPILER.md plan - Approved
-2. ⏳ Review TEST_FORMAT_PROPOSAL.md - Decide on format
-3. ⏳ Update test files with metadata (prerequisite)
+2. ⏳ Update test files with metadata (prerequisite)
+3. ⏳ Update test harness to parse metadata
 4. ⏳ Execute: `git reset --hard e1ecf0a`
 5. ⏳ Create `src/transpiler/` directory structure
 6. ⏳ Start with test 00: minimal text
