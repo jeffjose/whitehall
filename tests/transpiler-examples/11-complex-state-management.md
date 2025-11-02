@@ -167,3 +167,10 @@ fun ComplexStateManagement() {
     }
 }
 ```
+
+## Metadata
+
+```
+file: ComplexStateManagement.wh
+package: com.example.app.components
+```

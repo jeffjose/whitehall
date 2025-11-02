@@ -46,3 +46,10 @@ fun DataView(
     }
 }
 ```
+
+## Metadata
+
+```
+file: StatusView.wh
+package: com.example.app.components
+```

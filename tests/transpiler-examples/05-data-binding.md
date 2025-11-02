@@ -76,3 +76,10 @@ fun LoginForm() {
     }
 }
 ```
+
+## Metadata
+
+```
+file: LoginForm.wh
+package: com.example.app.components
+```

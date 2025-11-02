@@ -25,3 +25,10 @@ fun SingleProp(
     Text(text = message)
 }
 ```
+
+## Metadata
+
+```
+file: SingleProp.wh
+package: com.example.app.components
+```

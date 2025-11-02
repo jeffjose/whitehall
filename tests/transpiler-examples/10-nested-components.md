@@ -95,3 +95,10 @@ fun ItemList(
     }
 }
 ```
+
+## Metadata
+
+```
+file: ItemList.wh
+package: com.example.app.components
+```

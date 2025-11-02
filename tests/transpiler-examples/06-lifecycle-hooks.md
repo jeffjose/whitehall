@@ -79,3 +79,10 @@ fun FeedView() {
     }
 }
 ```
+
+## Metadata
+
+```
+file: FeedView.wh
+package: com.example.app.components
+```

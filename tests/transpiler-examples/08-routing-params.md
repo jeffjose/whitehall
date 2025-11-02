@@ -94,3 +94,11 @@ fun ProfileScreen(
     }
 }
 ```
+
+## Metadata
+
+```
+file: ProfileScreen.wh
+package: com.example.app.screens
+type: screen
+```

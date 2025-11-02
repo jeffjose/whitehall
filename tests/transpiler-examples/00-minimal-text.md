@@ -21,3 +21,10 @@ fun MinimalText() {
     Text(text = "Hello, World!")
 }
 ```
+
+## Metadata
+
+```
+file: MinimalText.wh
+package: com.example.app.components
+```

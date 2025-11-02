@@ -76,3 +76,11 @@ fun WelcomeScreen(navController: NavController) {
     }
 }
 ```
+
+## Metadata
+
+```
+file: WelcomeScreen.wh
+package: com.example.app.screens
+type: screen
+```

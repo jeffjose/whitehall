@@ -25,3 +25,10 @@ fun TextWithInterpolation() {
     Text(text = "Hello, $name!")
 }
 ```
+
+## Metadata
+
+```
+file: TextWithInterpolation.wh
+package: com.example.app.components
+```

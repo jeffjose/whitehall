@@ -44,3 +44,10 @@ fun Avatar(
     )
 }
 ```
+
+## Metadata
+
+```
+file: Avatar.wh
+package: com.example.app.components
+```

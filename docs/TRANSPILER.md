@@ -684,7 +684,7 @@ git commit -m "Implement test 00: minimal text component"
 
 #### Solution: Metadata Section
 
-Add a `## Metadata` section to each test file with explicit configuration.
+Add a `## Metadata` section at the **bottom** of each test file with explicit configuration (machine-readable data goes last, human-readable content first).
 
 **Format** (simple key-value, no YAML dependency):
 
@@ -692,13 +692,6 @@ Add a `## Metadata` section to each test file with explicit configuration.
 # Test Name
 
 Description of what this test validates.
-
-## Metadata
-
-```
-file: Avatar.wh
-package: com.example.app.components
-```
 
 ## Input
 
@@ -710,6 +703,13 @@ package: com.example.app.components
 
 ```kotlin
 // Expected Kotlin code
+```
+
+## Metadata
+
+```
+file: Avatar.wh
+package: com.example.app.components
 ```
 ```
 
@@ -757,18 +757,11 @@ fun Avatar(...) { ... }
 ```
 ```
 
-**After** (with metadata):
+**After** (with metadata at bottom):
 ```markdown
 # Basic Component with Props
 
 Tests a component with required and optional props.
-
-## Metadata
-
-```
-file: Avatar.wh
-package: com.example.app.components
-```
 
 ## Input
 
@@ -784,6 +777,13 @@ import $models.User
 package com.example.app.components
 ...
 fun Avatar(...) { ... }
+```
+
+## Metadata
+
+```
+file: Avatar.wh
+package: com.example.app.components
 ```
 ```
 

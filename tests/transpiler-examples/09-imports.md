@@ -44,6 +44,13 @@ fun UserHeader(
 }
 ```
 
+## Metadata
+
+```
+file: UserHeader.wh
+package: com.example.app.components
+```
+
 ## Notes
 
 Import alias mapping is configured in `whitehall.toml`:
