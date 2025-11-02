@@ -63,6 +63,9 @@ impl CodeGenerator {
             imports.extend(component_imports);
         }
 
+        // Sort imports alphabetically (standard Kotlin convention)
+        imports.sort();
+
         // Write all imports
         for import in imports {
             output.push_str(&format!("import {}\n", import));
@@ -235,9 +238,10 @@ impl CodeGenerator {
                     params.push(format!("text = {}", text_expr));
                 }
 
-                // Add component props
+                // Add component props (with transformations)
                 for prop in &comp.props {
-                    params.push(format!("{} = {}", prop.name, prop.value));
+                    let transformed = self.transform_prop(&comp.name, &prop.name, &prop.value);
+                    params.extend(transformed);
                 }
 
                 // Determine if this component has a trailing lambda (children block)
@@ -321,8 +325,9 @@ impl CodeGenerator {
     ) {
         match markup {
             Markup::Component(comp) => {
-                // Check if we need Modifier and clickable imports from props
+                // Check if we need imports from props based on transformations
                 for prop in &comp.props {
+                    // Generic prop value checks
                     if prop.value.contains("Modifier") {
                         let import = "androidx.compose.ui.Modifier".to_string();
                         if !prop_imports.contains(&import) {
@@ -334,6 +339,34 @@ impl CodeGenerator {
                         if !prop_imports.contains(&import) {
                             prop_imports.push(import);
                         }
+                    }
+
+                    // Component-specific prop transformations that need imports
+                    match (comp.name.as_str(), prop.name.as_str()) {
+                        ("Column", "spacing") => {
+                            // spacing → verticalArrangement = Arrangement.spacedBy(N.dp)
+                            self.add_import_if_missing(prop_imports, "androidx.compose.foundation.layout.Arrangement");
+                            self.add_import_if_missing(prop_imports, "androidx.compose.ui.unit.dp");
+                        }
+                        ("Column", "padding") => {
+                            // padding → modifier = Modifier.padding(N.dp)
+                            self.add_import_if_missing(prop_imports, "androidx.compose.ui.Modifier");
+                            self.add_import_if_missing(prop_imports, "androidx.compose.foundation.layout.padding");
+                            self.add_import_if_missing(prop_imports, "androidx.compose.ui.unit.dp");
+                        }
+                        ("Text", "fontSize") => {
+                            // fontSize → fontSize = N.sp
+                            self.add_import_if_missing(prop_imports, "androidx.compose.ui.unit.sp");
+                        }
+                        ("Text", "fontWeight") => {
+                            // fontWeight → FontWeight.Bold
+                            self.add_import_if_missing(prop_imports, "androidx.compose.ui.text.font.FontWeight");
+                        }
+                        ("Text", "color") if prop.value.starts_with('"') => {
+                            // color string → MaterialTheme.colorScheme
+                            self.add_import_if_missing(prop_imports, "androidx.compose.material3.MaterialTheme");
+                        }
+                        _ => {}
                     }
                 }
 
@@ -436,6 +469,113 @@ impl CodeGenerator {
         }
 
         Ok(format!("\"{}\"", parts.join("")))
+    }
+
+    fn add_import_if_missing(&self, imports: &mut Vec<String>, import: &str) {
+        let import_str = import.to_string();
+        if !imports.contains(&import_str) {
+            imports.push(import_str);
+        }
+    }
+
+    fn transform_prop(&self, component: &str, prop_name: &str, prop_value: &str) -> Vec<String> {
+        // Transform route aliases first: $routes → Routes (before adding braces)
+        let value = self.transform_route_aliases(prop_value);
+
+        // Transform lambda arrow syntax: () => to {}
+        let value = self.transform_lambda_arrow(&value);
+
+        // Component-specific transformations
+        match (component, prop_name) {
+            // Column spacing → verticalArrangement = Arrangement.spacedBy(N.dp)
+            ("Column", "spacing") => {
+                vec![format!("verticalArrangement = Arrangement.spacedBy({}.dp)", value)]
+            }
+            // Column padding → modifier = Modifier.padding(N.dp)
+            ("Column", "padding") => {
+                vec![format!("modifier = Modifier.padding({}.dp)", value)]
+            }
+            // Text fontSize → fontSize = N.sp
+            ("Text", "fontSize") => {
+                vec![format!("fontSize = {}.sp", value)]
+            }
+            // Text fontWeight string → FontWeight enum
+            ("Text", "fontWeight") => {
+                let weight = if value.starts_with('"') && value.ends_with('"') {
+                    // String literal "bold" → FontWeight.Bold
+                    let s = &value[1..value.len()-1];
+                    format!("FontWeight.{}", s.chars().next().unwrap().to_uppercase().collect::<String>() + &s[1..])
+                } else {
+                    value
+                };
+                vec![format!("fontWeight = {}", weight)]
+            }
+            // Text color string → MaterialTheme.colorScheme
+            ("Text", "color") => {
+                let color = if value.starts_with('"') && value.ends_with('"') {
+                    // String literal "secondary" → MaterialTheme.colorScheme.secondary
+                    let s = &value[1..value.len()-1];
+                    format!("MaterialTheme.colorScheme.{}", s)
+                } else {
+                    value
+                };
+                vec![format!("color = {}", color)]
+            }
+            // Card onClick → just transform the value
+            ("Card", "onClick") => {
+                vec![format!("onClick = {}", value)]
+            }
+            // Default: no transformation
+            _ => {
+                vec![format!("{} = {}", prop_name, value)]
+            }
+        }
+    }
+
+    fn transform_lambda_arrow(&self, value: &str) -> String {
+        // Transform () => expr to { expr }
+        if value.contains("() =>") {
+            let transformed = value.replace("() =>", "").trim().to_string();
+            // Wrap in braces
+            format!("{{ {} }}", transformed)
+        } else {
+            value.to_string()
+        }
+    }
+
+    fn transform_route_aliases(&self, value: &str) -> String {
+        // Transform $routes.foo.bar(params) to Routes.Foo.Bar(params)
+        if let Some(routes_pos) = value.find("$routes.") {
+            // Find the extent of the route path
+            let after_routes = &value[routes_pos + 8..]; // Skip "$routes."
+
+            // Find where route path ends (next '(' or whitespace or end)
+            let mut route_end = after_routes.len();
+            for (i, ch) in after_routes.chars().enumerate() {
+                if ch == '(' || ch.is_whitespace() || ch == ')' || ch == ',' {
+                    route_end = i;
+                    break;
+                }
+            }
+
+            let route_path = &after_routes[..route_end];
+            let before = &value[..routes_pos];
+            let after = &after_routes[route_end..];
+
+            // Capitalize route segments: post.detail → Post.Detail
+            let parts: Vec<&str> = route_path.split('.').collect();
+            let capitalized: Vec<String> = parts.iter().map(|part| {
+                let mut chars = part.chars();
+                match chars.next() {
+                    Some(first) => first.to_uppercase().collect::<String>() + chars.as_str(),
+                    None => part.to_string(),
+                }
+            }).collect();
+
+            format!("{}Routes.{}{}", before, capitalized.join("."), after)
+        } else {
+            value.to_string()
+        }
     }
 
     fn indent(&self) -> String {

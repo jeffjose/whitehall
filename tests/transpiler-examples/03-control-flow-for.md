@@ -59,9 +59,7 @@ fun PostList(
                     Card(
                         onClick = { navigate(Routes.Post.Detail(id = post.id)) }
                     ) {
-                        Column(
-                            modifier = Modifier.padding(12.dp)
-                        ) {
+                        Column(modifier = Modifier.padding(12.dp)) {
                             Text(
                                 text = post.title,
                                 fontSize = 16.sp,

@@ -24,11 +24,11 @@ import $models.User
 ```kotlin
 package com.example.app.components
 
+import androidx.compose.foundation.clickable
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
-import androidx.compose.foundation.clickable
-import com.example.app.models.User
 import coil.compose.AsyncImage
+import com.example.app.models.User
 
 @Composable
 fun Avatar(
