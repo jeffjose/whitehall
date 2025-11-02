@@ -121,10 +121,47 @@ impl CodeGenerator {
     }
 
     fn generate_markup(&self, markup: &Markup) -> Result<String, String> {
+        self.generate_markup_with_indent(markup, self.indent_level)
+    }
+
+    fn generate_markup_with_indent(&self, markup: &Markup, indent: usize) -> Result<String, String> {
         match markup {
+            Markup::IfElse(if_block) => {
+                let mut output = String::new();
+                let indent_str = "    ".repeat(indent);
+
+                // if block
+                output.push_str(&format!("{}if ({}) {{\n", indent_str, if_block.condition));
+                for child in &if_block.then_branch {
+                    output.push_str(&self.generate_markup_with_indent(child, indent + 1)?);
+                }
+                output.push_str(&format!("{}}}", indent_str));
+
+                // else if blocks
+                for else_if in &if_block.else_ifs {
+                    output.push_str(&format!(" else if ({}) {{\n", else_if.condition));
+                    for child in &else_if.body {
+                        output.push_str(&self.generate_markup_with_indent(child, indent + 1)?);
+                    }
+                    output.push_str(&format!("{}}}", indent_str));
+                }
+
+                // else block
+                if let Some(else_body) = &if_block.else_branch {
+                    output.push_str(" else {\n");
+                    for child in else_body {
+                        output.push_str(&self.generate_markup_with_indent(child, indent + 1)?);
+                    }
+                    output.push_str(&format!("{}}}", indent_str));
+                }
+
+                output.push('\n');
+                Ok(output)
+            }
             Markup::Component(comp) => {
                 let mut output = String::new();
-                output.push_str(&self.indent());
+                let indent_str = "    ".repeat(indent);
+                output.push_str(&indent_str);
                 output.push_str(&comp.name);
                 output.push('(');
 
@@ -145,28 +182,44 @@ impl CodeGenerator {
                 if params.len() > 1 || params.iter().any(|p| p.len() > 40) {
                     output.push('\n');
                     for (i, param) in params.iter().enumerate() {
-                        output.push_str(&format!("{}    {}", self.indent(), param));
+                        output.push_str(&format!("{}    {}", indent_str, param));
                         if i < params.len() - 1 {
                             output.push(',');
                         }
                         output.push('\n');
                     }
-                    output.push_str(&self.indent());
+                    output.push_str(&indent_str);
                 } else if !params.is_empty() {
                     output.push_str(&params[0]);
                 }
 
-                output.push_str(")\n");
+                output.push(')');
+
+                // Generate children if any (but not for Text, which uses children for text parameter)
+                if !comp.children.is_empty() && comp.name != "Text" {
+                    output.push_str(" {\n");
+                    for child in &comp.children {
+                        output.push_str(&self.generate_markup_with_indent(child, indent + 1)?);
+                    }
+                    output.push_str(&format!("{}}}\n", indent_str));
+                } else {
+                    output.push('\n');
+                }
+
                 Ok(output)
             }
-            Markup::Text(text) => Ok(format!("{}Text(text = \"{}\")\n", self.indent(), text)),
+            Markup::Text(text) => {
+                let indent_str = "    ".repeat(indent);
+                Ok(format!("{}Text(text = \"{}\")\n", indent_str, text))
+            }
             Markup::Interpolation(expr) => {
-                Ok(format!("{}Text(text = ${})\n", self.indent(), expr))
+                let indent_str = "    ".repeat(indent);
+                Ok(format!("{}Text(text = ${})\n", indent_str, expr))
             }
             Markup::Sequence(items) => {
                 let mut output = String::new();
                 for item in items {
-                    output.push_str(&self.generate_markup(item)?);
+                    output.push_str(&self.generate_markup_with_indent(item, indent)?);
                 }
                 Ok(output)
             }

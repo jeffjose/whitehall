@@ -1,7 +1,8 @@
 /// Parser for Whitehall syntax
 
 use crate::transpiler::ast::{
-    Component, ComponentProp, Import, Markup, PropDeclaration, StateDeclaration, WhitehallFile,
+    Component, ComponentProp, ElseIfBranch, IfElseBlock, Import, Markup, PropDeclaration,
+    StateDeclaration, WhitehallFile,
 };
 
 pub struct Parser {
@@ -254,22 +255,8 @@ impl Parser {
         let children = if self_closing {
             Vec::new()
         } else {
-            // Parse children (text with potential interpolation)
-            let children = self.parse_text_with_interpolation_until('<')?;
-
-            // Parse closing tag: </ComponentName>
-            self.expect_char('<')?;
-            self.expect_char('/')?;
-            let closing_name = self.parse_identifier()?;
-            self.expect_char('>')?;
-
-            if name != closing_name {
-                return Err(format!(
-                    "Mismatched tags: opening <{}> vs closing </{}>",
-                    name, closing_name
-                ));
-            }
-
+            // Parse children (can be text, components, or control flow)
+            let children = self.parse_children(&name)?;
             children
         };
 
@@ -313,6 +300,171 @@ impl Parser {
         }
 
         Ok(ComponentProp { name, value })
+    }
+
+    fn parse_children(&mut self, parent_name: &str) -> Result<Vec<Markup>, String> {
+        let mut children = Vec::new();
+
+        loop {
+            self.skip_whitespace();
+
+            // Check for closing tag
+            if self.peek_char() == Some('<') && self.peek_ahead(1) == Some('/') {
+                // Parse closing tag
+                self.expect_char('<')?;
+                self.expect_char('/')?;
+                let closing_name = self.parse_identifier()?;
+                self.expect_char('>')?;
+
+                if parent_name != closing_name {
+                    return Err(format!(
+                        "Mismatched tags: opening <{}> vs closing </{}>",
+                        parent_name, closing_name
+                    ));
+                }
+                break;
+            }
+
+            // Check for control flow (@if, @for, @when)
+            if self.peek_char() == Some('@') {
+                children.push(self.parse_control_flow()?);
+            }
+            // Check for child component
+            else if self.peek_char() == Some('<') {
+                children.push(self.parse_component()?);
+            }
+            // Parse text/interpolation
+            else if self.peek_char().is_some() {
+                let text_children = self.parse_text_with_interpolation_until_markup()?;
+                children.extend(text_children);
+            } else {
+                return Err(format!("Unexpected end while parsing children of <{}>", parent_name));
+            }
+        }
+
+        Ok(children)
+    }
+
+    fn parse_control_flow(&mut self) -> Result<Markup, String> {
+        self.expect_char('@')?;
+
+        if self.consume_word("if") {
+            self.parse_if_else()
+        } else {
+            Err("Unknown control flow construct".to_string())
+        }
+    }
+
+    fn parse_if_else(&mut self) -> Result<Markup, String> {
+        // Parse: @if (condition) { ... } [else if (...) { ... }]* [else { ... }]
+        self.skip_whitespace();
+        self.expect_char('(')?;
+        let condition = self.parse_until_char(')')?;
+        self.expect_char(')')?;
+        self.skip_whitespace();
+        self.expect_char('{')?;
+
+        let then_branch = self.parse_markup_block()?;
+
+        let mut else_ifs = Vec::new();
+        let mut else_branch = None;
+
+        // Parse else if / else
+        loop {
+            self.skip_whitespace();
+            if self.consume_word("else") {
+                self.skip_whitespace();
+                if self.consume_word("if") {
+                    // else if
+                    self.skip_whitespace();
+                    self.expect_char('(')?;
+                    let condition = self.parse_until_char(')')?;
+                    self.expect_char(')')?;
+                    self.skip_whitespace();
+                    self.expect_char('{')?;
+                    let body = self.parse_markup_block()?;
+                    else_ifs.push(ElseIfBranch { condition, body });
+                } else {
+                    // else
+                    self.expect_char('{')?;
+                    else_branch = Some(self.parse_markup_block()?);
+                    break;
+                }
+            } else {
+                break;
+            }
+        }
+
+        Ok(Markup::IfElse(IfElseBlock {
+            condition,
+            then_branch,
+            else_ifs,
+            else_branch,
+        }))
+    }
+
+    fn parse_markup_block(&mut self) -> Result<Vec<Markup>, String> {
+        // Parse markup until closing brace
+        let mut items = Vec::new();
+
+        loop {
+            self.skip_whitespace();
+
+            if self.peek_char() == Some('}') {
+                self.expect_char('}')?;
+                break;
+            }
+
+            // Check for control flow
+            if self.peek_char() == Some('@') {
+                items.push(self.parse_control_flow()?);
+            }
+            // Check for component
+            else if self.peek_char() == Some('<') {
+                items.push(self.parse_component()?);
+            }
+            // Text/interpolation
+            else if self.peek_char().is_some() {
+                let text_items = self.parse_text_with_interpolation_until_markup()?;
+                items.extend(text_items);
+            } else {
+                return Err("Unexpected end in markup block".to_string());
+            }
+        }
+
+        Ok(items)
+    }
+
+    fn parse_text_with_interpolation_until_markup(&mut self) -> Result<Vec<Markup>, String> {
+        let mut children = Vec::new();
+        let mut current_text = String::new();
+
+        while let Some(ch) = self.peek_char() {
+            if ch == '<' || ch == '@' || ch == '}' {
+                break;
+            } else if ch == '{' {
+                // Save any accumulated text
+                if !current_text.is_empty() {
+                    children.push(Markup::Text(current_text.clone()));
+                    current_text.clear();
+                }
+                // Parse interpolation
+                self.expect_char('{')?;
+                let expr = self.parse_until_char('}')?;
+                self.expect_char('}')?;
+                children.push(Markup::Interpolation(expr));
+            } else {
+                current_text.push(ch);
+                self.pos += 1;
+            }
+        }
+
+        // Save any remaining text
+        if !current_text.is_empty() {
+            children.push(Markup::Text(current_text));
+        }
+
+        Ok(children)
     }
 
     fn parse_text_with_interpolation_until(&mut self, delimiter: char) -> Result<Vec<Markup>, String> {
@@ -400,6 +552,10 @@ impl Parser {
 
     fn peek_char(&self) -> Option<char> {
         self.input.chars().nth(self.pos)
+    }
+
+    fn peek_ahead(&self, offset: usize) -> Option<char> {
+        self.input.chars().nth(self.pos + offset)
     }
 
     fn peek_word(&self) -> Option<&str> {

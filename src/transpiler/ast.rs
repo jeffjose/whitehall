@@ -33,6 +33,21 @@ pub enum Markup {
     Text(String),
     Interpolation(String), // {variable} expression
     Sequence(Vec<Markup>), // Multiple markup items
+    IfElse(IfElseBlock),   // @if/@else control flow
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct IfElseBlock {
+    pub condition: String,
+    pub then_branch: Vec<Markup>,
+    pub else_ifs: Vec<ElseIfBranch>,
+    pub else_branch: Option<Vec<Markup>>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct ElseIfBranch {
+    pub condition: String,
+    pub body: Vec<Markup>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
