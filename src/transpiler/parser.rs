@@ -323,8 +323,18 @@ impl Parser {
     }
 
     fn parse_component_prop(&mut self) -> Result<ComponentProp, String> {
-        // Parse: propName={expression} or propName="string"
-        let name = self.parse_identifier()?;
+        // Parse: propName={expression} or propName="string" or bind:value={expr}
+        // Prop names can include colons (for bind:value, on:click, etc.)
+        let mut name = self.parse_identifier()?;
+
+        // Check for colon (e.g., bind:value)
+        if self.peek_char() == Some(':') {
+            name.push(':');
+            self.pos += 1;
+            let rest = self.parse_identifier()?;
+            name.push_str(&rest);
+        }
+
         self.skip_whitespace();
         self.expect_char('=')?;
         self.skip_whitespace();

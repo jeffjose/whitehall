@@ -36,11 +36,11 @@ Tests two-way data binding with bind:value syntax.
 ```kotlin
 package com.example.app.components
 
-import androidx.compose.runtime.*
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.material3.TextField
+import androidx.compose.foundation.layout.Column
 import androidx.compose.material3.Button
+import androidx.compose.material3.TextField
+import androidx.compose.runtime.*
 import androidx.compose.ui.unit.dp
 
 @Composable
@@ -60,17 +60,13 @@ fun LoginForm() {
             value = username,
             onValueChange = { username = it }
         )
-
         TextField(
             label = { Text("Password") },
             value = password,
             onValueChange = { password = it },
             type = "password"
         )
-
-        Button(
-            onClick = { handleLogin() }
-        ) {
+        Button(onClick = { handleLogin() }) {
             Text("Login")
         }
     }
