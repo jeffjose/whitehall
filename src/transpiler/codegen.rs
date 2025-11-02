@@ -5,14 +5,16 @@ use crate::transpiler::ast::{Markup, WhitehallFile};
 pub struct CodeGenerator {
     package: String,
     component_name: String,
+    component_type: Option<String>,
     indent_level: usize,
 }
 
 impl CodeGenerator {
-    pub fn new(package: &str, component_name: &str) -> Self {
+    pub fn new(package: &str, component_name: &str, component_type: Option<&str>) -> Self {
         CodeGenerator {
             package: package.to_string(),
             component_name: component_name.to_string(),
+            component_type: component_type.map(|s| s.to_string()),
             indent_level: 0,
         }
     }
@@ -68,6 +70,11 @@ impl CodeGenerator {
             imports.push("kotlinx.coroutines.launch".to_string());
         }
 
+        // Add NavController import for screens
+        if self.component_type.as_deref() == Some("screen") {
+            imports.push("androidx.navigation.NavController".to_string());
+        }
+
         // Sort imports alphabetically (standard Kotlin convention)
         imports.sort();
 
@@ -82,11 +89,26 @@ impl CodeGenerator {
         output.push_str("@Composable\n");
         output.push_str(&format!("fun {}(", self.component_name));
 
+        // For screens, add navController parameter
+        let is_screen = self.component_type.as_deref() == Some("screen");
+        if is_screen {
+            output.push_str("navController: NavController");
+            if !file.props.is_empty() {
+                output.push_str(", ");
+            }
+        }
+
         // Props as function parameters
         if !file.props.is_empty() {
-            output.push('\n');
+            if is_screen {
+                // Already on same line with navController
+            } else {
+                output.push('\n');
+            }
             for (i, prop) in file.props.iter().enumerate() {
-                output.push_str("    ");
+                if !is_screen || i > 0 {
+                    output.push_str("    ");
+                }
                 output.push_str(&prop.name);
                 output.push_str(": ");
                 output.push_str(&prop.prop_type);
@@ -100,7 +122,9 @@ impl CodeGenerator {
                 if i < file.props.len() - 1 {
                     output.push(',');
                 }
-                output.push('\n');
+                if !is_screen || i < file.props.len() - 1 {
+                    output.push('\n');
+                }
             }
         }
 
@@ -170,11 +194,23 @@ impl CodeGenerator {
         for func in &file.functions {
             output.push_str(&self.indent());
             output.push_str(&format!("fun {}() {{\n", func.name));
-            // Output function body with proper indentation
+            // Output function body with proper indentation and transformations
             for line in func.body.lines() {
                 output.push_str(&self.indent());
                 output.push_str("    ");
-                output.push_str(line);
+
+                // Transform $routes.login → Routes.Login
+                let mut transformed_line = self.transform_route_aliases(line);
+
+                // For screens, transform navigate() to navController.navigate()
+                if self.component_type.as_deref() == Some("screen") {
+                    let trimmed = transformed_line.trim();
+                    if trimmed.starts_with("navigate(") {
+                        output.push_str("navController.");
+                    }
+                }
+
+                output.push_str(&transformed_line);
                 output.push('\n');
             }
             output.push_str(&self.indent());

@@ -263,7 +263,12 @@ mod tests {
             println!("Testing: {} ({})", test.name, filename);
 
             // Call the transpiler
-            match transpile(&test.input, &test.metadata.package, component_name) {
+            match transpile(
+                &test.input,
+                &test.metadata.package,
+                component_name,
+                test.metadata.type_hint.as_deref(),
+            ) {
                 Ok(actual_output) => {
                     if normalize_whitespace(&actual_output) != normalize_whitespace(&test.expected_output) {
                         println!("\n=== MISMATCH in {} ===", filename);

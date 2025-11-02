@@ -34,11 +34,11 @@ Tests basic $routes navigation without parameters.
 ```kotlin
 package com.example.app.screens
 
-import androidx.compose.runtime.Composable
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
 import androidx.compose.material3.Button
 import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
@@ -60,13 +60,9 @@ fun WelcomeScreen(navController: NavController) {
             text = "Welcome!",
             fontSize = 24.sp
         )
-
-        Button(
-            onClick = { handleLoginClick() }
-        ) {
+        Button(onClick = { handleLoginClick() }) {
             Text("Login")
         }
-
         Button(
             onClick = { handleSignupClick() },
             variant = "outlined"
