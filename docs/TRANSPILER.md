@@ -489,38 +489,39 @@ object routes {
 
 Unlike the previous attempt (all code at once), we'll build **incrementally**, one test at a time:
 
-#### Phase 1: Foundation (Tests 00-00b)
+#### Phase 1: Foundation (Tests 00-00b) ✅ COMPLETE
+
 **Goal**: Get the 3 simplest tests passing with solid foundation
 
-```bash
-# Reset to clean state
-git reset --hard e1ecf0a
+**Status**: ✅ **3/14 tests passing** (commits: `ce1f733`, `b284ca6`, `6ac7b93`)
 
-# Create transpiler structure
+**Test 00: Minimal Text** ✅ (`00-minimal-text.md`)
+- Input: Just `<Text>Hello, World!</Text>`
+- Implemented: Basic component shell, text node, Text component generation
+- Commit: `ce1f733` - 1/14 tests passing
+
+**Test 00a: Text with Interpolation** ✅ (`00a-text-with-interpolation.md`)
+- Input: State variable + `<Text>Hello, {name}!</Text>`
+- Implemented: State parsing (`var name = "value"`), text interpolation `{var}` → `$var`
+- Commit: `b284ca6` - 2/14 tests passing
+
+**Test 00b: Single Prop** ✅ (`00b-single-prop.md`)
+- Input: `@prop val message: String` + usage
+- Implemented: Prop parsing, function parameters, bare interpolation `{message}` → `message`
+- Commit: `6ac7b93` - 3/14 tests passing
+
+**Architecture Created**:
+```
 src/transpiler/
-  mod.rs           # Public API: transpile(input, package, name)
-  lexer.rs         # Token stream (optional, may use pest instead)
-  parser.rs        # Parse to AST
-  ast.rs           # AST node definitions
-  codegen.rs       # Generate Kotlin from AST
+  mod.rs      # Public API: transpile(input, package, name)
+  ast.rs      # AST: WhitehallFile, PropDeclaration, StateDeclaration, Markup
+  parser.rs   # Parse: @prop, var/val, <Component>, {interpolation}
+  codegen.rs  # Generate: @Composable functions, imports, state with remember
 ```
 
-**Test 00: Minimal Text** (`00-minimal-text.md`)
-- Input: Just `<Text>Hello World</Text>`
-- Implement: Basic component shell, text node, Text component generation
-- Verify: 1/14 tests passing
+**Testing**: `cargo test examples`
 
-**Test 00a: Text with Interpolation** (`00a-text-with-interpolation.md`)
-- Input: State variable + `<Text>Hello, {name}!</Text>`
-- Implement: State parsing, interpolation in text
-- Verify: 2/14 tests passing
-
-**Test 00b: Single Prop** (`00b-single-prop.md`)
-- Input: `@prop val message: String` + usage
-- Implement: Prop parsing, component parameters
-- Verify: 3/14 tests passing
-
-**Checkpoint**: Basic component structure working, solid foundation established.
+**Checkpoint**: ✅ Basic component structure working, solid foundation established.
 
 #### Phase 2: Basic Components (Test 01) ⏳ IN PROGRESS
 
