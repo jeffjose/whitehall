@@ -97,9 +97,17 @@ pub struct Component {
 }
 
 #[derive(Debug, Clone, PartialEq)]
+pub enum PropValue {
+    /// Simple expression: {someVariable} or {expression}
+    Expression(String),
+    /// Component as prop value: {<Component />}
+    Markup(Box<Markup>),
+}
+
+#[derive(Debug, Clone, PartialEq)]
 pub struct ComponentProp {
     pub name: String,
-    pub value: String, // Expression value
+    pub value: PropValue,
 }
 
 impl WhitehallFile {

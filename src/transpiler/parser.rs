@@ -2,8 +2,8 @@
 
 use crate::transpiler::ast::{
     Component, ComponentProp, ElseIfBranch, ForLoopBlock, FunctionDeclaration, IfElseBlock,
-    Import, LifecycleHook, Markup, PropDeclaration, StateDeclaration, WhenBlock, WhenBranch,
-    WhitehallFile,
+    Import, LifecycleHook, Markup, PropDeclaration, PropValue, StateDeclaration, WhenBlock,
+    WhenBranch, WhitehallFile,
 };
 
 pub struct Parser {
@@ -398,7 +398,7 @@ impl Parser {
     }
 
     fn parse_component_prop(&mut self) -> Result<ComponentProp, String> {
-        // Parse: propName={expression} or propName="string" or bind:value={expr}
+        // Parse: propName={expression} or propName="string" or propName={<Component />}
         // Prop names can include colons (for bind:value, on:click, etc.)
         let mut name = self.parse_identifier()?;
 
@@ -435,34 +435,44 @@ impl Parser {
                     self.pos += 1;
                 }
             }
-            format!("\"{}\"", str_value)
+            PropValue::Expression(format!("\"{}\"", str_value))
         } else if self.peek_char() == Some('{') {
-            // Expression: prop={value}
+            // Expression or component: prop={value} or prop={<Component />}
             self.expect_char('{')?;
+            self.skip_whitespace();
 
-            // Parse expression until closing brace (handle nested braces)
-            let mut expr_value = String::new();
-            let mut depth = 1;
+            // Check if this is a component: {<Component />}
+            if self.peek_char() == Some('<') {
+                // Parse component markup
+                let markup = self.parse_component()?;
+                self.skip_whitespace();
+                self.expect_char('}')?;
+                PropValue::Markup(Box::new(markup))
+            } else {
+                // Parse expression until closing brace (handle nested braces)
+                let mut expr_value = String::new();
+                let mut depth = 1;
 
-            while let Some(ch) = self.peek_char() {
-                if ch == '{' {
-                    depth += 1;
-                    expr_value.push(ch);
-                    self.pos += 1;
-                } else if ch == '}' {
-                    depth -= 1;
-                    if depth == 0 {
+                while let Some(ch) = self.peek_char() {
+                    if ch == '{' {
+                        depth += 1;
+                        expr_value.push(ch);
                         self.pos += 1;
-                        break;
+                    } else if ch == '}' {
+                        depth -= 1;
+                        if depth == 0 {
+                            self.pos += 1;
+                            break;
+                        }
+                        expr_value.push(ch);
+                        self.pos += 1;
+                    } else {
+                        expr_value.push(ch);
+                        self.pos += 1;
                     }
-                    expr_value.push(ch);
-                    self.pos += 1;
-                } else {
-                    expr_value.push(ch);
-                    self.pos += 1;
                 }
+                PropValue::Expression(expr_value)
             }
-            expr_value
         } else {
             return Err(format!("Expected prop value (either {{expr}} or \"string\")"));
         };

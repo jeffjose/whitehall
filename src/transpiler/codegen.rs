@@ -1,6 +1,6 @@
 /// Code generator for Kotlin/Compose output
 
-use crate::transpiler::ast::{Markup, WhitehallFile};
+use crate::transpiler::ast::{Markup, PropValue, WhitehallFile};
 
 pub struct CodeGenerator {
     package: String,
@@ -569,18 +569,67 @@ impl CodeGenerator {
                         .find(|p| p.name == "text")
                         .map(|p| {
                             // Extract text value (remove quotes if present)
-                            if p.value.starts_with('"') && p.value.ends_with('"') {
-                                p.value[1..p.value.len()-1].to_string()
+                            let prop_expr = self.get_prop_expr(&p.value);
+                            if prop_expr.starts_with('"') && prop_expr.ends_with('"') {
+                                prop_expr[1..prop_expr.len()-1].to_string()
                             } else {
-                                p.value.clone()
+                                prop_expr.to_string()
                             }
                         })
                 } else {
                     None
                 };
 
+                // Special handling for Scaffold with topBar
+                if comp.name == "Scaffold" {
+                    for prop in &comp.props {
+                        if prop.name == "topBar" {
+                            match &prop.value {
+                                PropValue::Markup(markup) => {
+                                    // topBar with component: wrap in lambda
+                                    // Generate at indent + 2 (Scaffold at indent + 1, content at indent + 2)
+                                    let topbar_code = self.generate_markup_with_indent(markup, indent + 2)?;
+                                    let closing_indent = "    ".repeat(indent + 1);
+                                    params.push(format!("topBar = {{\n{}{}}}", topbar_code, closing_indent));
+                                }
+                                PropValue::Expression(expr) => {
+                                    // Regular expression - just pass through
+                                    params.push(format!("topBar = {}", expr));
+                                }
+                            }
+                        } else {
+                            // Other Scaffold props - handle normally
+                            let prop_expr = self.get_prop_expr(&prop.value);
+                            let transformed = self.transform_prop(&comp.name, &prop.name, prop_expr);
+                            params.extend(transformed);
+                        }
+                    }
+                }
+                // Special handling for TopAppBar title
+                else if comp.name == "TopAppBar" {
+                    for prop in &comp.props {
+                        if prop.name == "title" {
+                            match &prop.value {
+                                PropValue::Expression(expr) => {
+                                    // title with expression: wrap in { Text(...) }
+                                    params.push(format!("title = {{ Text({}) }}", expr));
+                                }
+                                PropValue::Markup(markup) => {
+                                    // title with component: wrap in lambda
+                                    let title_code = self.generate_markup_with_indent(markup, indent + 1)?;
+                                    params.push(format!("title = {{\n{}}}", title_code.trim_end()));
+                                }
+                            }
+                        } else {
+                            // Other TopAppBar props - handle normally
+                            let prop_expr = self.get_prop_expr(&prop.value);
+                            let transformed = self.transform_prop(&comp.name, &prop.name, prop_expr);
+                            params.extend(transformed);
+                        }
+                    }
+                }
                 // Special handling for Text and Card with modifier props
-                if comp.name == "Text" || comp.name == "Card" {
+                else if comp.name == "Text" || comp.name == "Card" {
                     // Collect modifier-related props
                     let padding = comp.props.iter().find(|p| p.name == "padding");
                     let fill_max_width = comp.props.iter().find(|p| p.name == "fillMaxWidth");
@@ -592,12 +641,13 @@ impl CodeGenerator {
 
                         // Add padding first (if present)
                         if let Some(pad_prop) = padding {
-                            modifiers.push(format!(".padding({}.dp)", pad_prop.value));
+                            let pad_value = self.get_prop_expr(&pad_prop.value);
+                            modifiers.push(format!(".padding({}.dp)", pad_value));
                         }
 
                         // Add fillMaxWidth if present (as boolean prop or variable)
                         if let Some(fw_prop) = fill_max_width {
-                            let fw_value = fw_prop.value.trim();
+                            let fw_value = self.get_prop_expr(&fw_prop.value).trim();
                             if fw_value == "true" {
                                 modifiers.push(".fillMaxWidth()".to_string());
                             } else if fw_value == "false" {
@@ -610,7 +660,8 @@ impl CodeGenerator {
 
                         // Add explicit modifier last (if present)
                         if let Some(mod_prop) = explicit_modifier {
-                            let transformed = self.transform_ternary(&mod_prop.value);
+                            let mod_value = self.get_prop_expr(&mod_prop.value);
+                            let transformed = self.transform_ternary(mod_value);
                             modifiers.push(transformed);
                         }
 
@@ -635,17 +686,23 @@ impl CodeGenerator {
                         if prop.name == "padding" || prop.name == "fillMaxWidth" || prop.name == "modifier" {
                             continue; // Skip, already handled
                         }
-                        let transformed = self.transform_prop(&comp.name, &prop.name, &prop.value);
+                        let prop_expr = self.get_prop_expr(&prop.value);
+                        let transformed = self.transform_prop(&comp.name, &prop.name, prop_expr);
                         params.extend(transformed);
                     }
                 } else if comp.name == "Box" || comp.name == "AsyncImage" {
                     // Special handling for Box and AsyncImage with width/height/etc
-                    // Collect special props
-                    let width = comp.props.iter().find(|p| p.name == "width").map(|p| &p.value);
-                    let height = comp.props.iter().find(|p| p.name == "height").map(|p| &p.value);
-                    let bg_color = comp.props.iter().find(|p| p.name == "backgroundColor").map(|p| &p.value);
-                    let alignment = comp.props.iter().find(|p| p.name == "alignment").map(|p| &p.value);
-                    let url = comp.props.iter().find(|p| p.name == "url").map(|p| &p.value);
+                    // Collect special props as expression strings
+                    let width = comp.props.iter().find(|p| p.name == "width")
+                        .map(|p| self.get_prop_expr(&p.value));
+                    let height = comp.props.iter().find(|p| p.name == "height")
+                        .map(|p| self.get_prop_expr(&p.value));
+                    let bg_color = comp.props.iter().find(|p| p.name == "backgroundColor")
+                        .map(|p| self.get_prop_expr(&p.value));
+                    let alignment = comp.props.iter().find(|p| p.name == "alignment")
+                        .map(|p| self.get_prop_expr(&p.value));
+                    let url = comp.props.iter().find(|p| p.name == "url")
+                        .map(|p| self.get_prop_expr(&p.value));
                     let content_desc = comp.props.iter().find(|p| p.name == "contentDescription");
 
                     // Build modifier chain for Box
@@ -724,13 +781,15 @@ impl CodeGenerator {
                         if comp.name == "AsyncImage" && !has_async_image_modifier && (prop.name == "url" || prop.name == "width" || prop.name == "height") {
                             continue; // AsyncImage props handled above (only if no explicit modifier)
                         }
-                        let transformed = self.transform_prop(&comp.name, &prop.name, &prop.value);
+                        let prop_expr = self.get_prop_expr(&prop.value);
+                        let transformed = self.transform_prop(&comp.name, &prop.name, prop_expr);
                         params.extend(transformed);
                     }
                 } else {
                     // Regular prop handling for other components
                     for prop in &comp.props {
-                        let transformed = self.transform_prop(&comp.name, &prop.name, &prop.value);
+                        let prop_expr = self.get_prop_expr(&prop.value);
+                        let transformed = self.transform_prop(&comp.name, &prop.name, prop_expr);
                         params.extend(transformed);
                     }
                 }
@@ -764,7 +823,12 @@ impl CodeGenerator {
 
                 // Generate children if any (but not for Text, which uses children for text parameter)
                 if has_children {
-                    output.push_str(" {\n");
+                    // Scaffold children need paddingValues lambda parameter
+                    if comp.name == "Scaffold" {
+                        output.push_str(" { paddingValues ->\n");
+                    } else {
+                        output.push_str(" {\n");
+                    }
 
                     // If Button with text prop, generate Text child
                     if let Some(text) = button_text {
@@ -772,8 +836,13 @@ impl CodeGenerator {
                     }
 
                     // Generate regular children (pass component name as parent for context-aware generation)
-                    for child in &comp.children {
-                        output.push_str(&self.generate_markup_with_context(child, indent + 1, Some(&comp.name))?);
+                    for (i, child) in comp.children.iter().enumerate() {
+                        // For Scaffold, mark first child to add paddingValues to modifier
+                        if comp.name == "Scaffold" && i == 0 {
+                            output.push_str(&self.generate_scaffold_child(child, indent + 1)?);
+                        } else {
+                            output.push_str(&self.generate_markup_with_context(child, indent + 1, Some(&comp.name))?);
+                        }
                     }
                     output.push_str(&format!("{}}}\n", indent_str));
                 } else {
@@ -827,14 +896,16 @@ impl CodeGenerator {
             Markup::Component(comp) => {
                 // Check if we need imports from props based on transformations
                 for prop in &comp.props {
+                    let prop_expr = self.get_prop_expr(&prop.value);
+
                     // Generic prop value checks
-                    if prop.value.contains("Modifier") {
+                    if prop_expr.contains("Modifier") {
                         let import = "androidx.compose.ui.Modifier".to_string();
                         if !prop_imports.contains(&import) {
                             prop_imports.push(import);
                         }
                     }
-                    if prop.value.contains("clickable") {
+                    if prop_expr.contains("clickable") {
                         let import = "androidx.compose.foundation.clickable".to_string();
                         if !prop_imports.contains(&import) {
                             prop_imports.push(import);
@@ -873,7 +944,7 @@ impl CodeGenerator {
                             // fontWeight → FontWeight.Bold
                             self.add_import_if_missing(prop_imports, "androidx.compose.ui.text.font.FontWeight");
                         }
-                        ("Text", "color") if prop.value.starts_with('"') => {
+                        ("Text", "color") if prop_expr.starts_with('"') => {
                             // color string → MaterialTheme.colorScheme
                             self.add_import_if_missing(prop_imports, "androidx.compose.material3.MaterialTheme");
                         }
@@ -928,12 +999,17 @@ impl CodeGenerator {
                             self.add_import_if_missing(prop_imports, "androidx.compose.ui.Modifier");
                             self.add_import_if_missing(prop_imports, "androidx.compose.foundation.layout.fillMaxWidth");
                         }
-                        ("Text", "modifier") | ("Card", "modifier") if prop.value.contains("clickable") => {
+                        ("Text", "modifier") | ("Card", "modifier") if prop_expr.contains("clickable") => {
                             // modifier with clickable
                             self.add_import_if_missing(prop_imports, "androidx.compose.ui.Modifier");
                             self.add_import_if_missing(prop_imports, "androidx.compose.foundation.clickable");
                         }
                         _ => {}
+                    }
+
+                    // Recurse into PropValue::Markup to find nested components
+                    if let PropValue::Markup(markup) = &prop.value {
+                        self.collect_imports_recursive(markup, prop_imports, component_imports);
                     }
                 }
 
@@ -1416,5 +1492,68 @@ impl CodeGenerator {
 
     fn indent(&self) -> String {
         "    ".repeat(self.indent_level)
+    }
+
+    /// Helper to extract expression string from PropValue
+    /// Returns the expression string for Expression variant
+    /// For Markup variant, returns empty string (should be handled specially)
+    fn get_prop_expr<'a>(&self, prop_value: &'a PropValue) -> &'a str {
+        match prop_value {
+            PropValue::Expression(expr) => expr,
+            PropValue::Markup(_) => {
+                // Component-as-prop-value should be handled specially at call site
+                ""
+            }
+        }
+    }
+
+    /// Generate Scaffold's first child with .padding(paddingValues) prepended to modifier
+    fn generate_scaffold_child(&self, markup: &Markup, indent: usize) -> Result<String, String> {
+        // Only layout containers (Column, Row, Box) should get paddingValues
+        if let Markup::Component(comp) = markup {
+            if comp.name == "Column" || comp.name == "Row" || comp.name == "Box" {
+                // Generate the component but with paddingValues prepended to modifier
+                // This requires special handling - we'll temporarily modify component
+                let mut modified_comp = comp.clone();
+
+                // Build the modifier chain: paddingValues first, then layout padding if present
+                let mut modifier_parts = vec![".padding(paddingValues)".to_string()];
+
+                // Find padding prop and incorporate it into modifier
+                let padding_idx = modified_comp.props.iter().position(|p| p.name == "padding");
+                if let Some(idx) = padding_idx {
+                    let pad_value = self.get_prop_expr(&modified_comp.props[idx].value);
+                    modifier_parts.push(format!(".padding({}.dp)", pad_value));
+                    // Remove padding prop so it doesn't get processed again
+                    modified_comp.props.remove(idx);
+                }
+
+                // Check if there's already an explicit modifier prop
+                if let Some(mod_prop_idx) = modified_comp.props.iter().position(|p| p.name == "modifier") {
+                    // Modifier exists - prepend paddingValues to it
+                    let existing = &modified_comp.props[mod_prop_idx].value;
+                    let existing_expr = self.get_prop_expr(existing);
+                    let new_modifier = if existing_expr.starts_with("Modifier") {
+                        let rest = &existing_expr[8..]; // Skip "Modifier"
+                        format!("Modifier\n                {}{}", modifier_parts.join("\n                "), rest)
+                    } else {
+                        format!("Modifier{}.then({})", modifier_parts.join(""), existing_expr)
+                    };
+                    modified_comp.props[mod_prop_idx].value = PropValue::Expression(new_modifier);
+                } else {
+                    // No modifier - create one
+                    let modifier_str = format!("Modifier\n                {}", modifier_parts.join("\n                "));
+                    modified_comp.props.push(crate::transpiler::ast::ComponentProp {
+                        name: "modifier".to_string(),
+                        value: PropValue::Expression(modifier_str),
+                    });
+                }
+
+                return self.generate_markup_with_indent(&Markup::Component(modified_comp), indent);
+            }
+        }
+
+        // Not a layout component - generate normally
+        self.generate_markup_with_indent(markup, indent)
     }
 }
