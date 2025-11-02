@@ -547,9 +547,18 @@ src/transpiler/
 #### Phase 3: Control Flow (Tests 02-04)
 **Goal**: All control flow constructs working
 
-**Test 02: If/Else** (`02-control-flow-if.md`)
-- Implement: `@if`, `@else` parsing and generation
-- Verify: 5/14 tests passing
+**Test 02: If/Else** ✅ (`02-control-flow-if.md`)
+- Input: @if/@else if/else with nullable props
+- Implemented:
+  - ✅ `@if`/`@else if`/`@else` parsing and generation
+  - ✅ Control flow in `parse_children()` and `parse_markup_block()`
+  - ✅ `IfElse` branch recursion in import collection
+  - ✅ Column component import
+  - ✅ Nullable prop default values (`String? = null`)
+  - ✅ Component trailing lambda syntax (no `()` before `{`)
+  - ✅ Refined import ordering (single component before Composable)
+  - ✅ Infinite loop detection safeguards
+- Progress: **5/14 tests passing!** (commit: `3a2758c`)
 
 **Test 03: For Loops** (`03-control-flow-for.md`)
 - Implement: `@for` with keys and empty blocks
