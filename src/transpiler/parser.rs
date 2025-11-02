@@ -1,6 +1,6 @@
 /// Parser for Whitehall syntax
 
-use crate::transpiler::ast::{Component, Markup, StateDeclaration, WhitehallFile};
+use crate::transpiler::ast::{Component, Markup, PropDeclaration, StateDeclaration, WhitehallFile};
 
 pub struct Parser {
     input: String,
@@ -16,16 +16,88 @@ impl Parser {
     }
 
     pub fn parse(&mut self) -> Result<WhitehallFile, String> {
+        let mut props = Vec::new();
         let mut state = Vec::new();
 
-        // Parse state declarations (before markup)
-        while self.peek_word() == Some("var") || self.peek_word() == Some("val") {
-            state.push(self.parse_state_declaration()?);
+        // Parse props and state declarations (before markup)
+        loop {
             self.skip_whitespace();
+            if self.consume_word("@prop") {
+                props.push(self.parse_prop_declaration()?);
+            } else if self.peek_word() == Some("var") || self.peek_word() == Some("val") {
+                state.push(self.parse_state_declaration()?);
+            } else {
+                break;
+            }
         }
 
         let markup = self.parse_markup()?;
-        Ok(WhitehallFile { state, markup })
+        Ok(WhitehallFile {
+            props,
+            state,
+            markup,
+        })
+    }
+
+    fn parse_prop_declaration(&mut self) -> Result<PropDeclaration, String> {
+        // Parse: @prop val name: Type [= default]
+        self.skip_whitespace();
+
+        // Skip 'val' (props are always val)
+        if !self.consume_word("val") {
+            return Err("Expected 'val' after @prop".to_string());
+        }
+
+        self.skip_whitespace();
+        let name = self.parse_identifier()?;
+        self.skip_whitespace();
+        self.expect_char(':')?;
+        self.skip_whitespace();
+
+        // Parse type (everything until = or newline)
+        let prop_type = self.parse_type()?;
+
+        // Check for default value
+        self.skip_whitespace();
+        let default_value = if self.peek_char() == Some('=') {
+            self.expect_char('=')?;
+            self.skip_whitespace();
+            Some(self.parse_value()?)
+        } else {
+            None
+        };
+
+        Ok(PropDeclaration {
+            name,
+            prop_type,
+            default_value,
+        })
+    }
+
+    fn parse_type(&mut self) -> Result<String, String> {
+        let start = self.pos;
+        let mut depth = 0;
+
+        while let Some(ch) = self.peek_char() {
+            match ch {
+                '(' | '<' | '[' => {
+                    depth += 1;
+                    self.pos += 1;
+                }
+                ')' | '>' | ']' => {
+                    if depth > 0 {
+                        depth -= 1;
+                        self.pos += 1;
+                    } else {
+                        break;
+                    }
+                }
+                '=' | '\n' if depth == 0 => break,
+                _ => self.pos += 1,
+            }
+        }
+
+        Ok(self.input[start..self.pos].trim().to_string())
     }
 
     fn parse_state_declaration(&mut self) -> Result<StateDeclaration, String> {
@@ -213,6 +285,8 @@ impl Parser {
             Some("var")
         } else if remaining.starts_with("val ") || remaining.starts_with("val\n") {
             Some("val")
+        } else if remaining.starts_with("@prop") {
+            Some("@prop")
         } else {
             None
         }
@@ -222,6 +296,11 @@ impl Parser {
         let remaining = &self.input[self.pos..];
         if remaining.starts_with(word) {
             let next_pos = self.pos + word.len();
+            // For @prop, don't require whitespace after
+            if word == "@prop" {
+                self.pos = next_pos;
+                return true;
+            }
             if next_pos < self.input.len() {
                 let next_char = self.input.chars().nth(next_pos);
                 if next_char.map_or(true, |c| c.is_whitespace()) {

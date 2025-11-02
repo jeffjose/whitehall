@@ -2,8 +2,16 @@
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct WhitehallFile {
+    pub props: Vec<PropDeclaration>,
     pub state: Vec<StateDeclaration>,
     pub markup: Markup,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct PropDeclaration {
+    pub name: String,
+    pub prop_type: String,
+    pub default_value: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -30,6 +38,7 @@ pub struct Component {
 impl WhitehallFile {
     pub fn new() -> Self {
         WhitehallFile {
+            props: Vec::new(),
             state: Vec::new(),
             markup: Markup::Text(String::new()),
         }

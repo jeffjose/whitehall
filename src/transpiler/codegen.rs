@@ -34,7 +34,28 @@ impl CodeGenerator {
 
         // Component function
         output.push_str("@Composable\n");
-        output.push_str(&format!("fun {}() {{\n", self.component_name));
+        output.push_str(&format!("fun {}(", self.component_name));
+
+        // Props as function parameters
+        if !file.props.is_empty() {
+            output.push('\n');
+            for (i, prop) in file.props.iter().enumerate() {
+                output.push_str("    ");
+                output.push_str(&prop.name);
+                output.push_str(": ");
+                output.push_str(&prop.prop_type);
+                if let Some(default) = &prop.default_value {
+                    output.push_str(" = ");
+                    output.push_str(default);
+                }
+                if i < file.props.len() - 1 {
+                    output.push(',');
+                }
+                output.push('\n');
+            }
+        }
+
+        output.push_str(") {\n");
         self.indent_level += 1;
 
         // Generate state declarations
@@ -99,16 +120,17 @@ impl CodeGenerator {
             return Ok("\"\"".to_string());
         }
 
-        // If single text node, use simple string
+        // If single child
         if children.len() == 1 {
             match &children[0] {
                 Markup::Text(text) => return Ok(format!("\"{}\"", text)),
-                Markup::Interpolation(expr) => return Ok(format!("${}", expr)),
+                // Single interpolation - use bare expression (no quotes, no $)
+                Markup::Interpolation(expr) => return Ok(expr.to_string()),
                 _ => {}
             }
         }
 
-        // Multiple children: build string template
+        // Multiple children: build string template with interpolation
         let mut parts = Vec::new();
         for child in children {
             match child {
