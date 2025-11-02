@@ -697,6 +697,11 @@ impl CodeGenerator {
                             // color string → MaterialTheme.colorScheme
                             self.add_import_if_missing(prop_imports, "androidx.compose.material3.MaterialTheme");
                         }
+                        ("Card", "backgroundColor") => {
+                            // backgroundColor → CardDefaults.cardColors()
+                            self.add_import_if_missing(prop_imports, "androidx.compose.material3.CardDefaults");
+                            self.add_import_if_missing(prop_imports, "androidx.compose.material3.MaterialTheme");
+                        }
                         _ => {}
                     }
                 }
@@ -862,6 +867,11 @@ impl CodeGenerator {
                 return format!("{}!!{}", var_name, &expr[dot_pos..]);
             }
         }
+        // If expr is just a bare nullable variable, add !! as well
+        let trimmed = expr.trim();
+        if self.nullable_vars.contains(trimmed) {
+            return format!("{}!!", trimmed);
+        }
         expr.to_string()
     }
 
@@ -966,6 +976,19 @@ impl CodeGenerator {
             // Card onClick → just transform the value
             ("Card", "onClick") => {
                 vec![format!("onClick = {}", value)]
+            }
+            // Card backgroundColor → CardDefaults.cardColors()
+            ("Card", "backgroundColor") => {
+                // value is a string like "errorContainer", "primaryContainer", etc.
+                let color_name = if value.starts_with('"') && value.ends_with('"') {
+                    &value[1..value.len()-1]
+                } else {
+                    value.as_str()
+                };
+                vec![format!(
+                    "colors = CardDefaults.cardColors(\n                    containerColor = MaterialTheme.colorScheme.{}\n                )",
+                    color_name
+                )]
             }
             // Default: no transformation
             _ => {
