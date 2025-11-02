@@ -891,47 +891,89 @@ src/transpiler/
 #### Phase 8: Extended Patterns (Tests 12-17)
 **Goal**: Performance, images, advanced layouts, and lifecycle patterns
 
-**Status**: Tests defined, implementation pending
+**Complexity Evaluation**:
 
-**Test 12: LazyColumn** (`12-lazy-column.md`)
-- Input: LazyColumn with items() for performance-optimized scrollable lists
-- Required: `items()` function instead of forEach, key parameter support
-- Transformations: padding → contentPadding, spacing → verticalArrangement
+**🟢 LOW-HANGING FRUIT**:
+- **Test 16**: onDispose lifecycle hook ⭐⭐⭐⭐⭐ (30 min - **START HERE!**)
+  - Fits existing lifecycle hook infrastructure perfectly
+  - When both onMount + onDispose → wrap in DisposableEffect
+  - DisposableEffect { mount_code; onDispose { cleanup_code } }
 
-**Test 13: Box Layout** (`13-box-layout.md`)
-- Input: Box for stacking/overlaying components (avatar with status indicator)
-- Required: Box container, alignment prop support (bottomEnd, etc.)
-- Transformations: AsyncImage size props, background color handling
+**🟡 MODERATE COMPLEXITY** (2-3 hours each):
+- **Test 17**: Error handling / Card colors ⭐⭐⭐⭐ (1-2 hrs)
+  - backgroundColor="errorContainer" → CardDefaults.cardColors()
+  - Try/catch/finally already works ✅
+- **Test 13**: Box layout ⭐⭐⭐⭐ (2-3 hrs)
+  - width/height → Modifier.size()
+  - backgroundColor → .background(Color.Green)
+  - alignment → .align(Alignment.BottomEnd)
+- **Test 15**: Modifier chains ⭐⭐⭐ (2-3 hrs)
+  - fillMaxWidth={bool} → .let { if (bool) it.fillMaxWidth() else it }
+  - Conditional modifier patterns
+- **Test 12**: LazyColumn ⭐⭐⭐ (2-3 hrs)
+  - Context-aware: @for inside LazyColumn → items() not forEach
+  - contentPadding = PaddingValues()
 
-**Test 14: AsyncImage** (`14-async-image.md`)
-- Input: AsyncImage with placeholder, error states, and crossfade
-- Required: Coil ImageRequest builder pattern, placeholder/error drawables
-- Transformations: url → model, size → Modifier.size(), content description
+**🔴 COMPLEX** (4-5 hours):
+- **Test 14**: AsyncImage advanced ⭐⭐ (4-5 hrs)
+  - ImageRequest.Builder pattern (like test 10)
+  - R.drawable.* resource transformation
+  - LocalContext.current injection
 
-**Test 15: Modifier Chains** (`15-modifier-chains.md`)
-- Input: Multiple modifiers chained, conditional modifier application
-- Required: Modifier.let() for conditional chaining, fillMaxWidth/fillMaxSize
-- Transformations: fillMaxWidth={bool} → conditional .fillMaxWidth()
+**Implementation Priority**:
+1. Test 16 (onDispose) - Quick win, high value ✅
+2. Test 17 (Error handling) - Moderate, card colors ✅
+3. Tests 13, 15, 12 - Evaluate based on need
+4. Test 14 - Defer (complex like test 10)
 
-**Test 16: Lifecycle Cleanup** (`16-lifecycle-cleanup.md`)
+**Test 16: Lifecycle Cleanup** ⏸️ (`16-lifecycle-cleanup.md`)
 - Input: onDispose hook for resource cleanup (WebSocket disconnect)
-- Required: DisposableEffect instead of LaunchedEffect, onDispose callback
-- Pattern: onMount + onDispose → DisposableEffect { ... onDispose { } }
+- Required:
+  - ⏸️ Parse `onDispose { }` hook (trivial - like onMount)
+  - ⏸️ When both onMount + onDispose → DisposableEffect wrapper
+  - ⏸️ If only onMount → LaunchedEffect (current behavior)
+- Pattern: DisposableEffect(Unit) { mount_code; onDispose { cleanup_code } }
+- Estimated effort: 30 minutes
 
-**Test 17: Error Handling** (`17-error-handling.md`)
+**Test 17: Error Handling** ⏸️ (`17-error-handling.md`)
 - Input: Try/catch in async operations, loading/error/success states
-- Required: Try/catch/finally in LaunchedEffect, error state handling
-- Pattern: Common loading → error → success state machine
+- Required:
+  - ⏸️ backgroundColor="errorContainer" → CardDefaults.cardColors(containerColor = ...)
+  - ✅ Try/catch/finally already works
+  - ✅ Else if already works
+- Pattern: Special Card colors transformation
+- Estimated effort: 1-2 hours
 
-**Evaluation**: These tests cover high-priority real-world patterns:
-- LazyColumn: Essential for any app with scrollable lists (performance)
-- Box: Fundamental layout primitive alongside Column/Row
-- AsyncImage: Image loading is ubiquitous in mobile apps
-- Modifier chains: Advanced but common pattern for conditional styling
-- Lifecycle cleanup: Critical for preventing memory leaks
-- Error handling: Standard pattern for async operations
+**Test 12: LazyColumn** ⏸️ (`12-lazy-column.md`)
+- Input: LazyColumn with items() for performance-optimized scrollable lists
+- Required:
+  - ⏸️ Detect @for inside LazyColumn parent
+  - ⏸️ Transform to items(collection, key = {...}) { item -> }
+  - ⏸️ padding → contentPadding = PaddingValues()
+- Estimated effort: 2-3 hours
 
-**Implementation Strategy**: After completing tests 00-11, tackle these in order 12-17. Each represents a distinct feature area that builds on the existing architecture.
+**Test 13: Box Layout** ⏸️ (`13-box-layout.md`)
+- Input: Box for stacking/overlaying components
+- Required:
+  - ⏸️ width/height → Modifier.size()
+  - ⏸️ backgroundColor → .background(Color.Name)
+  - ⏸️ alignment → .align(Alignment.BottomEnd)
+- Estimated effort: 2-3 hours
+
+**Test 14: AsyncImage Advanced** ⏸️ (`14-async-image.md`)
+- Input: AsyncImage with placeholder, error, crossfade
+- Required:
+  - ⏸️ ImageRequest.Builder pattern
+  - ⏸️ R.drawable.* resource refs
+  - ⏸️ LocalContext.current injection
+- Estimated effort: 4-5 hours (complex like test 10)
+
+**Test 15: Modifier Chains** ⏸️ (`15-modifier-chains.md`)
+- Input: Multiple modifiers chained, conditional application
+- Required:
+  - ⏸️ fillMaxWidth={bool} → .let { if (bool) it.fillMaxWidth() else it }
+  - ⏸️ Ternary → .let transformation
+- Estimated effort: 2-3 hours
 
 ### Key Principles for Rebuild
 
