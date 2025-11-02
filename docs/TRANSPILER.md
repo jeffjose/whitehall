@@ -823,9 +823,16 @@ src/transpiler/
 #### Phase 5: Routing (Tests 07-08)
 **Goal**: Navigation and route parameters
 
-**Test 07: Routing Simple** (`07-routing-simple.md`)
-- Implement: `$routes` alias, navigation
-- Verify: 10/14 tests passing
+**Test 07: Simple Navigation** ✅ (`07-routing-simple.md`)
+- Input: navigate($routes.login), type: screen metadata
+- Implemented:
+  - ✅ `type: screen` metadata support in transpiler API
+  - ✅ Add `NavController` parameter for screens
+  - ✅ Transform `navigate()` → `navController.navigate()`
+  - ✅ Transform `$routes.login` → `Routes.Login` in function bodies
+  - ✅ `androidx.navigation.NavController` import
+  - ✅ Route alias transformation across entire codebase
+- Progress: **10/14 tests passing!** (commit: `0e93569`)
 
 **Test 08: Routing Params** (`08-routing-params.md`)
 - Implement: `$screen.params` access
