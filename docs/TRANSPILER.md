@@ -458,7 +458,7 @@ object routes {
 
 **Test Infrastructure**: ✅ Complete
 - Commit `e1ecf0a` established markdown-based test framework
-- 14 test cases defined in `tests/transpiler-examples/`
+- 18 test cases defined in `tests/transpiler-examples/` (00, 00a, 00b, 01-17)
 - Test harness can parse markdown and validate output
 - Tests serve dual purpose: validation + documentation
 
@@ -888,15 +888,50 @@ src/transpiler/
 
 **Checkpoint**: ✅ **93% complete!** All major features working. Only test 10 requires architectural enhancement.
 
-#### Phase 8: Additional Tests (Tests 12+)
-**Goal**: Edge cases and advanced patterns
+#### Phase 8: Extended Patterns (Tests 12-17)
+**Goal**: Performance, images, advanced layouts, and lifecycle patterns
 
-**Status**: Awaiting new test definitions
+**Status**: Tests defined, implementation pending
 
-Once additional tests are defined, we can evaluate:
-- Low-hanging fruit (features that fit current architecture)
-- High-impact features (widely applicable transformations)
-- Test 10 component-as-prop-value (if patterns emerge in new tests)
+**Test 12: LazyColumn** (`12-lazy-column.md`)
+- Input: LazyColumn with items() for performance-optimized scrollable lists
+- Required: `items()` function instead of forEach, key parameter support
+- Transformations: padding → contentPadding, spacing → verticalArrangement
+
+**Test 13: Box Layout** (`13-box-layout.md`)
+- Input: Box for stacking/overlaying components (avatar with status indicator)
+- Required: Box container, alignment prop support (bottomEnd, etc.)
+- Transformations: AsyncImage size props, background color handling
+
+**Test 14: AsyncImage** (`14-async-image.md`)
+- Input: AsyncImage with placeholder, error states, and crossfade
+- Required: Coil ImageRequest builder pattern, placeholder/error drawables
+- Transformations: url → model, size → Modifier.size(), content description
+
+**Test 15: Modifier Chains** (`15-modifier-chains.md`)
+- Input: Multiple modifiers chained, conditional modifier application
+- Required: Modifier.let() for conditional chaining, fillMaxWidth/fillMaxSize
+- Transformations: fillMaxWidth={bool} → conditional .fillMaxWidth()
+
+**Test 16: Lifecycle Cleanup** (`16-lifecycle-cleanup.md`)
+- Input: onDispose hook for resource cleanup (WebSocket disconnect)
+- Required: DisposableEffect instead of LaunchedEffect, onDispose callback
+- Pattern: onMount + onDispose → DisposableEffect { ... onDispose { } }
+
+**Test 17: Error Handling** (`17-error-handling.md`)
+- Input: Try/catch in async operations, loading/error/success states
+- Required: Try/catch/finally in LaunchedEffect, error state handling
+- Pattern: Common loading → error → success state machine
+
+**Evaluation**: These tests cover high-priority real-world patterns:
+- LazyColumn: Essential for any app with scrollable lists (performance)
+- Box: Fundamental layout primitive alongside Column/Row
+- AsyncImage: Image loading is ubiquitous in mobile apps
+- Modifier chains: Advanced but common pattern for conditional styling
+- Lifecycle cleanup: Critical for preventing memory leaks
+- Error handling: Standard pattern for async operations
+
+**Implementation Strategy**: After completing tests 00-11, tackle these in order 12-17. Each represents a distinct feature area that builds on the existing architecture.
 
 ### Key Principles for Rebuild
 
@@ -1282,17 +1317,35 @@ Brief description of what this test validates.
 
 Tests are numbered and organized by feature:
 
-- `01-basic-component.md` - Simple component with props
+**Foundation (00-00b)**:
+- `00-minimal-text.md` - Simplest component, just text
+- `00a-text-with-interpolation.md` - Text with {var} interpolation
+- `00b-single-prop.md` - Component with one prop
+
+**Core Features (01-06)**:
+- `01-basic-component.md` - Simple component with props and defaults
 - `02-control-flow-if.md` - `@if/@else` conditional rendering
 - `03-control-flow-for.md` - `@for` loops with keys and empty blocks
 - `04-control-flow-when.md` - `@when` expressions
 - `05-data-binding.md` - `bind:value` two-way binding
-- `06-lifecycle-hooks.md` - `onMount` and lifecycle hooks
+- `06-lifecycle-hooks.md` - `onMount` lifecycle hook
+
+**Routing (07-08)**:
 - `07-routing-simple.md` - Basic `$routes` navigation
 - `08-routing-params.md` - Route parameters via `$screen.params`
+
+**Composition (09-11)**:
 - `09-imports.md` - Import aliases (`$lib`, `$models`, etc.)
 - `10-nested-components.md` - Deep component trees
-- ... and more as needed
+- `11-complex-state-management.md` - Multiple state vars, derived state
+
+**Extended Patterns (12-17)**:
+- `12-lazy-column.md` - LazyColumn with items() for performance
+- `13-box-layout.md` - Box layout for stacking/overlaying
+- `14-async-image.md` - AsyncImage with placeholder/error states
+- `15-modifier-chains.md` - Chained and conditional modifiers
+- `16-lifecycle-cleanup.md` - onDispose for resource cleanup
+- `17-error-handling.md` - Try/catch in async operations
 
 #### Test Runner Implementation
 
