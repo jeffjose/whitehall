@@ -806,11 +806,19 @@ src/transpiler/
   - ✅ TextField and Button component imports
 - Progress: **8/14 tests passing!** (commits: `d116c52`, `c5aa78b`)
 
-**Test 06: Lifecycle Hooks** (`06-lifecycle-hooks.md`)
-- Implement: `onMount` → `LaunchedEffect` transformation
-- Verify: 9/14 tests passing
+**Test 06: Lifecycle Hooks** ✅ (`06-lifecycle-hooks.md`)
+- Input: onMount hook, state with type annotations, coroutines
+- Implemented:
+  - ✅ `onMount { }` lifecycle hook parsing
+  - ✅ State with type annotations: `var name: Type = value`
+  - ✅ `mutableStateOf<Type>(value)` for generic types
+  - ✅ `rememberCoroutineScope()` generation when hooks present
+  - ✅ `LaunchedEffect(Unit)` wrapper for onMount
+  - ✅ Transform `launch` → `coroutineScope.launch`
+  - ✅ `kotlinx.coroutines.launch` import
+- Progress: **9/14 tests passing!** (commit: `5a0a450`)
 
-**Checkpoint**: State management fully functional.
+**Checkpoint**: ✅ State management and lifecycle hooks fully functional!
 
 #### Phase 5: Routing (Tests 07-08)
 **Goal**: Navigation and route parameters
