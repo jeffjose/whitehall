@@ -99,23 +99,54 @@ impl Parser {
 
     fn parse_type(&mut self) -> Result<String, String> {
         let start = self.pos;
-        let mut depth = 0;
+        let mut paren_depth = 0;
+        let mut angle_depth = 0;
+        let mut bracket_depth = 0;
 
         while let Some(ch) = self.peek_char() {
             match ch {
-                '(' | '<' | '[' => {
-                    depth += 1;
+                '(' => {
+                    paren_depth += 1;
                     self.pos += 1;
                 }
-                ')' | '>' | ']' => {
-                    if depth > 0 {
-                        depth -= 1;
+                ')' => {
+                    if paren_depth > 0 {
+                        paren_depth -= 1;
                         self.pos += 1;
                     } else {
                         break;
                     }
                 }
-                '=' | '\n' if depth == 0 => break,
+                '<' => {
+                    angle_depth += 1;
+                    self.pos += 1;
+                }
+                '>' => {
+                    if angle_depth > 0 {
+                        angle_depth -= 1;
+                        self.pos += 1;
+                    } else {
+                        // Could be part of -> operator, keep going if in parens
+                        if paren_depth > 0 || bracket_depth > 0 {
+                            self.pos += 1;
+                        } else {
+                            break;
+                        }
+                    }
+                }
+                '[' => {
+                    bracket_depth += 1;
+                    self.pos += 1;
+                }
+                ']' => {
+                    if bracket_depth > 0 {
+                        bracket_depth -= 1;
+                        self.pos += 1;
+                    } else {
+                        break;
+                    }
+                }
+                '=' | '\n' if paren_depth == 0 && angle_depth == 0 && bracket_depth == 0 => break,
                 _ => self.pos += 1,
             }
         }
@@ -186,7 +217,13 @@ impl Parser {
         if self.peek_char() == Some('<') {
             self.parse_component()
         } else {
-            Err("Expected component".to_string())
+            let remaining = if self.pos < self.input.len() {
+                let end = (self.pos + 50).min(self.input.len());
+                &self.input[self.pos..end]
+            } else {
+                "EOF"
+            };
+            Err(format!("Expected component, found: {:?}", remaining))
         }
     }
 

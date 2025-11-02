@@ -23,30 +23,42 @@ impl CodeGenerator {
         // Package declaration
         output.push_str(&format!("package {}\n\n", self.package));
 
-        // Collect all imports in proper order:
-        // 1. Component imports (Text, AsyncImage, etc.)
-        // 2. Composable import
-        // 3. User imports
-        // 4. Runtime imports (if state present)
+        // Collect prop and component imports from markup first to determine order
+        let mut prop_imports = Vec::new();
+        let mut component_imports = Vec::new();
+        self.collect_imports_recursive(&file.markup, &mut prop_imports, &mut component_imports);
 
+        // Import ordering:
+        // If there are NO prop imports and NO user imports, put component imports first
+        // Otherwise: Composable, prop imports, user imports, component imports
         let mut imports = Vec::new();
 
-        // Collect component imports from markup
-        self.collect_imports_from_markup(&file.markup, &mut imports);
+        let has_other_imports = !prop_imports.is_empty() || !file.imports.is_empty();
 
-        // Add Composable or runtime imports depending on whether we have state
+        if !has_other_imports {
+            // Simple case: component imports first (e.g., Text before Composable)
+            imports.extend(component_imports.clone());
+        }
+
+        // Add Composable or runtime imports
         if !file.state.is_empty() {
-            // If we have state, use runtime.* which includes Composable
             imports.push("androidx.compose.runtime.*".to_string());
         } else {
-            // Otherwise just import Composable
             imports.push("androidx.compose.runtime.Composable".to_string());
         }
+
+        // Add prop imports (Modifier, clickable)
+        imports.extend(prop_imports);
 
         // User imports (resolve $ aliases)
         for import in &file.imports {
             let resolved = self.resolve_import(&import.path);
             imports.push(resolved);
+        }
+
+        // Add component imports (if not already added)
+        if has_other_imports {
+            imports.extend(component_imports);
         }
 
         // Write all imports
@@ -170,50 +182,55 @@ impl CodeGenerator {
         }
     }
 
-    fn collect_imports_from_markup(&self, markup: &Markup, imports: &mut Vec<String>) {
+    fn collect_imports_recursive(
+        &self,
+        markup: &Markup,
+        prop_imports: &mut Vec<String>,
+        component_imports: &mut Vec<String>,
+    ) {
         match markup {
             Markup::Component(comp) => {
-                // Add imports for known components
+                // Check if we need Modifier and clickable imports from props
+                for prop in &comp.props {
+                    if prop.value.contains("Modifier") {
+                        let import = "androidx.compose.ui.Modifier".to_string();
+                        if !prop_imports.contains(&import) {
+                            prop_imports.push(import);
+                        }
+                    }
+                    if prop.value.contains("clickable") {
+                        let import = "androidx.compose.foundation.clickable".to_string();
+                        if !prop_imports.contains(&import) {
+                            prop_imports.push(import);
+                        }
+                    }
+                }
+
+                // Add imports for known components (after prop imports)
                 match comp.name.as_str() {
                     "Text" => {
                         let import = "androidx.compose.material3.Text".to_string();
-                        if !imports.contains(&import) {
-                            imports.push(import);
+                        if !component_imports.contains(&import) {
+                            component_imports.push(import);
                         }
                     }
                     "AsyncImage" => {
                         let import = "coil.compose.AsyncImage".to_string();
-                        if !imports.contains(&import) {
-                            imports.push(import);
+                        if !component_imports.contains(&import) {
+                            component_imports.push(import);
                         }
                     }
                     _ => {}
                 }
 
-                // Check if we need Modifier and clickable imports from props
-                for prop in &comp.props {
-                    if prop.value.contains("Modifier") {
-                        let import = "androidx.compose.ui.Modifier".to_string();
-                        if !imports.contains(&import) {
-                            imports.push(import);
-                        }
-                    }
-                    if prop.value.contains("clickable") {
-                        let import = "androidx.compose.foundation.clickable".to_string();
-                        if !imports.contains(&import) {
-                            imports.push(import);
-                        }
-                    }
-                }
-
                 // Recurse into children
                 for child in &comp.children {
-                    self.collect_imports_from_markup(child, imports);
+                    self.collect_imports_recursive(child, prop_imports, component_imports);
                 }
             }
             Markup::Sequence(items) => {
                 for item in items {
-                    self.collect_imports_from_markup(item, imports);
+                    self.collect_imports_recursive(item, prop_imports, component_imports);
                 }
             }
             _ => {}
