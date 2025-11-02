@@ -522,18 +522,19 @@ src/transpiler/
 
 **Checkpoint**: Basic component structure working, solid foundation established.
 
-#### Phase 2: Basic Components (Test 01)
+#### Phase 2: Basic Components (Test 01) ⏳ IN PROGRESS
+
 **Goal**: Full component with multiple props and defaults
 
 **Test 01: Basic Component** (`01-basic-component.md`)
 - Input: Avatar component with url, size, onClick props
-- Implement:
-  - Multiple props with types
-  - Default values
-  - Optional types (`(() -> Unit)?`)
-  - Import statement parsing
-  - Component invocation with props
-- Verify: 4/14 tests passing
+- Need to implement:
+  - Import statements (`import $models.User`)
+  - Multiple props with defaults (size = 48)
+  - Optional/nullable types (`(() -> Unit)?`)
+  - Self-closing tags (`<AsyncImage />`)
+  - Props on child components (`url={url}`)
+- Target: 4/14 tests passing
 
 **Checkpoint**: Real components can be defined and used.
 
