@@ -248,7 +248,7 @@ mod tests {
     }
 
     #[test]
-    fn test_transpile_all_examples() {
+    fn examples() {
         use whitehall::transpiler::transpile;
 
         let test_files = load_test_files();
