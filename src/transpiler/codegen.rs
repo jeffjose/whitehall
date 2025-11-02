@@ -579,8 +579,67 @@ impl CodeGenerator {
                     None
                 };
 
-                // Special handling for Box and AsyncImage with width/height/etc
-                if comp.name == "Box" || comp.name == "AsyncImage" {
+                // Special handling for Text and Card with modifier props
+                if comp.name == "Text" || comp.name == "Card" {
+                    // Collect modifier-related props
+                    let padding = comp.props.iter().find(|p| p.name == "padding");
+                    let fill_max_width = comp.props.iter().find(|p| p.name == "fillMaxWidth");
+                    let explicit_modifier = comp.props.iter().find(|p| p.name == "modifier");
+
+                    // Build modifier chain if we have modifier-related props
+                    if padding.is_some() || fill_max_width.is_some() || explicit_modifier.is_some() {
+                        let mut modifiers = Vec::new();
+
+                        // Add padding first (if present)
+                        if let Some(pad_prop) = padding {
+                            modifiers.push(format!(".padding({}.dp)", pad_prop.value));
+                        }
+
+                        // Add fillMaxWidth if present (as boolean prop or variable)
+                        if let Some(fw_prop) = fill_max_width {
+                            let fw_value = fw_prop.value.trim();
+                            if fw_value == "true" {
+                                modifiers.push(".fillMaxWidth()".to_string());
+                            } else if fw_value == "false" {
+                                // Skip - don't add modifier
+                            } else {
+                                // It's a variable - use .let { if ... }
+                                modifiers.push(format!(".let {{ if ({}) it.fillMaxWidth() else it }}", fw_value));
+                            }
+                        }
+
+                        // Add explicit modifier last (if present)
+                        if let Some(mod_prop) = explicit_modifier {
+                            let transformed = self.transform_ternary(&mod_prop.value);
+                            modifiers.push(transformed);
+                        }
+
+                        // Combine into modifier parameter
+                        if !modifiers.is_empty() {
+                            if modifiers.len() == 1 && !modifiers[0].starts_with('.') {
+                                // Single non-chained modifier (from explicit modifier with ternary)
+                                params.push(format!("modifier = Modifier{}", modifiers[0]));
+                            } else {
+                                // Chain of modifiers
+                                let modifier_chain = modifiers.iter()
+                                    .map(|m| format!("            {}", m))
+                                    .collect::<Vec<_>>()
+                                    .join("\n");
+                                params.push(format!("modifier = Modifier\n{}", modifier_chain));
+                            }
+                        }
+                    }
+
+                    // Add other props (excluding the ones we handled)
+                    for prop in &comp.props {
+                        if prop.name == "padding" || prop.name == "fillMaxWidth" || prop.name == "modifier" {
+                            continue; // Skip, already handled
+                        }
+                        let transformed = self.transform_prop(&comp.name, &prop.name, &prop.value);
+                        params.extend(transformed);
+                    }
+                } else if comp.name == "Box" || comp.name == "AsyncImage" {
+                    // Special handling for Box and AsyncImage with width/height/etc
                     // Collect special props
                     let width = comp.props.iter().find(|p| p.name == "width").map(|p| &p.value);
                     let height = comp.props.iter().find(|p| p.name == "height").map(|p| &p.value);
@@ -858,6 +917,22 @@ impl CodeGenerator {
                             self.add_import_if_missing(prop_imports, "androidx.compose.foundation.layout.PaddingValues");
                             self.add_import_if_missing(prop_imports, "androidx.compose.ui.unit.dp");
                         }
+                        ("Text", "padding") | ("Card", "padding") => {
+                            // padding → modifier = Modifier.padding(N.dp)
+                            self.add_import_if_missing(prop_imports, "androidx.compose.ui.Modifier");
+                            self.add_import_if_missing(prop_imports, "androidx.compose.foundation.layout.padding");
+                            self.add_import_if_missing(prop_imports, "androidx.compose.ui.unit.dp");
+                        }
+                        ("Text", "fillMaxWidth") | ("Card", "fillMaxWidth") => {
+                            // fillMaxWidth → modifier chain with .fillMaxWidth()
+                            self.add_import_if_missing(prop_imports, "androidx.compose.ui.Modifier");
+                            self.add_import_if_missing(prop_imports, "androidx.compose.foundation.layout.fillMaxWidth");
+                        }
+                        ("Text", "modifier") | ("Card", "modifier") if prop.value.contains("clickable") => {
+                            // modifier with clickable
+                            self.add_import_if_missing(prop_imports, "androidx.compose.ui.Modifier");
+                            self.add_import_if_missing(prop_imports, "androidx.compose.foundation.clickable");
+                        }
                         _ => {}
                     }
                 }
@@ -1002,9 +1077,16 @@ impl CodeGenerator {
             return Ok("\"\"".to_string());
         }
 
-        // If single child
-        if children.len() == 1 {
-            match &children[0] {
+        // Filter out whitespace-only Text nodes
+        let non_whitespace_children: Vec<&Markup> = children.iter()
+            .filter(|child| {
+                !matches!(child, Markup::Text(t) if t.trim().is_empty())
+            })
+            .collect();
+
+        // If single non-whitespace child
+        if non_whitespace_children.len() == 1 {
+            match non_whitespace_children[0] {
                 Markup::Text(text) => return Ok(format!("\"{}\"", text)),
                 // Single interpolation - use bare expression (no quotes, no $)
                 Markup::Interpolation(expr) => {
@@ -1016,7 +1098,7 @@ impl CodeGenerator {
 
         // Multiple children: build string template with interpolation
         let mut parts = Vec::new();
-        for child in children {
+        for child in &non_whitespace_children {
             match child {
                 Markup::Text(text) => parts.push(text.to_string()),
                 Markup::Interpolation(expr) => {
@@ -1055,6 +1137,46 @@ impl CodeGenerator {
         let import_str = import.to_string();
         if !imports.contains(&import_str) {
             imports.push(import_str);
+        }
+    }
+
+    fn transform_ternary(&self, expr: &str) -> String {
+        // Transform ternary operator: condition ? value : value
+        // To Kotlin: .let { if (condition) value else value }
+
+        // Find ? and : at the same depth level
+        let mut depth = 0;
+        let mut question_pos = None;
+        let mut colon_pos = None;
+
+        for (i, ch) in expr.char_indices() {
+            match ch {
+                '(' | '{' | '[' => depth += 1,
+                ')' | '}' | ']' => depth -= 1,
+                '?' if depth == 0 && question_pos.is_none() => question_pos = Some(i),
+                ':' if depth == 0 && question_pos.is_some() && colon_pos.is_none() => colon_pos = Some(i),
+                _ => {}
+            }
+        }
+
+        if let (Some(q), Some(c)) = (question_pos, colon_pos) {
+            let condition = expr[..q].trim();
+            let mut then_value = expr[q+1..c].trim().to_string();
+            let mut else_value = expr[c+1..].trim().to_string();
+
+            // Replace Modifier. with it. in the values for chaining
+            if then_value.starts_with("Modifier.") {
+                then_value = then_value.replace("Modifier.", "it.");
+            }
+            if else_value.starts_with("Modifier.") {
+                else_value = else_value.replace("Modifier.", "it.");
+            } else if else_value == "Modifier" {
+                else_value = "it".to_string();
+            }
+
+            format!(".let {{ if ({}) {} else {} }}", condition, then_value, else_value)
+        } else {
+            expr.to_string()
         }
     }
 
