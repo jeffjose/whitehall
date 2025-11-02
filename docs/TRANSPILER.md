@@ -779,11 +779,17 @@ src/transpiler/
   - ✅ Alphabetical import sorting (standard Kotlin convention)
 - Progress: **6/14 tests passing!** (commits: `304f634`, `a885f79`)
 
-**Test 04: When** (`04-control-flow-when.md`)
-- Implement: `@when` expression branches
-- Verify: 7/14 tests passing
+**Test 04: When** ✅ (`04-control-flow-when.md`)
+- Input: @when with multi-branch conditionals and else clause
+- Implemented:
+  - ✅ `@when { condition -> markup }` parsing
+  - ✅ Multiple branches with conditions
+  - ✅ `else` branch support (condition = None)
+  - ✅ Inline component generation for branch bodies
+  - ✅ When branch recursion in import collection
+- Progress: **7/14 tests passing!** (commit: `edc994c`)
 
-**Checkpoint**: All control flow working correctly.
+**Checkpoint**: ✅ All control flow working correctly (if/else, for, when)!
 
 #### Phase 4: Advanced Features (Tests 05-06)
 **Goal**: Data binding and lifecycle hooks
