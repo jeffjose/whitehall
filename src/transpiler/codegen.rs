@@ -549,10 +549,101 @@ impl CodeGenerator {
                     None
                 };
 
-                // Add component props (with transformations)
-                for prop in &comp.props {
-                    let transformed = self.transform_prop(&comp.name, &prop.name, &prop.value);
-                    params.extend(transformed);
+                // Special handling for Box and AsyncImage with width/height/etc
+                if comp.name == "Box" || comp.name == "AsyncImage" {
+                    // Collect special props
+                    let width = comp.props.iter().find(|p| p.name == "width").map(|p| &p.value);
+                    let height = comp.props.iter().find(|p| p.name == "height").map(|p| &p.value);
+                    let bg_color = comp.props.iter().find(|p| p.name == "backgroundColor").map(|p| &p.value);
+                    let alignment = comp.props.iter().find(|p| p.name == "alignment").map(|p| &p.value);
+                    let url = comp.props.iter().find(|p| p.name == "url").map(|p| &p.value);
+                    let content_desc = comp.props.iter().find(|p| p.name == "contentDescription");
+
+                    // Build modifier chain for Box
+                    if comp.name == "Box" && (width.is_some() || height.is_some() || bg_color.is_some() || alignment.is_some()) {
+                        let mut modifiers = Vec::new();
+
+                        // Add size modifier if width/height present
+                        if let (Some(w), Some(h)) = (width, height) {
+                            modifiers.push(format!(".size({}.dp)", w));
+                        }
+
+                        // Add background modifier
+                        if let Some(color) = bg_color {
+                            let color_str = if color.starts_with('"') && color.ends_with('"') {
+                                let c = &color[1..color.len()-1];
+                                format!("Color.{}", c.chars().next().unwrap().to_uppercase().collect::<String>() + &c[1..])
+                            } else {
+                                color.to_string()
+                            };
+                            modifiers.push(format!(".background({})", color_str));
+                        }
+
+                        // Add alignment modifier
+                        if let Some(align) = alignment {
+                            let align_str = if align.starts_with('"') && align.ends_with('"') {
+                                let a = &align[1..align.len()-1];
+                                format!("Alignment.{}", a.chars().next().unwrap().to_uppercase().collect::<String>() + &a[1..])
+                            } else {
+                                align.to_string()
+                            };
+                            modifiers.push(format!(".align({})", align_str));
+                        }
+
+                        // Combine into modifier parameter with proper indentation
+                        if !modifiers.is_empty() {
+                            let modifier_chain = modifiers.iter()
+                                .map(|m| format!("                    {}", m))
+                                .collect::<Vec<_>>()
+                                .join("\n");
+                            params.push(format!("modifier = Modifier\n{}", modifier_chain));
+                        }
+                    }
+
+                    // Handle AsyncImage special props
+                    if comp.name == "AsyncImage" {
+                        let has_modifier = comp.props.iter().any(|p| p.name == "modifier");
+
+                        // Only transform if there's NO explicit modifier prop
+                        if !has_modifier {
+                            // url → model
+                            if let Some(url_val) = url {
+                                params.push(format!("model = {}", url_val));
+                            }
+
+                            // Add contentDescription
+                            if content_desc.is_none() {
+                                params.push("contentDescription = null".to_string());
+                            }
+
+                            // width/height → modifier = Modifier.size()
+                            if let (Some(w), Some(h)) = (width, height) {
+                                params.push(format!("modifier = Modifier.size({}.dp)", w));
+                            }
+                        }
+                    }
+
+                    // Add other props (excluding the ones we handled)
+                    let has_async_image_modifier = comp.name == "AsyncImage" &&
+                        comp.props.iter().any(|p| p.name == "modifier");
+
+                    for prop in &comp.props {
+                        // Skip props we've already handled
+                        if comp.name == "Box" && (prop.name == "width" || prop.name == "height" || prop.name == "backgroundColor" || prop.name == "alignment") {
+                            continue; // Box props handled above
+                        }
+                        if comp.name == "AsyncImage" && !has_async_image_modifier && (prop.name == "url" || prop.name == "width" || prop.name == "height") {
+                            continue; // AsyncImage props handled above (only if no explicit modifier)
+                        }
+                        let transformed = self.transform_prop(&comp.name, &prop.name, &prop.value);
+                        params.extend(transformed);
+                    }
+                } else {
+                    // Regular prop handling for other components
+                    for prop in &comp.props {
+                        let transformed = self.transform_prop(&comp.name, &prop.name, &prop.value);
+                        params.extend(transformed);
+                    }
                 }
 
                 // Determine if this component has a trailing lambda (children block)
@@ -702,6 +793,31 @@ impl CodeGenerator {
                             self.add_import_if_missing(prop_imports, "androidx.compose.material3.CardDefaults");
                             self.add_import_if_missing(prop_imports, "androidx.compose.material3.MaterialTheme");
                         }
+                        ("Box", "width") | ("Box", "height") => {
+                            // width/height → Modifier.size()
+                            self.add_import_if_missing(prop_imports, "androidx.compose.ui.Modifier");
+                            self.add_import_if_missing(prop_imports, "androidx.compose.foundation.layout.size");
+                            self.add_import_if_missing(prop_imports, "androidx.compose.ui.unit.dp");
+                        }
+                        ("Box", "backgroundColor") => {
+                            // backgroundColor → .background(Color.Name)
+                            self.add_import_if_missing(prop_imports, "androidx.compose.foundation.background");
+                            self.add_import_if_missing(prop_imports, "androidx.compose.ui.graphics.Color");
+                        }
+                        ("Box", "alignment") => {
+                            // alignment → .align(Alignment.Name)
+                            self.add_import_if_missing(prop_imports, "androidx.compose.ui.Alignment");
+                        }
+                        ("AsyncImage", "url") | ("AsyncImage", "width") | ("AsyncImage", "height") => {
+                            // Only add imports if AsyncImage has no explicit modifier
+                            let has_modifier = comp.props.iter().any(|p| p.name == "modifier");
+                            if !has_modifier {
+                                // url → model, width/height → Modifier.size()
+                                self.add_import_if_missing(prop_imports, "androidx.compose.ui.Modifier");
+                                self.add_import_if_missing(prop_imports, "androidx.compose.foundation.layout.size");
+                                self.add_import_if_missing(prop_imports, "androidx.compose.ui.unit.dp");
+                            }
+                        }
                         _ => {}
                     }
                 }
@@ -758,6 +874,12 @@ impl CodeGenerator {
                     }
                     "Icon" => {
                         let import = "androidx.compose.material3.Icon".to_string();
+                        if !component_imports.contains(&import) {
+                            component_imports.push(import);
+                        }
+                    }
+                    "Box" => {
+                        let import = "androidx.compose.foundation.layout.Box".to_string();
                         if !component_imports.contains(&import) {
                             component_imports.push(import);
                         }
