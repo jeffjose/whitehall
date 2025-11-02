@@ -203,19 +203,21 @@ impl Parser {
     }
 
     fn parse_function_declaration(&mut self) -> Result<FunctionDeclaration, String> {
-        // Parse: fun name() { body }
+        // Parse: fun name(params) { body }
         self.skip_whitespace();
         let name = self.parse_identifier()?;
         self.skip_whitespace();
 
-        // Expect '(' and skip params (we just capture everything)
+        // Parse params (capture everything between parens)
         self.expect_char('(')?;
+        let param_start = self.pos;
         while self.peek_char() != Some(')') {
             if self.peek_char().is_none() {
                 return Err("Unexpected EOF in function params".to_string());
             }
             self.pos += 1;
         }
+        let params = self.input[param_start..self.pos].trim().to_string();
         self.expect_char(')')?;
         self.skip_whitespace();
 
@@ -248,6 +250,7 @@ impl Parser {
 
         Ok(FunctionDeclaration {
             name,
+            params,
             body: body.trim().to_string(),
         })
     }

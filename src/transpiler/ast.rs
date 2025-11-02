@@ -33,7 +33,8 @@ pub struct StateDeclaration {
 #[derive(Debug, Clone, PartialEq)]
 pub struct FunctionDeclaration {
     pub name: String,
-    pub body: String, // Just capture the whole function body as a string
+    pub params: String, // Parameters as string (e.g., "postId: String")
+    pub body: String,   // Just capture the whole function body as a string
 }
 
 #[derive(Debug, Clone, PartialEq)]

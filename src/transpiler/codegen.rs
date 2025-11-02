@@ -7,6 +7,7 @@ pub struct CodeGenerator {
     component_name: String,
     component_type: Option<String>,
     indent_level: usize,
+    nullable_vars: std::collections::HashSet<String>,
 }
 
 impl CodeGenerator {
@@ -16,6 +17,7 @@ impl CodeGenerator {
             component_name: component_name.to_string(),
             component_type: component_type.map(|s| s.to_string()),
             indent_level: 0,
+            nullable_vars: std::collections::HashSet::new(),
         }
     }
 
@@ -24,6 +26,13 @@ impl CodeGenerator {
 
         // Package declaration
         output.push_str(&format!("package {}\n\n", self.package));
+
+        // Extract route parameters if this is a screen
+        let route_params = if self.component_type.as_deref() == Some("screen") {
+            self.extract_route_params(file)
+        } else {
+            Vec::new()
+        };
 
         // Collect prop and component imports from markup first to determine order
         let mut prop_imports = Vec::new();
@@ -92,9 +101,19 @@ impl CodeGenerator {
         // For screens, add navController parameter
         let is_screen = self.component_type.as_deref() == Some("screen");
         if is_screen {
-            output.push_str("navController: NavController");
-            if !file.props.is_empty() {
-                output.push_str(", ");
+            if !route_params.is_empty() || !file.props.is_empty() {
+                output.push('\n');
+                output.push_str("    navController: NavController,\n");
+                // Add route parameters
+                for param in &route_params {
+                    output.push_str(&format!("    {}: String", param));
+                    if !file.props.is_empty() {
+                        output.push(',');
+                    }
+                    output.push('\n');
+                }
+            } else {
+                output.push_str("navController: NavController");
             }
         }
 
@@ -133,6 +152,13 @@ impl CodeGenerator {
 
         // Generate state declarations
         for state in &file.state {
+            // Track nullable variables
+            if let Some(ref type_ann) = state.type_annotation {
+                if type_ann.ends_with('?') {
+                    self.nullable_vars.insert(state.name.clone());
+                }
+            }
+
             output.push_str(&self.indent());
             if state.mutable {
                 if let Some(ref type_ann) = state.type_annotation {
@@ -173,12 +199,16 @@ impl CodeGenerator {
                     for line in hook.body.lines() {
                         output.push_str(&self.indent());
                         output.push_str("    ");
+
+                        // Transform $screen.params.{name} → {name}
+                        let mut transformed_line = line.replace("$screen.params.", "");
+
                         // Add coroutineScope. prefix to launch calls
-                        let transformed_line = line.trim();
-                        if transformed_line.starts_with("launch ") || transformed_line.starts_with("launch{") {
+                        let trimmed = transformed_line.trim();
+                        if trimmed.starts_with("launch ") || trimmed.starts_with("launch{") {
                             output.push_str("coroutineScope.");
                         }
-                        output.push_str(line);
+                        output.push_str(&transformed_line);
                         output.push('\n');
                     }
                     output.push_str(&self.indent());
@@ -193,7 +223,7 @@ impl CodeGenerator {
         // Generate function declarations
         for func in &file.functions {
             output.push_str(&self.indent());
-            output.push_str(&format!("fun {}() {{\n", func.name));
+            output.push_str(&format!("fun {}({}) {{\n", func.name, func.params));
             // Output function body with proper indentation and transformations
             for line in func.body.lines() {
                 output.push_str(&self.indent());
@@ -201,6 +231,9 @@ impl CodeGenerator {
 
                 // Transform $routes.login → Routes.Login
                 let mut transformed_line = self.transform_route_aliases(line);
+
+                // Transform $screen.params.{name} → {name}
+                transformed_line = transformed_line.replace("$screen.params.", "");
 
                 // For screens, transform navigate() to navController.navigate()
                 if self.component_type.as_deref() == Some("screen") {
@@ -549,6 +582,12 @@ impl CodeGenerator {
                             component_imports.push(import);
                         }
                     }
+                    "Scaffold" => {
+                        let import = "androidx.compose.material3.Scaffold".to_string();
+                        if !component_imports.contains(&import) {
+                            component_imports.push(import);
+                        }
+                    }
                     "AsyncImage" => {
                         let import = "coil.compose.AsyncImage".to_string();
                         if !component_imports.contains(&import) {
@@ -618,7 +657,9 @@ impl CodeGenerator {
             match &children[0] {
                 Markup::Text(text) => return Ok(format!("\"{}\"", text)),
                 // Single interpolation - use bare expression (no quotes, no $)
-                Markup::Interpolation(expr) => return Ok(expr.to_string()),
+                Markup::Interpolation(expr) => {
+                    return Ok(self.add_null_assertions(expr));
+                }
                 _ => {}
             }
         }
@@ -628,12 +669,25 @@ impl CodeGenerator {
         for child in children {
             match child {
                 Markup::Text(text) => parts.push(text.to_string()),
-                Markup::Interpolation(expr) => parts.push(format!("${}", expr)),
+                Markup::Interpolation(expr) => {
+                    parts.push(format!("${{{}}}", self.add_null_assertions(expr)));
+                }
                 _ => return Err("Unexpected child in text".to_string()),
             }
         }
 
         Ok(format!("\"{}\"", parts.join("")))
+    }
+
+    fn add_null_assertions(&self, expr: &str) -> String {
+        // If expr is like "user.name" and "user" is nullable, transform to "user!!.name"
+        if let Some(dot_pos) = expr.find('.') {
+            let var_name = &expr[..dot_pos];
+            if self.nullable_vars.contains(var_name) {
+                return format!("{}!!{}", var_name, &expr[dot_pos..]);
+            }
+        }
+        expr.to_string()
     }
 
     fn add_import_if_missing(&self, imports: &mut Vec<String>, import: &str) {
@@ -771,6 +825,43 @@ impl CodeGenerator {
             format!("{}Routes.{}{}", before, capitalized.join("."), after)
         } else {
             value.to_string()
+        }
+    }
+
+    fn extract_route_params(&self, file: &WhitehallFile) -> Vec<String> {
+        let mut params = std::collections::HashSet::new();
+
+        // Scan lifecycle hooks for $screen.params.{name}
+        for hook in &file.lifecycle_hooks {
+            self.extract_params_from_text(&hook.body, &mut params);
+        }
+
+        // Scan function bodies
+        for func in &file.functions {
+            self.extract_params_from_text(&func.body, &mut params);
+        }
+
+        // Scan state initial values
+        for state in &file.state {
+            self.extract_params_from_text(&state.initial_value, &mut params);
+        }
+
+        let mut param_vec: Vec<String> = params.into_iter().collect();
+        param_vec.sort();
+        param_vec
+    }
+
+    fn extract_params_from_text(&self, text: &str, params: &mut std::collections::HashSet<String>) {
+        // Find all $screen.params.{name} patterns
+        let pattern = "$screen.params.";
+        for part in text.split(pattern).skip(1) {
+            // Extract the param name (until non-alphanumeric)
+            let param_name: String = part.chars()
+                .take_while(|c| c.is_alphanumeric() || *c == '_')
+                .collect();
+            if !param_name.is_empty() {
+                params.insert(param_name);
+            }
         }
     }
 
