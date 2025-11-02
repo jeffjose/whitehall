@@ -296,13 +296,26 @@ impl Parser {
         if self.peek_char() == Some('"') {
             self.parse_string()
         } else {
-            // Parse until newline or EOF
+            // Parse value (handle braces for complex expressions like filter { ... })
             let start = self.pos;
+            let mut brace_depth = 0;
+
             while let Some(ch) = self.peek_char() {
-                if ch == '\n' {
-                    break;
+                if ch == '{' {
+                    brace_depth += 1;
+                    self.pos += 1;
+                } else if ch == '}' {
+                    if brace_depth > 0 {
+                        brace_depth -= 1;
+                        self.pos += 1;
+                    } else {
+                        break; // Closing brace not part of value
+                    }
+                } else if ch == '\n' && brace_depth == 0 {
+                    break; // End of value at newline (unless inside braces)
+                } else {
+                    self.pos += 1;
                 }
-                self.pos += 1;
             }
             Ok(self.input[start..self.pos].trim().to_string())
         }

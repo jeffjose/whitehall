@@ -73,16 +73,17 @@ import $lib.api.ApiClient
 ```kotlin
 package com.example.app.components
 
-import androidx.compose.runtime.*
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
 import androidx.compose.material3.Card
-import androidx.compose.material3.TextField
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextField
+import androidx.compose.runtime.*
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.example.app.models.User
 import com.example.app.lib.api.ApiClient
+import com.example.app.models.User
 import kotlinx.coroutines.launch
 
 @Composable

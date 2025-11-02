@@ -699,7 +699,13 @@ impl CodeGenerator {
             match child {
                 Markup::Text(text) => parts.push(text.to_string()),
                 Markup::Interpolation(expr) => {
-                    parts.push(format!("${{{}}}", self.add_null_assertions(expr)));
+                    let transformed = self.add_null_assertions(expr);
+                    // Simple variable without property access doesn't need braces
+                    if !transformed.contains('.') && !transformed.contains("!!") {
+                        parts.push(format!("${}", transformed));
+                    } else {
+                        parts.push(format!("${{{}}}", transformed));
+                    }
                 }
                 _ => return Err("Unexpected child in text".to_string()),
             }
@@ -752,6 +758,15 @@ impl CodeGenerator {
                     value
                 };
                 vec![format!("label = {{ Text(\"{}\") }}", label_text)]
+            }
+            // TextField placeholder → placeholder = { Text("...") }
+            ("TextField", "placeholder") => {
+                let placeholder_text = if value.starts_with('"') && value.ends_with('"') {
+                    value[1..value.len()-1].to_string()
+                } else {
+                    value
+                };
+                vec![format!("placeholder = {{ Text(\"{}\") }}", placeholder_text)]
             }
             // Button text is handled differently - it becomes a child, not a prop
             ("Button", "text") => {
