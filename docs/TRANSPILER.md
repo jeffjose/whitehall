@@ -452,6 +452,251 @@ object routes {
 - [ ] Integration with `whitehall dev`
 - [ ] Performance optimization
 
+## Current Status and Reset Plan (Nov 2025)
+
+### Situation Analysis
+
+**Test Infrastructure**: ✅ Complete
+- Commit `e1ecf0a` established markdown-based test framework
+- 14 test cases defined in `tests/transpiler-examples/`
+- Test harness can parse markdown and validate output
+- Tests serve dual purpose: validation + documentation
+
+**Transpiler Implementation**: ❌ Fundamentally Broken
+- Commit `08648c2f` added ~2000 lines of hand-written parser + codegen
+- Only 1 of 14 tests passing at that commit
+- Subsequent commits (9 more) attempted band-aid fixes
+- Current state: 3 of 14 tests passing, many edge case bugs
+- Root causes:
+  - Hand-written parser without proper grammar specification
+  - All code added in one massive commit (not iterative)
+  - No proper lexer phase (attempted "lexer-free" parser)
+  - Insufficient prop parsing, text interpolation issues
+  - Import and type handling incomplete
+
+### Decision: Clean Reset
+
+**Recommended Action**: Reset to commit `e1ecf0a` and rebuild properly
+
+**Rationale**:
+1. Current implementation is built on shaky foundation
+2. Fixing piecemeal issues doesn't address core architectural problems
+3. Test infrastructure is solid and ready to guide development
+4. Commit `e1ecf0a` is clean slate: tests exist, no broken code
+5. Better to build correctly once than patch forever
+
+### Implementation Strategy: Test-Driven Development
+
+Unlike the previous attempt (all code at once), we'll build **incrementally**, one test at a time:
+
+#### Phase 1: Foundation (Tests 00-00b)
+**Goal**: Get the 3 simplest tests passing with solid foundation
+
+```bash
+# Reset to clean state
+git reset --hard e1ecf0a
+
+# Create transpiler structure
+src/transpiler/
+  mod.rs           # Public API: transpile(input, package, name)
+  lexer.rs         # Token stream (optional, may use pest instead)
+  parser.rs        # Parse to AST
+  ast.rs           # AST node definitions
+  codegen.rs       # Generate Kotlin from AST
+```
+
+**Test 00: Minimal Text** (`00-minimal-text.md`)
+- Input: Just `<Text>Hello World</Text>`
+- Implement: Basic component shell, text node, Text component generation
+- Verify: 1/14 tests passing
+
+**Test 00a: Text with Interpolation** (`00a-text-with-interpolation.md`)
+- Input: State variable + `<Text>Hello, {name}!</Text>`
+- Implement: State parsing, interpolation in text
+- Verify: 2/14 tests passing
+
+**Test 00b: Single Prop** (`00b-single-prop.md`)
+- Input: `@prop val message: String` + usage
+- Implement: Prop parsing, component parameters
+- Verify: 3/14 tests passing
+
+**Checkpoint**: Basic component structure working, solid foundation established.
+
+#### Phase 2: Basic Components (Test 01)
+**Goal**: Full component with multiple props and defaults
+
+**Test 01: Basic Component** (`01-basic-component.md`)
+- Input: Avatar component with url, size, onClick props
+- Implement:
+  - Multiple props with types
+  - Default values
+  - Optional types (`(() -> Unit)?`)
+  - Import statement parsing
+  - Component invocation with props
+- Verify: 4/14 tests passing
+
+**Checkpoint**: Real components can be defined and used.
+
+#### Phase 3: Control Flow (Tests 02-04)
+**Goal**: All control flow constructs working
+
+**Test 02: If/Else** (`02-control-flow-if.md`)
+- Implement: `@if`, `@else` parsing and generation
+- Verify: 5/14 tests passing
+
+**Test 03: For Loops** (`03-control-flow-for.md`)
+- Implement: `@for` with keys and empty blocks
+- Verify: 6/14 tests passing
+
+**Test 04: When** (`04-control-flow-when.md`)
+- Implement: `@when` expression branches
+- Verify: 7/14 tests passing
+
+**Checkpoint**: All control flow working correctly.
+
+#### Phase 4: Advanced Features (Tests 05-06)
+**Goal**: Data binding and lifecycle hooks
+
+**Test 05: Data Binding** (`05-data-binding.md`)
+- Implement: `bind:value={var}` transformation
+- Verify: 8/14 tests passing
+
+**Test 06: Lifecycle Hooks** (`06-lifecycle-hooks.md`)
+- Implement: `onMount` → `LaunchedEffect` transformation
+- Verify: 9/14 tests passing
+
+**Checkpoint**: State management fully functional.
+
+#### Phase 5: Routing (Tests 07-08)
+**Goal**: Navigation and route parameters
+
+**Test 07: Routing Simple** (`07-routing-simple.md`)
+- Implement: `$routes` alias, navigation
+- Verify: 10/14 tests passing
+
+**Test 08: Routing Params** (`08-routing-params.md`)
+- Implement: `$screen.params` access
+- Verify: 11/14 tests passing
+
+**Checkpoint**: Routing system complete.
+
+#### Phase 6: Composition (Tests 09-10)
+**Goal**: Imports and nesting
+
+**Test 09: Imports** (`09-imports.md`)
+- Implement: Full import alias system (`$lib`, `$models`, etc.)
+- Verify: 12/14 tests passing
+
+**Test 10: Nested Components** (`10-nested-components.md`)
+- Implement: Deep component trees
+- Verify: 13/14 tests passing
+
+#### Phase 7: Complex Examples (Test 11+)
+**Goal**: Real-world complexity
+
+**Test 11+**: Complex state management, etc.
+- Verify: 14/14 tests passing
+
+**Checkpoint**: ✅ Full transpiler complete!
+
+### Key Principles for Rebuild
+
+1. **One Test at a Time**: Don't move to next test until current passes
+2. **Commit After Each Test**: Create atomic commits per test
+3. **No Big Leaps**: Resist urge to implement multiple features at once
+4. **Test Output Guides Design**: Let expected Kotlin shape implementation
+5. **Refactor Between Tests**: Clean up after each test passes
+6. **Use Proper Tools**: Consider pest/nom instead of hand-rolled parser
+
+### Test Execution Pattern
+
+For each test:
+
+```bash
+# 1. Read the test markdown file
+cat tests/transpiler-examples/00-minimal-text.md
+
+# 2. Understand input and expected output
+
+# 3. Run test (will fail initially)
+cargo test test_transpile_all_examples -- --nocapture
+
+# 4. Implement minimum code to make THIS test pass
+#    (Don't worry about future tests yet)
+
+# 5. Verify test passes
+cargo test test_transpile_all_examples
+
+# 6. Commit immediately with clear message
+git add .
+git commit -m "Implement test 00: minimal text component"
+
+# 7. Move to next test
+```
+
+### Avoiding Previous Mistakes
+
+**DON'T**:
+- ❌ Implement all features at once
+- ❌ Write code without running tests
+- ❌ Batch multiple tests before committing
+- ❌ Try to handle edge cases prematurely
+- ❌ Write "clever" hand-rolled parsers
+
+**DO**:
+- ✅ Implement exactly what current test needs
+- ✅ Run tests constantly during development
+- ✅ Commit after each passing test
+- ✅ Let tests reveal edge cases naturally
+- ✅ Consider using battle-tested parser libraries
+
+### Success Metrics
+
+- **Test Count**: Must monotonically increase (never go backward)
+- **Commit Size**: Small, focused commits (~100-300 lines)
+- **Build Time**: All tests should run in <5 seconds
+- **Code Quality**: Clean, documented, refactored between tests
+
+### Prerequisites: Fix Test Metadata
+
+**IMPORTANT**: Before resetting the transpiler, we need to fix the test markdown format.
+
+**Current Problem**:
+- Component names are implicit (filename `01-basic-component.md` but expected output shows `fun Avatar()`)
+- Package names vary (components vs screens) but are hardcoded in test harness
+- No way to specify the source filename (e.g., `Avatar.wh`)
+
+**Solution**: Add metadata section to each test markdown file
+
+See **[TEST_FORMAT_PROPOSAL.md](./TEST_FORMAT_PROPOSAL.md)** for full details.
+
+**Example Metadata Section**:
+```markdown
+## Metadata
+
+```
+file: Avatar.wh
+package: com.example.app.components
+```
+```
+
+**Required Steps** (before transpiler reset):
+1. ✅ Review TEST_FORMAT_PROPOSAL.md
+2. ⏳ Add metadata sections to all 14 test files
+3. ⏳ Update test harness to parse and use metadata
+4. ⏳ Validate all tests parse correctly
+5. ⏳ Commit test infrastructure updates
+
+### Next Immediate Steps
+
+1. ✅ Review TRANSPILER.md plan - Approved
+2. ⏳ Review TEST_FORMAT_PROPOSAL.md - Decide on format
+3. ⏳ Update test files with metadata (prerequisite)
+4. ⏳ Execute: `git reset --hard e1ecf0a`
+5. ⏳ Create `src/transpiler/` directory structure
+6. ⏳ Start with test 00: minimal text
+7. ⏳ Build incrementally, test by test
+
 ## Technology Choices
 
 ### Parser Library
