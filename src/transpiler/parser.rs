@@ -2,7 +2,7 @@
 
 use crate::transpiler::ast::{
     Component, ComponentProp, ElseIfBranch, ForLoopBlock, IfElseBlock, Import, Markup,
-    PropDeclaration, StateDeclaration, WhitehallFile,
+    PropDeclaration, StateDeclaration, WhenBlock, WhenBranch, WhitehallFile,
 };
 
 pub struct Parser {
@@ -392,6 +392,8 @@ impl Parser {
             self.parse_if_else()
         } else if self.consume_word("for") {
             self.parse_for_loop()
+        } else if self.consume_word("when") {
+            self.parse_when()
         } else {
             Err("Unknown control flow construct".to_string())
         }
@@ -517,6 +519,57 @@ impl Parser {
             body,
             empty_block,
         }))
+    }
+
+    fn parse_when(&mut self) -> Result<Markup, String> {
+        // Parse: @when { condition -> markup, ... else -> markup }
+        self.skip_whitespace();
+        self.expect_char('{')?;
+
+        let mut branches = Vec::new();
+
+        loop {
+            self.skip_whitespace();
+
+            // Check for closing brace
+            if self.peek_char() == Some('}') {
+                self.expect_char('}')?;
+                break;
+            }
+
+            // Parse branch
+            let condition = if self.consume_word("else") {
+                None
+            } else {
+                // Parse condition until '->'
+                let mut cond = String::new();
+                while let Some(ch) = self.peek_char() {
+                    if ch == '-' && self.peek_ahead(1) == Some('>') {
+                        break;
+                    }
+                    cond.push(ch);
+                    self.pos += 1;
+                }
+                Some(cond.trim().to_string())
+            };
+
+            // Expect '->'
+            self.skip_whitespace();
+            self.expect_char('-')?;
+            self.expect_char('>')?;
+            self.skip_whitespace();
+
+            // Parse body (single markup item)
+            let body = if self.peek_char() == Some('<') {
+                self.parse_component()?
+            } else {
+                return Err("Expected component after '->' in when branch".to_string());
+            };
+
+            branches.push(WhenBranch { condition, body });
+        }
+
+        Ok(Markup::When(WhenBlock { branches }))
     }
 
     fn parse_markup_block(&mut self) -> Result<Vec<Markup>, String> {

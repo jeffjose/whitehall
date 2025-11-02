@@ -224,6 +224,30 @@ impl CodeGenerator {
 
                 Ok(output)
             }
+            Markup::When(when_block) => {
+                let mut output = String::new();
+                let indent_str = "    ".repeat(indent);
+
+                output.push_str(&format!("{}when {{\n", indent_str));
+
+                for branch in &when_block.branches {
+                    if let Some(condition) = &branch.condition {
+                        output.push_str(&format!("{}    {} -> ", indent_str, condition));
+                    } else {
+                        output.push_str(&format!("{}    else -> ", indent_str));
+                    }
+
+                    // Generate the body inline (single component)
+                    let body_code = self.generate_markup_with_indent(&branch.body, 0)?;
+                    // Remove leading indent and trailing newline for inline placement
+                    let body_trimmed = body_code.trim();
+                    output.push_str(body_trimmed);
+                    output.push('\n');
+                }
+
+                output.push_str(&format!("{}}}\n", indent_str));
+                Ok(output)
+            }
             Markup::Component(comp) => {
                 let mut output = String::new();
                 let indent_str = "    ".repeat(indent);
@@ -437,6 +461,12 @@ impl CodeGenerator {
                     for item in empty_block {
                         self.collect_imports_recursive(item, prop_imports, component_imports);
                     }
+                }
+            }
+            Markup::When(when_block) => {
+                // Recurse into each when branch body
+                for branch in &when_block.branches {
+                    self.collect_imports_recursive(&branch.body, prop_imports, component_imports);
                 }
             }
             _ => {}
