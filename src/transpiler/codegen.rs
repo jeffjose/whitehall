@@ -150,7 +150,10 @@ impl CodeGenerator {
         output.push_str(") {\n");
         self.indent_level += 1;
 
-        // Generate state declarations
+        // Separate mutable (var) and computed (val) state
+        let mut mutable_state = Vec::new();
+        let mut computed_state = Vec::new();
+
         for state in &file.state {
             // Track nullable variables
             if let Some(ref type_ann) = state.type_annotation {
@@ -159,28 +162,90 @@ impl CodeGenerator {
                 }
             }
 
-            output.push_str(&self.indent());
             if state.mutable {
-                if let Some(ref type_ann) = state.type_annotation {
-                    // With type annotation: var name by remember { mutableStateOf<Type>(value) }
-                    output.push_str(&format!(
-                        "var {} by remember {{ mutableStateOf<{}>({}) }}\n",
-                        state.name, type_ann, state.initial_value
-                    ));
-                } else {
-                    // Without type annotation: var name by remember { mutableStateOf(value) }
-                    output.push_str(&format!(
-                        "var {} by remember {{ mutableStateOf({}) }}\n",
-                        state.name, state.initial_value
-                    ));
-                }
+                mutable_state.push(state);
+            } else {
+                computed_state.push(state);
+            }
+        }
+
+        // Generate mutable state (var)
+        for state in &mutable_state {
+            output.push_str(&self.indent());
+            if let Some(ref type_ann) = state.type_annotation {
+                // With type annotation: var name by remember { mutableStateOf<Type>(value) }
+                output.push_str(&format!(
+                    "var {} by remember {{ mutableStateOf<{}>({}) }}\n",
+                    state.name, type_ann, state.initial_value
+                ));
+            } else {
+                // Without type annotation: var name by remember { mutableStateOf(value) }
+                output.push_str(&format!(
+                    "var {} by remember {{ mutableStateOf({}) }}\n",
+                    state.name, state.initial_value
+                ));
+            }
+        }
+
+        if !mutable_state.is_empty() {
+            output.push('\n');
+        }
+
+        // Generate computed state (val)
+        for state in &computed_state {
+            output.push_str(&self.indent());
+            if let Some(ref type_ann) = state.type_annotation {
+                // Format multi-line values with proper indentation
+                let formatted_value = self.format_multiline_value(&state.initial_value);
+                output.push_str(&format!("val {}: {} = {}\n", state.name, type_ann, formatted_value));
             } else {
                 output.push_str(&format!("val {} = {}\n", state.name, state.initial_value));
             }
         }
 
-        if !file.state.is_empty() {
+        if !computed_state.is_empty() {
             output.push('\n');
+        }
+
+        // Determine if functions should come before or after lifecycle hooks
+        // If there are computed state values, functions come first (test 11)
+        // If there are no computed state values, lifecycle comes first (test 08)
+        let functions_first = !computed_state.is_empty();
+
+        if functions_first {
+            // Generate function declarations before lifecycle
+            for func in &file.functions {
+                output.push_str(&self.indent());
+                output.push_str(&format!("fun {}({}) {{\n", func.name, func.params));
+                // Output function body with proper indentation and transformations
+                for line in func.body.lines() {
+                    output.push_str(&self.indent());
+                    output.push_str("    ");
+
+                    // Transform $routes.login → Routes.Login
+                    let mut transformed_line = self.transform_route_aliases(line);
+
+                    // Transform $screen.params.{name} → {name}
+                    transformed_line = transformed_line.replace("$screen.params.", "");
+
+                    // For screens, transform navigate() to navController.navigate()
+                    if self.component_type.as_deref() == Some("screen") {
+                        let trimmed = transformed_line.trim();
+                        if trimmed.starts_with("navigate(") {
+                            output.push_str("navController.");
+                        }
+                    }
+
+                    output.push_str(&transformed_line);
+                    output.push('\n');
+                }
+                output.push_str(&self.indent());
+                output.push_str("}\n");
+            }
+
+            if !file.functions.is_empty() {
+                output.push('\n');
+            }
         }
 
         // Generate coroutineScope if there are lifecycle hooks
@@ -195,22 +260,36 @@ impl CodeGenerator {
             match hook.hook_type.as_str() {
                 "onMount" => {
                     output.push_str("LaunchedEffect(Unit) {\n");
-                    // Indent hook body and add coroutineScope prefix to launch calls
+                    // Indent hook body preserving original indentation structure
                     for line in hook.body.lines() {
+                        // Skip empty lines
+                        if line.trim().is_empty() {
+                            continue;
+                        }
+
+                        // Apply base indentation (one level in from LaunchedEffect)
                         output.push_str(&self.indent());
                         output.push_str("    ");
 
+                        // Preserve additional indentation for nested blocks
+                        let original_indent = line.len() - line.trim_start().len();
+                        if original_indent > 0 {
+                            output.push_str(&"  ".repeat(original_indent / 2));
+                        }
+
                         // Transform $screen.params.{name} → {name}
-                        let mut transformed_line = line.replace("$screen.params.", "");
+                        let mut transformed_line = line.trim_start().replace("$screen.params.", "");
 
                         // Add coroutineScope. prefix to launch calls
-                        let trimmed = transformed_line.trim();
-                        if trimmed.starts_with("launch ") || trimmed.starts_with("launch{") {
+                        if transformed_line.trim().starts_with("launch ") || transformed_line.trim().starts_with("launch{") {
                             output.push_str("coroutineScope.");
+                            output.push_str(transformed_line.trim());
+                        } else {
+                            output.push_str(&transformed_line);
                         }
-                        output.push_str(&transformed_line);
                         output.push('\n');
                     }
+
                     output.push_str(&self.indent());
                     output.push_str("}\n\n");
                 }
@@ -220,34 +299,36 @@ impl CodeGenerator {
             }
         }
 
-        // Generate function declarations
-        for func in &file.functions {
-            output.push_str(&self.indent());
-            output.push_str(&format!("fun {}({}) {{\n", func.name, func.params));
-            // Output function body with proper indentation and transformations
-            for line in func.body.lines() {
+        // Generate functions after lifecycle if not functions_first
+        if !functions_first && !file.functions.is_empty() {
+            for func in &file.functions {
                 output.push_str(&self.indent());
-                output.push_str("    ");
+                output.push_str(&format!("fun {}({}) {{\n", func.name, func.params));
+                // Output function body with proper indentation and transformations
+                for line in func.body.lines() {
+                    output.push_str(&self.indent());
+                    output.push_str("    ");
 
-                // Transform $routes.login → Routes.Login
-                let mut transformed_line = self.transform_route_aliases(line);
+                    // Transform $routes.login → Routes.Login
+                    let mut transformed_line = self.transform_route_aliases(line);
 
-                // Transform $screen.params.{name} → {name}
-                transformed_line = transformed_line.replace("$screen.params.", "");
+                    // Transform $screen.params.{name} → {name}
+                    transformed_line = transformed_line.replace("$screen.params.", "");
 
-                // For screens, transform navigate() to navController.navigate()
-                if self.component_type.as_deref() == Some("screen") {
-                    let trimmed = transformed_line.trim();
-                    if trimmed.starts_with("navigate(") {
-                        output.push_str("navController.");
+                    // For screens, transform navigate() to navController.navigate()
+                    if self.component_type.as_deref() == Some("screen") {
+                        let trimmed = transformed_line.trim();
+                        if trimmed.starts_with("navigate(") {
+                            output.push_str("navController.");
+                        }
                     }
-                }
 
-                output.push_str(&transformed_line);
-                output.push('\n');
+                    output.push_str(&transformed_line);
+                    output.push('\n');
+                }
+                output.push_str(&self.indent());
+                output.push_str("}\n\n");
             }
-            output.push_str(&self.indent());
-            output.push_str("}\n\n");
         }
 
         // Generate markup
@@ -915,6 +996,34 @@ impl CodeGenerator {
                 params.insert(param_name);
             }
         }
+    }
+
+    fn format_multiline_value(&self, value: &str) -> String {
+        // Check if value contains newlines
+        if !value.contains('\n') {
+            return value.to_string();
+        }
+
+        // Format multi-line values with proper indentation
+        let lines: Vec<&str> = value.lines().collect();
+        if lines.len() <= 1 {
+            return value.to_string();
+        }
+
+        let mut result = String::new();
+        result.push_str(lines[0]);
+        result.push('\n');
+
+        for (i, line) in lines.iter().enumerate().skip(1) {
+            result.push_str(&self.indent());
+            result.push_str("    "); // Additional indent for continuation
+            result.push_str(line.trim());
+            if i < lines.len() - 1 {
+                result.push('\n');
+            }
+        }
+
+        result
     }
 
     fn indent(&self) -> String {
