@@ -926,23 +926,29 @@ src/transpiler/
 3. Tests 13, 15, 12 - Evaluate based on need
 4. Test 14 - Defer (complex like test 10)
 
-**Test 16: Lifecycle Cleanup** ⏸️ (`16-lifecycle-cleanup.md`)
+**Test 16: Lifecycle Cleanup** ✅ (`16-lifecycle-cleanup.md`)
 - Input: onDispose hook for resource cleanup (WebSocket disconnect)
-- Required:
-  - ⏸️ Parse `onDispose { }` hook (trivial - like onMount)
-  - ⏸️ When both onMount + onDispose → DisposableEffect wrapper
-  - ⏸️ If only onMount → LaunchedEffect (current behavior)
-- Pattern: DisposableEffect(Unit) { mount_code; onDispose { cleanup_code } }
-- Estimated effort: 30 minutes
+- Implemented:
+  - ✅ Parse `onDispose { }` hook (similar to onMount)
+  - ✅ When both onMount + onDispose → DisposableEffect wrapper
+  - ✅ If only onMount → LaunchedEffect (backward compatible)
+  - ✅ Only generate coroutineScope when launch calls present
+  - ✅ DisposableEffect(Unit) { mount_code; onDispose { cleanup_code } }
+- Progress: **14/20 tests passing!** (commit: `b7950a4`)
+- Actual effort: 30 minutes ✅
 
-**Test 17: Error Handling** ⏸️ (`17-error-handling.md`)
+**Test 17: Error Handling** ✅ (`17-error-handling.md`)
 - Input: Try/catch in async operations, loading/error/success states
-- Required:
-  - ⏸️ backgroundColor="errorContainer" → CardDefaults.cardColors(containerColor = ...)
-  - ✅ Try/catch/finally already works
-  - ✅ Else if already works
-- Pattern: Special Card colors transformation
-- Estimated effort: 1-2 hours
+- Implemented:
+  - ✅ backgroundColor="errorContainer" → CardDefaults.cardColors()
+  - ✅ CardDefaults and MaterialTheme imports
+  - ✅ Null assertion for bare nullable variables: error → error!!
+  - ✅ Try/catch/finally already worked
+  - ✅ Else if already worked
+- Progress: **15/20 tests passing!** (commit: `e3b5fd4`)
+- Actual effort: 1 hour ✅
+
+**Checkpoint**: ✅ **75% complete!** Quick wins delivered as predicted!
 
 **Test 12: LazyColumn** ⏸️ (`12-lazy-column.md`)
 - Input: LazyColumn with items() for performance-optimized scrollable lists
