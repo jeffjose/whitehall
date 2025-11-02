@@ -404,6 +404,10 @@ impl CodeGenerator {
     }
 
     fn generate_markup_with_indent(&self, markup: &Markup, indent: usize) -> Result<String, String> {
+        self.generate_markup_with_context(markup, indent, None)
+    }
+
+    fn generate_markup_with_context(&self, markup: &Markup, indent: usize, parent: Option<&str>) -> Result<String, String> {
         match markup {
             Markup::IfElse(if_block) => {
                 let mut output = String::new();
@@ -441,6 +445,32 @@ impl CodeGenerator {
                 let mut output = String::new();
                 let indent_str = "    ".repeat(indent);
 
+                // Special handling for LazyColumn: use items() instead of forEach
+                if parent == Some("LazyColumn") {
+                    // items(collection, key = { expr }) { item ->
+                    output.push_str(&format!("{}items({}", indent_str, for_loop.collection));
+
+                    if let Some(key_expr) = &for_loop.key_expr {
+                        // Ensure key expression has braces
+                        let formatted_key = if key_expr.trim().starts_with('{') {
+                            key_expr.to_string()
+                        } else {
+                            format!("{{ {} }}", key_expr)
+                        };
+                        output.push_str(&format!(", key = {}", formatted_key));
+                    }
+
+                    output.push_str(&format!(") {{ {} ->\n", for_loop.item));
+
+                    for child in &for_loop.body {
+                        output.push_str(&self.generate_markup_with_context(child, indent + 1, None)?);
+                    }
+
+                    output.push_str(&format!("{}}}\n", indent_str));
+                    return Ok(output);
+                }
+
+                // Regular forEach handling (for non-LazyColumn contexts)
                 // If there's an empty block, wrap in if/else
                 if let Some(empty_body) = &for_loop.empty_block {
                     // if (collection.isEmpty()) { empty block } else { forEach }
@@ -682,9 +712,9 @@ impl CodeGenerator {
                         output.push_str(&format!("{}    Text(\"{}\")\n", indent_str, text));
                     }
 
-                    // Generate regular children
+                    // Generate regular children (pass component name as parent for context-aware generation)
                     for child in &comp.children {
-                        output.push_str(&self.generate_markup_with_indent(child, indent + 1)?);
+                        output.push_str(&self.generate_markup_with_context(child, indent + 1, Some(&comp.name))?);
                     }
                     output.push_str(&format!("{}}}\n", indent_str));
                 } else {
@@ -818,6 +848,16 @@ impl CodeGenerator {
                                 self.add_import_if_missing(prop_imports, "androidx.compose.ui.unit.dp");
                             }
                         }
+                        ("LazyColumn", "spacing") => {
+                            // spacing → verticalArrangement = Arrangement.spacedBy(N.dp)
+                            self.add_import_if_missing(prop_imports, "androidx.compose.foundation.layout.Arrangement");
+                            self.add_import_if_missing(prop_imports, "androidx.compose.ui.unit.dp");
+                        }
+                        ("LazyColumn", "padding") => {
+                            // padding → contentPadding = PaddingValues(N.dp)
+                            self.add_import_if_missing(prop_imports, "androidx.compose.foundation.layout.PaddingValues");
+                            self.add_import_if_missing(prop_imports, "androidx.compose.ui.unit.dp");
+                        }
                         _ => {}
                     }
                 }
@@ -882,6 +922,20 @@ impl CodeGenerator {
                         let import = "androidx.compose.foundation.layout.Box".to_string();
                         if !component_imports.contains(&import) {
                             component_imports.push(import);
+                        }
+                    }
+                    "LazyColumn" => {
+                        let import = "androidx.compose.foundation.lazy.LazyColumn".to_string();
+                        if !component_imports.contains(&import) {
+                            component_imports.push(import);
+                        }
+                        // LazyColumn with ForLoop children needs items import
+                        let has_for_loop = comp.children.iter().any(|child| matches!(child, Markup::ForLoop(_)));
+                        if has_for_loop {
+                            let items_import = "androidx.compose.foundation.lazy.items".to_string();
+                            if !prop_imports.contains(&items_import) {
+                                prop_imports.push(items_import);
+                            }
                         }
                     }
                     "AsyncImage" => {
@@ -1060,6 +1114,14 @@ impl CodeGenerator {
             // Column padding → modifier = Modifier.padding(N.dp)
             ("Column", "padding") => {
                 vec![format!("modifier = Modifier.padding({}.dp)", value)]
+            }
+            // LazyColumn spacing → verticalArrangement = Arrangement.spacedBy(N.dp)
+            ("LazyColumn", "spacing") => {
+                vec![format!("verticalArrangement = Arrangement.spacedBy({}.dp)", value)]
+            }
+            // LazyColumn padding → contentPadding = PaddingValues(N.dp)
+            ("LazyColumn", "padding") => {
+                vec![format!("contentPadding = PaddingValues({}.dp)", value)]
             }
             // Row spacing → horizontalArrangement = Arrangement.spacedBy(N.dp)
             ("Row", "spacing") => {

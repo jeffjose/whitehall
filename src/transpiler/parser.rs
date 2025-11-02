@@ -159,6 +159,10 @@ impl Parser {
                     }
                 }
                 '=' | '\n' if paren_depth == 0 && angle_depth == 0 && bracket_depth == 0 => break,
+                '-' if self.peek_ahead(1) == Some('>') => {
+                    // -> is part of function type, continue parsing
+                    self.pos += 2; // Skip ->
+                }
                 _ => self.pos += 1,
             }
         }

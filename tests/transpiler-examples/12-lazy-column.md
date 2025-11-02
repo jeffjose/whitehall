@@ -32,6 +32,7 @@ package com.example.app.components
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -55,9 +56,7 @@ fun PostFeed(
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         items(posts, key = { it.id }) { post ->
-            Card(
-                onClick = { onPostClick(post.id) }
-            ) {
+            Card(onClick = { onPostClick(post.id) }) {
                 Column(modifier = Modifier.padding(16.dp)) {
                     Text(
                         text = post.title,
