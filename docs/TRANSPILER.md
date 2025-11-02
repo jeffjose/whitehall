@@ -851,21 +851,52 @@ src/transpiler/
 #### Phase 6: Composition (Tests 09-10)
 **Goal**: Imports and nesting
 
-**Test 09: Imports** (`09-imports.md`)
-- Implement: Full import alias system (`$lib`, `$models`, etc.)
-- Verify: 12/14 tests passing
+**Test 09: Import Aliases** ✅ (`09-imports.md`)
+- Input: import $lib.api.ApiClient, $models.User, etc.
+- Implemented:
+  - ✅ Already working through existing `resolve_import()` function
+  - ✅ Alphabetical import sorting (standard Kotlin convention)
+  - ✅ All import aliases: `$app`, `$lib`, `$models`, `$components`
+- Progress: **12/14 tests passing!** (commit: `89b9c22`)
 
-**Test 10: Nested Components** (`10-nested-components.md`)
-- Implement: Deep component trees
-- Verify: 13/14 tests passing
+**Test 10: Nested Components** ⏸️ (`10-nested-components.md`)
+- Input: Components as prop values, Scaffold with topBar, deep nesting
+- **Status**: Requires component-as-prop-value support (complex feature)
+- Remaining work:
+  - ⏸️ Parse markup (e.g., `<TopAppBar />`) as prop values
+  - ⏸️ Scaffold lambda wrapper: `{ paddingValues -> ... }`
+  - ⏸️ TopAppBar title transformation: `title={var}` → `title = { Text(var) }`
+  - ⏸️ Modifier chaining for Scaffold children
 
-#### Phase 7: Complex Examples (Test 11+)
+**Checkpoint**: Import system complete. Test 10 deferred (architectural change needed).
+
+#### Phase 7: Complex Examples (Test 11)
 **Goal**: Real-world complexity
 
-**Test 11+**: Complex state management, etc.
-- Verify: 14/14 tests passing
+**Test 11: Complex State Management** ✅ (`11-complex-state-management.md`)
+- Input: Multiple state vars, computed vals, derived state, complex interactions
+- Implemented:
+  - ✅ Separated var (mutable) and val (computed) state declarations
+  - ✅ Type annotations on computed values: `val name: Type = value`
+  - ✅ Multi-line value formatting with proper indentation
+  - ✅ Smart ordering based on computed state:
+    - With computed state: `var → val → functions → coroutineScope → lifecycle`
+    - Without computed state: `var → coroutineScope → lifecycle → functions`
+  - ✅ LaunchedEffect proper nesting and indentation
+  - ✅ Blank lines between all major sections
+- Progress: **13/14 tests passing!** (commit: `abe1bf4`)
 
-**Checkpoint**: ✅ Full transpiler complete!
+**Checkpoint**: ✅ **93% complete!** All major features working. Only test 10 requires architectural enhancement.
+
+#### Phase 8: Additional Tests (Tests 12+)
+**Goal**: Edge cases and advanced patterns
+
+**Status**: Awaiting new test definitions
+
+Once additional tests are defined, we can evaluate:
+- Low-hanging fruit (features that fit current architecture)
+- High-impact features (widely applicable transformations)
+- Test 10 component-as-prop-value (if patterns emerge in new tests)
 
 ### Key Principles for Rebuild
 
