@@ -560,9 +560,19 @@ src/transpiler/
   - ✅ Infinite loop detection safeguards
 - Progress: **5/14 tests passing!** (commit: `3a2758c`)
 
-**Test 03: For Loops** (`03-control-flow-for.md`)
-- Implement: `@for` with keys and empty blocks
-- Verify: 6/14 tests passing
+**Test 03: For Loops** ⏸️ (`03-control-flow-for.md`)
+- Input: @for with key expressions and empty blocks
+- Implemented:
+  - ✅ `@for (item in collection, key = { expr }) { } empty { }` parsing
+  - ✅ if/else + forEach generation pattern
+  - ✅ key() wrapping for keyed iterations
+  - ✅ String literal props (`prop="value"`)
+  - ✅ Card component import
+  - ⏸️ Prop transformations (spacing→verticalArrangement, padding→modifier, fontSize→sp, etc.)
+  - ⏸️ Lambda expression transformations (() => to {})
+  - ⏸️ Route alias transformations ($routes → Routes)
+- Status: Core @for loop working, advanced prop transformations needed for full test pass
+- Progress: **Partial** (commit: `304f634`)
 
 **Test 04: When** (`04-control-flow-when.md`)
 - Implement: `@when` expression branches
