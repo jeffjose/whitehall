@@ -806,10 +806,6 @@ src/transpiler/
   - ✅ TextField and Button component imports
 - Progress: **8/14 tests passing!** (commits: `d116c52`, `c5aa78b`)
 
-**Test 05: Data Binding** (`05-data-binding.md`)
-- Implement: `bind:value={var}` transformation
-- Verify: 8/14 tests passing
-
 **Test 06: Lifecycle Hooks** (`06-lifecycle-hooks.md`)
 - Implement: `onMount` → `LaunchedEffect` transformation
 - Verify: 9/14 tests passing
