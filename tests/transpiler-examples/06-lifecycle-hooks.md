@@ -40,8 +40,8 @@ import $models.Post
 ```kotlin
 package com.example.app.components
 
-import androidx.compose.runtime.*
 import androidx.compose.foundation.layout.Column
+import androidx.compose.runtime.*
 import com.example.app.lib.api.ApiClient
 import com.example.app.models.Post
 import kotlinx.coroutines.launch
@@ -55,15 +55,15 @@ fun FeedView() {
 
     LaunchedEffect(Unit) {
         coroutineScope.launch {
-            ApiClient.getFeed()
+              ApiClient.getFeed()
                 .onSuccess {
-                    posts = it
-                    isLoading = false
+                  posts = it
+                  isLoading = false
                 }
                 .onFailure {
-                    isLoading = false
+                  isLoading = false
                 }
-        }
+            }
     }
 
     Column {

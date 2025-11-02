@@ -63,6 +63,11 @@ impl CodeGenerator {
             imports.extend(component_imports);
         }
 
+        // Add kotlinx.coroutines.launch if there are lifecycle hooks
+        if !file.lifecycle_hooks.is_empty() {
+            imports.push("kotlinx.coroutines.launch".to_string());
+        }
+
         // Sort imports alphabetically (standard Kotlin convention)
         imports.sort();
 
@@ -106,10 +111,19 @@ impl CodeGenerator {
         for state in &file.state {
             output.push_str(&self.indent());
             if state.mutable {
-                output.push_str(&format!(
-                    "var {} by remember {{ mutableStateOf({}) }}\n",
-                    state.name, state.initial_value
-                ));
+                if let Some(ref type_ann) = state.type_annotation {
+                    // With type annotation: var name by remember { mutableStateOf<Type>(value) }
+                    output.push_str(&format!(
+                        "var {} by remember {{ mutableStateOf<{}>({}) }}\n",
+                        state.name, type_ann, state.initial_value
+                    ));
+                } else {
+                    // Without type annotation: var name by remember { mutableStateOf(value) }
+                    output.push_str(&format!(
+                        "var {} by remember {{ mutableStateOf({}) }}\n",
+                        state.name, state.initial_value
+                    ));
+                }
             } else {
                 output.push_str(&format!("val {} = {}\n", state.name, state.initial_value));
             }
@@ -117,6 +131,39 @@ impl CodeGenerator {
 
         if !file.state.is_empty() {
             output.push('\n');
+        }
+
+        // Generate coroutineScope if there are lifecycle hooks
+        if !file.lifecycle_hooks.is_empty() {
+            output.push_str(&self.indent());
+            output.push_str("val coroutineScope = rememberCoroutineScope()\n\n");
+        }
+
+        // Generate lifecycle hooks
+        for hook in &file.lifecycle_hooks {
+            output.push_str(&self.indent());
+            match hook.hook_type.as_str() {
+                "onMount" => {
+                    output.push_str("LaunchedEffect(Unit) {\n");
+                    // Indent hook body and add coroutineScope prefix to launch calls
+                    for line in hook.body.lines() {
+                        output.push_str(&self.indent());
+                        output.push_str("    ");
+                        // Add coroutineScope. prefix to launch calls
+                        let transformed_line = line.trim();
+                        if transformed_line.starts_with("launch ") || transformed_line.starts_with("launch{") {
+                            output.push_str("coroutineScope.");
+                        }
+                        output.push_str(line);
+                        output.push('\n');
+                    }
+                    output.push_str(&self.indent());
+                    output.push_str("}\n\n");
+                }
+                _ => {
+                    // Other hooks can be added later
+                }
+            }
         }
 
         // Generate function declarations

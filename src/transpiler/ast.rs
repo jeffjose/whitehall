@@ -6,6 +6,7 @@ pub struct WhitehallFile {
     pub props: Vec<PropDeclaration>,
     pub state: Vec<StateDeclaration>,
     pub functions: Vec<FunctionDeclaration>,
+    pub lifecycle_hooks: Vec<LifecycleHook>,
     pub markup: Markup,
 }
 
@@ -24,7 +25,8 @@ pub struct PropDeclaration {
 #[derive(Debug, Clone, PartialEq)]
 pub struct StateDeclaration {
     pub name: String,
-    pub mutable: bool, // var vs val
+    pub mutable: bool,                   // var vs val
+    pub type_annotation: Option<String>, // e.g., "List<Post>"
     pub initial_value: String,
 }
 
@@ -32,6 +34,12 @@ pub struct StateDeclaration {
 pub struct FunctionDeclaration {
     pub name: String,
     pub body: String, // Just capture the whole function body as a string
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct LifecycleHook {
+    pub hook_type: String, // "onMount", "onUnmount", etc.
+    pub body: String,      // Hook body content
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -100,6 +108,7 @@ impl WhitehallFile {
             props: Vec::new(),
             state: Vec::new(),
             functions: Vec::new(),
+            lifecycle_hooks: Vec::new(),
             markup: Markup::Text(String::new()),
         }
     }

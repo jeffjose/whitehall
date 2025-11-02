@@ -2,7 +2,8 @@
 
 use crate::transpiler::ast::{
     Component, ComponentProp, ElseIfBranch, ForLoopBlock, FunctionDeclaration, IfElseBlock,
-    Import, Markup, PropDeclaration, StateDeclaration, WhenBlock, WhenBranch, WhitehallFile,
+    Import, LifecycleHook, Markup, PropDeclaration, StateDeclaration, WhenBlock, WhenBranch,
+    WhitehallFile,
 };
 
 pub struct Parser {
@@ -23,8 +24,9 @@ impl Parser {
         let mut props = Vec::new();
         let mut state = Vec::new();
         let mut functions = Vec::new();
+        let mut lifecycle_hooks = Vec::new();
 
-        // Parse imports, props, state, and functions (before markup)
+        // Parse imports, props, state, functions, and lifecycle hooks (before markup)
         loop {
             self.skip_whitespace();
             if self.consume_word("import") {
@@ -35,6 +37,8 @@ impl Parser {
                 state.push(self.parse_state_declaration()?);
             } else if self.consume_word("fun") {
                 functions.push(self.parse_function_declaration()?);
+            } else if self.consume_word("onMount") {
+                lifecycle_hooks.push(self.parse_lifecycle_hook("onMount")?);
             } else {
                 break;
             }
@@ -46,6 +50,7 @@ impl Parser {
             props,
             state,
             functions,
+            lifecycle_hooks,
             markup,
         })
     }
@@ -160,7 +165,7 @@ impl Parser {
     }
 
     fn parse_state_declaration(&mut self) -> Result<StateDeclaration, String> {
-        // Parse: var name = "value" or val name = value
+        // Parse: var name = "value" or var name: Type = value
         let mutable = if self.consume_word("var") {
             true
         } else if self.consume_word("val") {
@@ -172,6 +177,17 @@ impl Parser {
         self.skip_whitespace();
         let name = self.parse_identifier()?;
         self.skip_whitespace();
+
+        // Check for type annotation
+        let type_annotation = if self.peek_char() == Some(':') {
+            self.expect_char(':')?;
+            self.skip_whitespace();
+            Some(self.parse_type()?)
+        } else {
+            None
+        };
+
+        self.skip_whitespace();
         self.expect_char('=')?;
         self.skip_whitespace();
 
@@ -181,6 +197,7 @@ impl Parser {
         Ok(StateDeclaration {
             name,
             mutable,
+            type_annotation,
             initial_value,
         })
     }
@@ -231,6 +248,42 @@ impl Parser {
 
         Ok(FunctionDeclaration {
             name,
+            body: body.trim().to_string(),
+        })
+    }
+
+    fn parse_lifecycle_hook(&mut self, hook_type: &str) -> Result<LifecycleHook, String> {
+        // Parse: onMount { body }
+        self.skip_whitespace();
+        self.expect_char('{')?;
+
+        let mut body = String::new();
+        let mut depth = 1;
+
+        while depth > 0 {
+            match self.peek_char() {
+                Some('{') => {
+                    body.push('{');
+                    depth += 1;
+                    self.pos += 1;
+                }
+                Some('}') => {
+                    if depth > 1 {
+                        body.push('}');
+                    }
+                    depth -= 1;
+                    self.pos += 1;
+                }
+                Some(ch) => {
+                    body.push(ch);
+                    self.pos += 1;
+                }
+                None => return Err("Unexpected EOF in lifecycle hook body".to_string()),
+            }
+        }
+
+        Ok(LifecycleHook {
+            hook_type: hook_type.to_string(),
             body: body.trim().to_string(),
         })
     }
