@@ -834,9 +834,17 @@ src/transpiler/
   - ✅ Route alias transformation across entire codebase
 - Progress: **10/14 tests passing!** (commit: `0e93569`)
 
-**Test 08: Routing Params** (`08-routing-params.md`)
-- Implement: `$screen.params` access
-- Verify: 11/14 tests passing
+**Test 08: Route Parameters** ✅ (`08-routing-params.md`)
+- Input: $screen.params.id, function params, nullable interpolations
+- Implemented:
+  - ✅ Extract route params from `$screen.params.{name}` references
+  - ✅ Add route params as function parameters (after navController)
+  - ✅ Transform `$screen.params.id` → `id` in code
+  - ✅ Function parameter parsing: `fun name(params) { body }`
+  - ✅ Nullable variable tracking from type annotations
+  - ✅ Null assertion operator: `{user.name}` → `user!!.name`
+  - ✅ Scaffold component support
+- Progress: **11/14 tests passing!** (commit: `7cebaae`)
 
 **Checkpoint**: Routing system complete.
 
