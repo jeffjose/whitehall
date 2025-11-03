@@ -1108,14 +1108,40 @@ Once infrastructure is in place, additional optimizations become easier:
 
 ### ⏳ Next Steps
 
-**Phase 1: Usage Tracking (Week 2)** - Enable variable access tracking
+**Phase 0.5: View Backend (Weeks 1-2)** - Build Android View generation (REQUIRED for RecyclerView)
+
+**Why needed**: RecyclerView needs Android Views, not Composables. See `docs/VIEW-BACKEND.md` for full architecture.
+
+1. Refactor `codegen.rs` into multi-backend architecture:
+   - Create `src/transpiler/codegen/` directory
+   - Move existing logic → `codegen/compose.rs`
+   - Create `codegen/mod.rs` with `Backend` trait
+   - Create `codegen/view.rs` for Android View generation
+2. Implement View backend:
+   - Card → MaterialCardView
+   - Column → LinearLayout(VERTICAL)
+   - Row → LinearLayout(HORIZONTAL)
+   - Text → TextView
+   - Button → Button
+3. Create `src/transpiler/recyclerview.rs`:
+   - RecyclerView wrapper generation
+   - Adapter class boilerplate
+   - ViewHolder creation
+4. Add unit tests for View backend
+5. **Still zero behavior changes** (not used yet)
+
+**Deliverables**: View backend functional, RecyclerView generator ready
+
+---
+
+**Phase 1: Usage Tracking (Week 3)** - Enable variable access tracking
 1. Implement `Analyzer::track_usage()` to walk markup AST
 2. Record where variables are accessed in loops, conditions, components
 3. Mark which variables are used (but not yet tracking mutations)
 4. Add unit tests for usage tracking
 5. Still zero behavior changes (hints not generated yet)
 
-**Phase 2: Static Detection (Week 3)** - Identify optimization opportunities
+**Phase 2: Static Detection (Week 4)** - Identify optimization opportunities
 6. Implement `Analyzer::check_static_collection()` with confidence scoring
 7. Heuristics:
    - `val` collection: +40 confidence
@@ -1127,7 +1153,7 @@ Once infrastructure is in place, additional optimizations become easier:
 10. Log hints (don't act on them yet)
 11. Still zero behavior changes
 
-**Phase 3: Hint Generation (Week 4)** - Wire analyzer to optimizer
+**Phase 3: Hint Generation (Week 5)** - Wire analyzer to optimizer
 12. Enable `infer_optimizations()` in analyzer
 13. Pass hints to optimizer via `SemanticInfo`
 14. Add debug logging showing detection decisions
@@ -1135,7 +1161,7 @@ Once infrastructure is in place, additional optimizations become easier:
 16. Validate against example 02 (should not detect, confidence 0)
 17. Still zero behavior changes (optimizer ignores hints)
 
-**Phase 4: Optimization Planning (Week 5)** - Plan which optimizations to apply
+**Phase 4: Optimization Planning (Week 6)** - Plan which optimizations to apply
 18. Implement `Optimizer::plan_optimizations()` to consume hints
 19. Apply threshold: only optimize if confidence >= 80
 20. Generate `Optimization::UseRecyclerView` for qualifying loops
@@ -1144,7 +1170,7 @@ Once infrastructure is in place, additional optimizations become easier:
 23. Add unit tests for planning logic
 24. Still zero behavior changes (CodeGen not updated yet)
 
-**Phase 5: RecyclerView Generation (Week 6-7)** - First actual optimization! 🎉
+**Phase 5: RecyclerView Integration (Weeks 7-8)** - First actual optimization! 🎉
 25. Update `CodeGenerator` to consume optimization metadata
 26. Implement `generate_recyclerview()` for static lists
 27. Generate:
@@ -1166,7 +1192,7 @@ Once infrastructure is in place, additional optimizations become easier:
 - `tests/optimization-examples/02-dynamic-list-no-optimization.md`
   - All phases: Validates against Unoptimized Output ✅
 
-**Timeline estimate:** 6-7 weeks for Phases 1-5 complete
+**Timeline estimate:** 8 weeks for Phases 0.5-5 complete (2 + 1 + 1 + 1 + 1 + 2 weeks)
 
 **Success criteria for Phase 5:**
 - Example 01 generates RecyclerView (Optimized Output matches)
@@ -1177,19 +1203,20 @@ Once infrastructure is in place, additional optimizations become easier:
 
 ### 📊 Metrics
 
-| Metric | Target | Phase 0 | Phase 1-4 | Phase 5 |
-|--------|--------|---------|-----------|---------|
-| Test coverage | 23/23 passing | ✅ 23/23 | 23/23 | 23/23 |
-| Optimization examples | 2 examples | ✅ 2/2 | 2/2 | 2/2 |
-| Compile time | <5% increase | ✅ 0% | ~2% | ~3% |
-| Code generation | - | Identical | Identical | **Different** |
-| Optimizations applied | - | ✅ 0% | 0% | ~5-10% |
-| Infrastructure complete | 100% | ✅ 100% | - | - |
-| Symbol table | Working | ✅ Yes | Yes | Yes |
-| Usage tracking | Working | ⏳ No | Yes | Yes |
-| Static detection | Working | ⏳ No | Yes | Yes |
-| Optimization planning | Working | ⏳ No | ⏳ No | Yes |
-| RecyclerView generation | Working | ⏳ No | ⏳ No | Yes |
+| Metric | Target | Phase 0 | Phase 0.5 | Phase 1-4 | Phase 5 |
+|--------|--------|---------|-----------|-----------|---------|
+| Test coverage | 23/23 passing | ✅ 23/23 | 23/23 | 23/23 | 23/23 |
+| Optimization examples | 2 examples | ✅ 2/2 | 2/2 | 2/2 | 2/2 |
+| Compile time | <5% increase | ✅ 0% | 0% | ~2% | ~3% |
+| Code generation | - | Identical | Identical | Identical | **Different** |
+| Optimizations applied | - | ✅ 0% | 0% | 0% | ~5-10% |
+| Infrastructure complete | 100% | ✅ 100% | - | - | - |
+| Symbol table | Working | ✅ Yes | Yes | Yes | Yes |
+| View backend | Working | ⏳ No | **Yes** | Yes | Yes |
+| Usage tracking | Working | ⏳ No | No | Yes | Yes |
+| Static detection | Working | ⏳ No | No | Yes | Yes |
+| Optimization planning | Working | ⏳ No | No | ⏳ No | Yes |
+| RecyclerView generation | Working | ⏳ No | ⏳ No | ⏳ No | Yes |
 
 ---
 
