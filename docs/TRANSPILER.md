@@ -1570,11 +1570,11 @@ tests/
 
 ## Implementation Status
 
-### ✅ Complete - All 20 Test Cases Passing (100%)
+### ✅ Complete - All 23 Test Cases Passing (100%)
 
 The Whitehall transpiler is **production-ready** with all core features implemented and tested.
 
-#### Test Suite (20/20 passing):
+#### Test Suite (23/23 passing):
 
 **Core Features:**
 - ✅ 00-minimal-text.md - Basic text rendering
@@ -1599,6 +1599,9 @@ The Whitehall transpiler is **production-ready** with all core features implemen
 - ✅ 15-modifier-chains.md - Conditional modifiers, ternary operators
 - ✅ 16-lifecycle-cleanup.md - onDispose with DisposableEffect
 - ✅ 17-error-handling.md - Async operations with error states
+- ✅ 18-string-resources.md - String resources for i18n
+- ✅ 19-checkbox-switch.md - Checkbox/Switch with bind:checked
+- ✅ 20-derived-state.md - derivedStateOf for optimized computed state
 
 ### Architecture Completed
 
