@@ -1,118 +1,36 @@
 # Dynamic List - No Optimization
 
-Tests that mutable lists with event handlers correctly stay as Compose (no optimization).
-
-**Unoptimized:** Compose LazyColumn
-**Optimized:** Same (no optimization - correct!)
-
-**Why no optimization:**
-- Collection is `var` with `mutableStateOf` (mutable)
-- Modified in lifecycle hooks
-- Has event handlers that mutate state
-- Confidence: 0/100
+Tests that mutable lists correctly stay as Compose (no optimization).
 
 ## Input
 
 ```whitehall
-var todos by remember { mutableStateOf(emptyList<Todo>()) }
-var selectedId by remember { mutableStateOf<String?>(null) }
+var items = listOf("One", "Two", "Three")
 
-onMount {
-  launch {
-    todos = ApiClient.getTodos()
+<Column>
+  @for (item in items) {
+    <Text text={item} />
   }
-}
-
-fun toggleTodo(id: String) {
-  todos = todos.map {
-    if (it.id == id) it.copy(done = !it.done) else it
-  }
-}
-
-@for (todo in todos, key = { it.id }) {
-  <Card
-    padding={8}
-    backgroundColor={todo.id == selectedId ? "primaryContainer" : "surface"}
-    onClick={() => selectedId = todo.id}
-  >
-    <Row spacing={8}>
-      <Checkbox
-        bind:checked={todo.done}
-        onChange={() => toggleTodo(todo.id)}
-      />
-      <Text fontSize={16}>{todo.text}</Text>
-    </Row>
-  </Card>
-}
+</Column>
 ```
 
 ## Unoptimized Output
 
 ```kotlin
-package com.example.app.components
+package com.example
 
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Row
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.Checkbox
-import androidx.compose.material3.MaterialTheme
+import androidx.compose.foundation.layout.Column
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
-import kotlinx.coroutines.launch
 
 @Composable
-fun DynamicTodoList() {
-    var todos by remember { mutableStateOf(emptyList<Todo>()) }
-    var selectedId by remember { mutableStateOf<String?>(null) }
-
-    val coroutineScope = rememberCoroutineScope()
-
-    LaunchedEffect(Unit) {
-        coroutineScope.launch {
-            todos = ApiClient.getTodos()
-        }
-    }
-
-    fun toggleTodo(id: String) {
-        todos = todos.map {
-            if (it.id == id) it.copy(done = !it.done) else it
-        }
-    }
+fun DynamicList() {
+    var items = listOf("One", "Two", "Three")
 
     Column {
-        todos.forEach { todo ->
-            key(todo.id) {
-                Card(
-                    modifier = Modifier
-                        .padding(8.dp)
-                        .clickable { selectedId = todo.id },
-                    colors = CardDefaults.cardColors(
-                        containerColor = if (todo.id == selectedId) {
-                            MaterialTheme.colorScheme.primaryContainer
-                        } else {
-                            MaterialTheme.colorScheme.surface
-                        }
-                    )
-                ) {
-                    Row(
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        Checkbox(
-                            checked = todo.done,
-                            onCheckedChange = { toggleTodo(todo.id) }
-                        )
-                        Text(
-                            text = todo.text,
-                            fontSize = 16.sp
-                        )
-                    }
-                }
-            }
+        items.forEach { item ->
+            Text(text = item)
         }
     }
 }
@@ -120,16 +38,28 @@ fun DynamicTodoList() {
 
 ## Optimized Output
 
-Same as unoptimized (no optimization applied - correct!)
+```kotlin
+package com.example
 
-**Why no optimization:** Compose handles reactive state elegantly. RecyclerView would require manual `notifyDataSetChanged()` and complex state management.
+import androidx.compose.foundation.layout.Column
+import androidx.compose.material3.Text
+import androidx.compose.runtime.*
+
+@Composable
+fun DynamicList() {
+    var items by remember { mutableStateOf(listOf("One", "Two", "Three")) }
+
+    Column {
+        items.forEach { item ->
+            Text(text = item)
+        }
+    }
+}
+```
 
 ## Metadata
 
 ```
-file: DynamicTodoList.wh
-package: com.example.app.components
-optimization: none
-confidence: 0
-reason: mutable_state_with_handlers
+file: DynamicList.wh
+package: com.example
 ```

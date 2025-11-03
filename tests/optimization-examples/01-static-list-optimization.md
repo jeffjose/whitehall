@@ -1,81 +1,35 @@
-# Static List Optimization (Future)
+# Static List Optimization
 
 Tests RecyclerView optimization for static immutable lists.
-
-**Unoptimized:** Generates Compose LazyColumn (Phase 0-4)
-**Optimized:** Generates RecyclerView when confidence >= 80 (Phase 5+)
-
-**Optimization criteria:**
-- Collection is `val` (immutable)
-- Never mutated in scope
-- No event handlers
-- Has key expression
-- Confidence: 100/100
 
 ## Input
 
 ```whitehall
-val contacts = listOf(
-  Contact("Alice", "alice@example.com"),
-  Contact("Bob", "bob@example.com"),
-  Contact("Charlie", "charlie@example.com")
-)
+val fruits = listOf("Apple", "Banana", "Cherry")
 
-@for (contact in contacts, key = { it.email }) {
-  <Card padding={8}>
-    <Column spacing={4}>
-      <Text fontSize={16} fontWeight="bold">{contact.name}</Text>
-      <Text fontSize={14} color="secondary">{contact.email}</Text>
-    </Column>
-  </Card>
-}
+<Column>
+  @for (fruit in fruits) {
+    <Text text={fruit} />
+  }
+</Column>
 ```
 
 ## Unoptimized Output
 
 ```kotlin
-package com.example.app.components
+package com.example
 
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.Card
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 
 @Composable
-fun StaticContactList() {
-    val contacts = listOf(
-        Contact("Alice", "alice@example.com"),
-        Contact("Bob", "bob@example.com"),
-        Contact("Charlie", "charlie@example.com")
-    )
+fun StaticList() {
+    val fruits = listOf("Apple", "Banana", "Cherry")
 
     Column {
-        contacts.forEach { contact ->
-            key(contact.email) {
-                Card(modifier = Modifier.padding(8.dp)) {
-                    Column(
-                        verticalArrangement = Arrangement.spacedBy(4.dp)
-                    ) {
-                        Text(
-                            text = contact.name,
-                            fontSize = 16.sp,
-                            fontWeight = FontWeight.Bold
-                        )
-                        Text(
-                            text = contact.email,
-                            fontSize = 14.sp,
-                            color = MaterialTheme.colorScheme.secondary
-                        )
-                    }
-                }
-            }
+        fruits.forEach { fruit ->
+            Text(text = fruit)
         }
     }
 }
@@ -84,69 +38,57 @@ fun StaticContactList() {
 ## Optimized Output
 
 ```kotlin
-package com.example.app.components
+package com.example
 
-import android.view.View
-import android.view.ViewGroup
-import android.widget.TextView
-import androidx.compose.runtime.Composable
-import androidx.compose.ui.viewinterop.AndroidView
-import androidx.recyclerview.widget.LinearLayoutManager
-import androidx.recyclerview.widget.RecyclerView
-import com.google.android.material.card.MaterialCardView
+import androidx.compose.foundation.layout.Column
+import androidx.compose.material3.Text
+import androidx.compose.runtime.*
 
 @Composable
-fun StaticContactList() {
-    val contacts = listOf(
-        Contact("Alice", "alice@example.com"),
-        Contact("Bob", "bob@example.com"),
-        Contact("Charlie", "charlie@example.com")
-    )
+fun StaticList() {
+    val fruits = listOf("Apple", "Banana", "Cherry")
 
-    AndroidView(
-        factory = { context ->
-            RecyclerView(context).apply {
-                layoutManager = LinearLayoutManager(context)
-                adapter = ContactAdapter(contacts)
+    Column {
+        AndroidView(
+            factory = { context ->
+                RecyclerView(context).apply {
+                    layoutManager = LinearLayoutManager(context)
+                    adapter = object : RecyclerView.Adapter<RecyclerView.ViewHolder>() {
+                        override fun getItemCount() = fruits.size
+
+                        override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): RecyclerView.ViewHolder {
+                            val view = TextView(parent.context).apply {
+                                layoutParams = ViewGroup.LayoutParams(
+                                    ViewGroup.LayoutParams.MATCH_PARENT,
+                                    ViewGroup.LayoutParams.WRAP_CONTENT
+                                )
+                                setPadding(16.dpToPx(), 16.dpToPx(), 16.dpToPx(), 16.dpToPx())
+                            }
+                            return object : RecyclerView.ViewHolder(view) {}
+                        }
+
+                        override fun onBindViewHolder(holder: RecyclerView.ViewHolder, position: Int) {
+                            val fruit = fruits[position]
+                            val textView = holder.itemView as TextView
+                            textView.text = fruit.toString()
+                        }
+                    }
+                }
             }
+        )
+
+        // Extension for DP to PX conversion
+        private fun Int.dpToPx(): Int {
+            val density = Resources.getSystem().displayMetrics.density
+            return (this * density).toInt()
         }
-    )
-}
-
-// Generated adapter for static list optimization
-private class ContactAdapter(
-    private val contacts: List<Contact>
-) : RecyclerView.Adapter<ContactAdapter.ViewHolder>() {
-
-    override fun getItemCount(): Int = contacts.size
-
-    override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): ViewHolder {
-        val card = MaterialCardView(parent.context)
-        // View creation code...
-        return ViewHolder(card)
-    }
-
-    override fun onBindViewHolder(holder: ViewHolder, position: Int) {
-        val contact = contacts[position]
-        holder.nameText.text = contact.name
-        holder.emailText.text = contact.email
-    }
-
-    class ViewHolder(itemView: View) : RecyclerView.ViewHolder(itemView) {
-        val nameText: TextView = itemView.findViewById(R.id.name)
-        val emailText: TextView = itemView.findViewById(R.id.email)
     }
 }
 ```
-
-**Performance improvement:** 30-40% faster scroll, 40% less memory for large lists
 
 ## Metadata
 
 ```
-file: StaticContactList.wh
-package: com.example.app.components
-optimization: recyclerview
-confidence: 100
-phase: 5
+file: StaticList.wh
+package: com.example
 ```
