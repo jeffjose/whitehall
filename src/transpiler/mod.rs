@@ -7,6 +7,7 @@ mod ast;
 mod codegen;
 mod optimizer;
 mod parser;
+mod recyclerview;
 
 use analyzer::Analyzer;
 use codegen::CodeGenerator;
