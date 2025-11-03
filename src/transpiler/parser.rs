@@ -200,11 +200,15 @@ impl Parser {
         // Parse initial value (simple string or expression for now)
         let initial_value = self.parse_value()?;
 
+        // Detect if this uses derivedStateOf pattern
+        let is_derived_state = initial_value.trim().starts_with("derivedStateOf");
+
         Ok(StateDeclaration {
             name,
             mutable,
             type_annotation,
             initial_value,
+            is_derived_state,
         })
     }
 

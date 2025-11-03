@@ -8,6 +8,7 @@ pub struct CodeGenerator {
     component_type: Option<String>,
     indent_level: usize,
     nullable_vars: std::collections::HashSet<String>,
+    var_types: std::collections::HashMap<String, (String, String)>, // Maps variable name to (type, default_value)
 }
 
 impl CodeGenerator {
@@ -18,6 +19,7 @@ impl CodeGenerator {
             component_type: component_type.map(|s| s.to_string()),
             indent_level: 0,
             nullable_vars: std::collections::HashSet::new(),
+            var_types: std::collections::HashMap::new(),
         }
     }
 
@@ -176,12 +178,25 @@ impl CodeGenerator {
         for state in &mutable_state {
             output.push_str(&self.indent());
             if let Some(ref type_ann) = state.type_annotation {
+                // Store type and default value for bind:value transformations
+                self.var_types.insert(
+                    state.name.clone(),
+                    (type_ann.clone(), state.initial_value.clone())
+                );
+
                 // With type annotation: var name by remember { mutableStateOf<Type>(value) }
                 output.push_str(&format!(
                     "var {} by remember {{ mutableStateOf<{}>({}) }}\n",
                     state.name, type_ann, state.initial_value
                 ));
             } else {
+                // Try to infer type from initial value for bind:value support
+                let inferred_type = self.infer_type_from_value(&state.initial_value);
+                self.var_types.insert(
+                    state.name.clone(),
+                    (inferred_type, state.initial_value.clone())
+                );
+
                 // Without type annotation: var name by remember { mutableStateOf(value) }
                 output.push_str(&format!(
                     "var {} by remember {{ mutableStateOf({}) }}\n",
@@ -197,7 +212,20 @@ impl CodeGenerator {
         // Generate computed state (val)
         for state in &computed_state {
             output.push_str(&self.indent());
-            if let Some(ref type_ann) = state.type_annotation {
+
+            if state.is_derived_state {
+                // derivedStateOf needs special wrapping: val name by remember { derivedStateOf { ... } }
+                // Need to format with increased indent level for proper nesting
+                output.push_str(&format!("val {} by remember {{\n", state.name));
+
+                // Temporarily increase indent for the derivedStateOf content
+                self.indent_level += 1;
+                let formatted_value = self.format_multiline_value(&state.initial_value);
+                self.indent_level -= 1;
+
+                output.push_str(&format!("{}    {}\n", self.indent(), formatted_value));
+                output.push_str(&format!("{}}}\n", self.indent()));
+            } else if let Some(ref type_ann) = state.type_annotation {
                 // Format multi-line values with proper indentation
                 let formatted_value = self.format_multiline_value(&state.initial_value);
                 output.push_str(&format!("val {}: {} = {}\n", state.name, type_ann, formatted_value));
@@ -1284,7 +1312,10 @@ impl CodeGenerator {
         let mut parts = Vec::new();
         for child in &non_whitespace_children {
             match child {
-                Markup::Text(text) => parts.push(text.to_string()),
+                Markup::Text(text) => {
+                    // Escape dollar signs in literal text for Kotlin string templates
+                    parts.push(self.escape_dollar_signs(text));
+                }
                 Markup::Interpolation(expr) => {
                     let str_res_transformed = self.transform_string_resource(expr);
                     let transformed = self.add_null_assertions(&str_res_transformed);
@@ -1369,6 +1400,20 @@ impl CodeGenerator {
         // Handle bind:value special syntax
         if prop_name == "bind:value" {
             let var_name = prop_value.trim();
+
+            // Check if this variable has a numeric type
+            if let Some((type_str, default_value)) = self.var_types.get(var_name) {
+                if self.is_numeric_type(type_str) {
+                    // Numeric bind:value needs type conversions
+                    let (to_method, default) = self.get_numeric_conversion(type_str, default_value);
+                    return vec![
+                        format!("value = {}.toString()", var_name),
+                        format!("onValueChange = {{ {} = it.{} ?: {} }}", var_name, to_method, default),
+                    ];
+                }
+            }
+
+            // Default bind:value (for String types)
             return vec![
                 format!("value = {}", var_name),
                 format!("onValueChange = {{ {} = it }}", var_name),
@@ -1623,6 +1668,63 @@ impl CodeGenerator {
                 ""
             }
         }
+    }
+
+    /// Infer type from initial value
+    /// Returns type string or "Unknown" if cannot infer
+    fn infer_type_from_value(&self, value: &str) -> String {
+        let trimmed = value.trim();
+
+        // Check for integer literals
+        if trimmed.parse::<i32>().is_ok() {
+            return "Int".to_string();
+        }
+
+        // Check for double/float literals
+        if trimmed.parse::<f64>().is_ok() {
+            return "Double".to_string();
+        }
+
+        // Check for boolean literals
+        if trimmed == "true" || trimmed == "false" {
+            return "Boolean".to_string();
+        }
+
+        // Check for string literals
+        if trimmed.starts_with('"') && trimmed.ends_with('"') {
+            return "String".to_string();
+        }
+
+        // Default to unknown
+        "Unknown".to_string()
+    }
+
+    /// Check if a type is numeric (Int, Double, Float, Long)
+    fn is_numeric_type(&self, type_str: &str) -> bool {
+        matches!(
+            type_str,
+            "Int" | "Double" | "Float" | "Long" | "Short" | "Byte"
+        )
+    }
+
+    /// Get the appropriate conversion method for a numeric type
+    /// Returns (to_method, default_value) e.g., ("toIntOrNull()", "0")
+    fn get_numeric_conversion(&self, type_str: &str, default_value: &str) -> (String, String) {
+        let to_method = match type_str {
+            "Int" => "toIntOrNull()",
+            "Double" => "toDoubleOrNull()",
+            "Float" => "toFloatOrNull()",
+            "Long" => "toLongOrNull()",
+            _ => "toIntOrNull()", // Default to Int
+        };
+
+        (to_method.to_string(), default_value.to_string())
+    }
+
+    /// Escape dollar signs in literal text for Kotlin string templates
+    /// Converts $ to \$ so it's treated as literal in Kotlin strings
+    fn escape_dollar_signs(&self, text: &str) -> String {
+        text.replace('$', "\\$")
     }
 
     /// Transform R.string references to stringResource() calls

@@ -28,6 +28,7 @@ pub struct StateDeclaration {
     pub mutable: bool,                   // var vs val
     pub type_annotation: Option<String>, // e.g., "List<Post>"
     pub initial_value: String,
+    pub is_derived_state: bool,          // true if initial_value uses derivedStateOf
 }
 
 #[derive(Debug, Clone, PartialEq)]

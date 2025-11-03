@@ -2,7 +2,7 @@
 
 Last updated: 2025-11-03
 
-## Overall Status: 22/23 tests passing (95.7%)
+## Overall Status: 23/23 tests passing (100%) ✅
 
 ### All Passing Tests ✅
 
@@ -28,10 +28,7 @@ Last updated: 2025-11-03
 20. ✅ 17-error-handling.md - Async operations with error states
 21. ✅ 18-string-resources.md - R.string for internationalization
 22. ✅ 19-checkbox-switch.md - Checkbox/Switch with bind:checked
-
-### Remaining Test ⏸️
-
-23. ⏸️ 20-derived-state.md - derivedStateOf for optimized computed state
+23. ✅ 20-derived-state.md - derivedStateOf for optimized computed state
 
 ## Recent Achievements
 
@@ -47,18 +44,26 @@ Last updated: 2025-11-03
 - Pattern: bind:checked={var} → checked = var, onCheckedChange = { var = it }
 - Automatic component imports
 
-### Test 20 - derivedStateOf (In Progress)
-**Requirements**:
-- Detect `val name: Type = derivedStateOf { ... }` pattern
-- Transform to `val name by remember { derivedStateOf { ... } }`
-- Handle TextField label and placeholder wrapping in { Text(...) }
-- Handle number type TextField with .toString() and .toIntOrNull()
+### Test 20 - derivedStateOf (Completed)
+**Requirements Implemented**:
+- ✅ Detect `val name: Type = derivedStateOf { ... }` pattern in parser
+- ✅ Transform to `val name by remember { derivedStateOf { ... } }` in codegen
+- ✅ TextField label and placeholder auto-wrapping in { Text(...) } (was already working)
+- ✅ Numeric TextField bind:value with type-aware conversions:
+  - Track variable types and defaults in HashMap during state generation
+  - Transform `bind:value={numVar}` to `value = numVar.toString(), onValueChange = { numVar = it.toIntOrNull() ?: default }`
+  - Support Int, Double, Float, Long types with appropriate conversion methods
+- ✅ Escape dollar signs in literal text for Kotlin string templates (`$` → `\$`)
 
-**Complexity**: High - requires state declaration parsing enhancement
+**Architecture Decisions**:
+- Added `is_derived_state` boolean field to StateDeclaration AST node
+- Added `var_types` HashMap to CodeGenerator to track variable types and defaults
+- Implemented proper indentation for nested derivedStateOf blocks
+- Type inference from initial values for variables without explicit type annotations
 
 ## Achievement Milestone
 
-**95.7% test coverage** - Only 1 advanced optimization pattern remaining!
+**100% test coverage achieved!** 🎉
 
 The transpiler successfully handles all core features plus advanced patterns like:
 - Component composition
@@ -70,9 +75,15 @@ The transpiler successfully handles all core features plus advanced patterns lik
 - Performance optimizations (LazyColumn)
 - Advanced layouts and modifiers
 
-## Next Steps
+## Summary of Test 20 Implementation
 
-1. Implement derivedStateOf transformation
-2. Add TextField label/placeholder wrapping
-3. Handle numeric TextField bind:value conversions
-4. Achieve 100% test coverage!
+Test 20 required implementing several interconnected features:
+
+1. **AST Enhancement**: Added `is_derived_state` field to StateDeclaration
+2. **Parser Detection**: Detect "derivedStateOf" keyword in state initial values
+3. **Type Tracking System**: Store variable types and defaults in HashMap
+4. **Numeric bind:value**: Type-aware transformations for TextField with numeric state
+5. **Dollar Sign Escaping**: Properly escape `$` in literal text for Kotlin strings
+6. **Indentation Handling**: Correct nesting indentation for derivedStateOf blocks
+
+All features were implemented with proper architecture decisions and no technical debt.
