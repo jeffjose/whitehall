@@ -2,6 +2,7 @@ use anyhow::{Context, Result};
 use std::fs;
 use std::path::{Path, PathBuf};
 
+use crate::android_scaffold;
 use crate::config::Config;
 use crate::project::{discover_files, FileType, WhitehallFile};
 use crate::transpiler;
@@ -43,7 +44,14 @@ pub fn execute_build(config: &Config, clean: bool) -> Result<BuildResult> {
     let files = discover_files(config)
         .context("Failed to discover source files")?;
 
-    // 3. Transpile each file
+    // 3. Generate Android scaffold (only if clean or missing)
+    let scaffold_exists = output_dir.join("app/build.gradle.kts").exists();
+    if clean || !scaffold_exists {
+        android_scaffold::generate(config, output_dir)
+            .context("Failed to generate Android project scaffold")?;
+    }
+
+    // 4. Transpile each file
     let mut errors = Vec::new();
     let mut success_count = 0;
 
@@ -57,7 +65,7 @@ pub fn execute_build(config: &Config, clean: bool) -> Result<BuildResult> {
         }
     }
 
-    // 4. Generate MainActivity if all files transpiled successfully
+    // 5. Generate MainActivity if all files transpiled successfully
     if errors.is_empty() {
         generate_main_activity(config, output_dir, &files)?;
     }
