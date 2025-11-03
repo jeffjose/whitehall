@@ -26,9 +26,9 @@
 - [ ] `whitehall check` - Syntax validation CLI command (planned)
 - [ ] Basic LSP support (syntax highlighting) (future)
 
-**Success metric:** ✓ Can write `.wh` files and transpiler validates them (23/23 tests passing)
+**Success metric:** ✓ Can write `.wh` files and transpiler validates them (30/30 tests passing)
 
-**Status**: Transpiler core is **100% complete** - all 23 test cases passing. See `docs/TRANSPILER.md` for details.
+**Status**: Transpiler core is **100% complete** - all 30 test cases passing (28 transpiler + 2 optimization examples). See `docs/TRANSPILER.md` for details.
 
 ---
 
@@ -53,7 +53,7 @@
 ## Phase 3: Compilation (Partial - v0.3)
 **Goal: Generate working Android code**
 
-- [x] AST → Kotlin transpiler (100% complete, 23 tests passing)
+- [x] AST → Kotlin transpiler (100% complete, 30 tests passing)
 - [x] Generate Activity code (MainActivity generation planned)
 - [x] Handle UI components (all Compose components supported)
 - [ ] `whitehall build` - CLI command to transpile project

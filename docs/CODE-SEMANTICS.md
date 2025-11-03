@@ -2,9 +2,14 @@
 
 **Status**: ✅ Phase 6 Complete - RecyclerView Optimization Live! 🎉
 
-**Last Updated**: 2025-01-03
+**Last Updated**: 2025-11-03
 
 **Current Progress**: Complete optimization system (Phases 0-6). Static collections now generate RecyclerView automatically. First actual optimization working!
+
+**New Features**:
+- ✅ **Array Literal Syntax**: `[1,2,3]` → `listOf()` / `mutableListOf()` (see [ARRAY-LITERALS.md](./ARRAY-LITERALS.md))
+- ✅ **Multiline Lists**: Parser supports newlines in `listOf()` and `[...]`
+- ✅ **30 Tests Passing**: 28 transpiler examples + 2 optimization examples
 
 ---
 

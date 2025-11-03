@@ -4,11 +4,12 @@
 
 ## Current Status
 
-✅ **Transpiler Core: 100% Complete**
-- All 23 test cases passing (100% coverage)
+✅ **Transpiler Core: 100% Complete + Optimizations**
+- **30 test cases passing** (28 transpiler + 2 optimization examples)
 - Zero compiler warnings
 - Clean, production-ready codebase
 - Full feature parity with syntax design
+- **Phase 6 Optimizations Working**: Static list → RecyclerView
 
 ### What's Working
 - ✅ Component transpilation (.wh → .kt)
@@ -20,6 +21,9 @@
 - ✅ State management (mutableStateOf, derivedStateOf)
 - ✅ Advanced patterns (LazyColumn, AsyncImage, modifiers)
 - ✅ Internationalization (string resources)
+- ✅ **Array literal syntax**: `[1,2,3]` → `listOf()` / `mutableListOf()`
+- ✅ **Multiline list support**: Parser handles newlines in `listOf()` and `[...]`
+- ✅ **RecyclerView optimization**: Static `val` collections auto-optimize to RecyclerView
 
 ### What's NOT Working
 - ❌ CLI integration (`whitehall dev`, `whitehall build`)
