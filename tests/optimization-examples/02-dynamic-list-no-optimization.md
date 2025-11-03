@@ -2,7 +2,8 @@
 
 Tests that mutable lists with event handlers correctly stay as Compose (no optimization).
 
-**Behavior (all phases):** Always generates Compose LazyColumn (correct!)
+**Unoptimized:** Compose LazyColumn
+**Optimized:** Same (no optimization - correct!)
 
 **Why no optimization:**
 - Collection is `var` with `mutableStateOf` (mutable)
@@ -45,7 +46,7 @@ fun toggleTodo(id: String) {
 }
 ```
 
-## Output (Unoptimized - Correct!)
+## Unoptimized Output
 
 ```kotlin
 package com.example.app.components
@@ -117,7 +118,11 @@ fun DynamicTodoList() {
 }
 ```
 
-**Why this is correct:** Compose handles reactive state elegantly. RecyclerView would require manual `notifyDataSetChanged()` and complex state management.
+## Optimized Output
+
+Same as unoptimized (no optimization applied - correct!)
+
+**Why no optimization:** Compose handles reactive state elegantly. RecyclerView would require manual `notifyDataSetChanged()` and complex state management.
 
 ## Metadata
 

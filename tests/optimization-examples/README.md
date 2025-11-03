@@ -6,9 +6,13 @@ Testable examples showing transparent automatic optimizations.
 
 Each example has:
 - **Input**: Whitehall `.wh` source code
-- **Output** (Current/Unoptimized): What Phase 0-4 generates (always Compose)
-- **Output** (Future/Optimized): What Phase 5+ will generate (RecyclerView when safe)
+- **Unoptimized Output**: What the transpiler generates without optimization (Compose)
+- **Optimized Output**: What the transpiler generates with optimization enabled (RecyclerView/other)
 - **Metadata**: File info, optimization type, confidence score
+
+This format allows testing both modes:
+- Phase 0-4: Test against Unoptimized Output
+- Phase 5+: Test against Optimized Output
 
 ## Examples
 
@@ -43,16 +47,18 @@ Each example has:
 ## Testing
 
 ```bash
-# Phase 0-4: Should generate Compose (Current Output section)
+# Phase 0-4: Should generate Unoptimized Output
 cargo test --test optimization_examples
 
-# Phase 5+: Example 01 should generate RecyclerView (Future Output section)
-cargo test --test optimization_examples --features phase5
+# Phase 5+: Should generate Optimized Output when optimization enabled
+cargo test --test optimization_examples --features optimizations
 ```
 
 ## Adding Examples
 
 1. Create `XX-name.md`
-2. Add Input, Output (current), Output (future), Metadata sections
+2. Add Input, Unoptimized Output, Optimized Output, Metadata sections
 3. Keep it concise and testable
 4. Update this README
+
+Both outputs are always testable - no time-based "future" code!

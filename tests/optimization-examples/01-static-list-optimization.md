@@ -1,9 +1,9 @@
 # Static List Optimization (Future)
 
-Tests RecyclerView optimization for static immutable lists (Phase 5+).
+Tests RecyclerView optimization for static immutable lists.
 
-**Current behavior (Phase 0-4):** Generates Compose LazyColumn
-**Future behavior (Phase 5+):** Generates RecyclerView when confidence >= 80
+**Unoptimized:** Generates Compose LazyColumn (Phase 0-4)
+**Optimized:** Generates RecyclerView when confidence >= 80 (Phase 5+)
 
 **Optimization criteria:**
 - Collection is `val` (immutable)
@@ -31,7 +31,7 @@ val contacts = listOf(
 }
 ```
 
-## Current Output (Phase 0-4: Unoptimized)
+## Unoptimized Output
 
 ```kotlin
 package com.example.app.components
@@ -81,7 +81,7 @@ fun StaticContactList() {
 }
 ```
 
-## Future Output (Phase 5+: Optimized with RecyclerView)
+## Optimized Output
 
 ```kotlin
 package com.example.app.components
