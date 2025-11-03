@@ -1,18 +1,14 @@
-# Dynamic List → No Optimization (Stay with Compose)
+# Dynamic List - No Optimization
 
-**Scenario:** User has a mutable list with event handlers that modify state
+Tests that mutable lists with event handlers correctly stay as Compose (no optimization).
 
-**Why NOT optimize:** List changes over time and has interactive state. RecyclerView would require manual state management and notifyDataSetChanged(). Compose handles this elegantly.
+**Behavior (all phases):** Always generates Compose LazyColumn (correct!)
 
-**Detection criteria (fails optimization):**
-- ❌ Collection is `var` (mutable) OR has `mutableStateOf`
-- ❌ Mutated in lifecycle hooks or functions
-- ❌ Has event handlers that modify list or related state
-- ❌ Interactive behavior (selections, toggles, etc.)
-
-**Decision:** Keep Compose LazyColumn (correct choice!)
-
----
+**Why no optimization:**
+- Collection is `var` with `mutableStateOf` (mutable)
+- Modified in lifecycle hooks
+- Has event handlers that mutate state
+- Confidence: 0/100
 
 ## Input
 
@@ -43,22 +39,13 @@ fun toggleTodo(id: String) {
         bind:checked={todo.done}
         onChange={() => toggleTodo(todo.id)}
       />
-      <Text
-        fontSize={16}
-        textDecoration={todo.done ? "line-through" : "none"}
-      >
-        {todo.text}
-      </Text>
+      <Text fontSize={16}>{todo.text}</Text>
     </Row>
   </Card>
 }
 ```
 
----
-
-## Unoptimized Output (Current - Correct!)
-
-**Backend:** Compose LazyColumn (no optimization applied)
+## Output (Unoptimized - Correct!)
 
 ```kotlin
 package com.example.app.components
@@ -66,8 +53,6 @@ package com.example.app.components
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Checkbox
@@ -75,7 +60,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.launch
@@ -99,36 +83,33 @@ fun DynamicTodoList() {
         }
     }
 
-    LazyColumn {
-        items(todos, key = { it.id }) { todo ->
-            Card(
-                modifier = Modifier
-                    .padding(8.dp)
-                    .clickable { selectedId = todo.id },
-                colors = CardDefaults.cardColors(
-                    containerColor = if (todo.id == selectedId) {
-                        MaterialTheme.colorScheme.primaryContainer
-                    } else {
-                        MaterialTheme.colorScheme.surface
-                    }
-                )
-            ) {
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    Checkbox(
-                        checked = todo.done,
-                        onCheckedChange = { toggleTodo(todo.id) }
-                    )
-                    Text(
-                        text = todo.text,
-                        fontSize = 16.sp,
-                        textDecoration = if (todo.done) {
-                            TextDecoration.LineThrough
+    Column {
+        todos.forEach { todo ->
+            key(todo.id) {
+                Card(
+                    modifier = Modifier
+                        .padding(8.dp)
+                        .clickable { selectedId = todo.id },
+                    colors = CardDefaults.cardColors(
+                        containerColor = if (todo.id == selectedId) {
+                            MaterialTheme.colorScheme.primaryContainer
                         } else {
-                            TextDecoration.None
+                            MaterialTheme.colorScheme.surface
                         }
                     )
+                ) {
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Checkbox(
+                            checked = todo.done,
+                            onCheckedChange = { toggleTodo(todo.id) }
+                        )
+                        Text(
+                            text = todo.text,
+                            fontSize = 16.sp
+                        )
+                    }
                 }
             }
         }
@@ -136,105 +117,7 @@ fun DynamicTodoList() {
 }
 ```
 
-**Why this is correct:**
-- Compose handles reactive state updates automatically
-- `mutableStateOf` triggers recomposition when todos change
-- Interactive selection state managed seamlessly
-- Checkbox binding works out of the box
-- Performance is fine for typical list sizes (<1000 items)
-
----
-
-## Optimized Output (Phase 5 Target)
-
-**Backend:** SAME - No optimization applied ✅
-
-```kotlin
-// Identical to unoptimized output above
-// Whitehall analyzer detects this should NOT be optimized
-```
-
-**Why no optimization:**
-- List is mutable (`var` with `mutableStateOf`)
-- Modified in `onMount` lifecycle hook
-- Modified in `toggleTodo` function
-- Has `onClick` event handler that mutates `selectedId`
-- Has `onChange` event handler that mutates `todos`
-- Selection state depends on comparison with `selectedId`
-
-**This is the RIGHT decision!** RecyclerView would be much harder to maintain here.
-
----
-
-## Analyzer Decision Log (Future)
-
-```
-[ANALYZE] Checking for_loop over 'todos'
-  ❌ Collection 'todos' is var with mutableStateOf: 0 confidence
-  ❌ Mutated in onMount hook (todos = ApiClient.getTodos()): -50 confidence
-  ❌ Mutated in toggleTodo function (todos = todos.map(...)): -50 confidence
-  ❌ Has onClick handler: potential mutations
-  ❌ Has onChange handler: potential mutations
-  ❌ TOTAL CONFIDENCE: 0
-
-[OPTIMIZE] Skipping optimization for 'todos'
-  ❌ Confidence threshold not met (0 < 80)
-  ✅ Keeping Compose LazyColumn (correct choice)
-
-[CODEGEN] Generating standard Compose LazyColumn for 'todos'
-  ✅ Using items() API with key
-  ✅ Handling mutableStateOf reactivity
-  ✅ Binding event handlers correctly
-```
-
----
-
-## Performance Comparison
-
-### If We Wrongly Optimized to RecyclerView:
-
-**Problems:**
-```kotlin
-// BAD - Would need manual state management
-private var todos: List<Todo> = emptyList()
-private var adapter: TodoAdapter? = null
-
-fun updateTodos(newTodos: List<Todo>) {
-    todos = newTodos
-    adapter?.notifyDataSetChanged()  // Manual update!
-}
-
-fun toggleTodo(id: String) {
-    val index = todos.indexOfFirst { it.id == id }
-    if (index != -1) {
-        todos = todos.toMutableList().apply {
-            set(index, get(index).copy(done = !get(index).done))
-        }
-        adapter?.notifyItemChanged(index)  // Manual notification!
-    }
-}
-```
-
-**Issues:**
-- Manual notifyDataSetChanged() calls
-- Complex index tracking
-- Selection state management messy
-- Checkbox binding requires custom ViewHolder logic
-- Much more code, harder to maintain
-- Loses Compose's reactive benefits
-
-### With Compose (Current):
-
-**Benefits:**
-- Automatic reactivity (mutableStateOf)
-- Clean event handlers
-- Simple state management
-- Standard Compose patterns
-- Easy to understand and modify
-
-**Performance:** Good enough for typical use cases (<1000 items)
-
----
+**Why this is correct:** Compose handles reactive state elegantly. RecyclerView would require manual `notifyDataSetChanged()` and complex state management.
 
 ## Metadata
 

@@ -531,10 +531,14 @@ impl Parser {
                 // Parse closing tag
                 self.expect_char('<')?;
                 self.expect_char('/')?;
+                eprintln!("[DEBUG] About to parse closing tag, pos={}, next 30 chars: {:?}",
+                         self.pos,
+                         &self.input[self.pos..self.pos.saturating_add(30).min(self.input.len())]);
                 let closing_name = self.parse_identifier().map_err(|e| {
                     let context = &self.input[self.pos..self.pos.saturating_add(20).min(self.input.len())];
                     format!("Failed to parse closing tag name: {}. Context: {:?}", e, context)
                 })?;
+                eprintln!("[DEBUG] Parsed closing tag name: {:?}", closing_name);
                 self.expect_char('>')?;
 
                 if parent_name != closing_name {
@@ -844,7 +848,7 @@ impl Parser {
                 }
                 // Otherwise, @ is part of text content
                 current_text.push(ch);
-                self.pos += 1;
+                self.advance_char();
             } else if ch == '{' {
                 // Save any accumulated text
                 if !current_text.is_empty() {
@@ -858,7 +862,7 @@ impl Parser {
                 children.push(Markup::Interpolation(expr));
             } else {
                 current_text.push(ch);
-                self.pos += 1;
+                self.advance_char();
             }
         }
 
@@ -891,7 +895,7 @@ impl Parser {
                 children.push(Markup::Interpolation(expr));
             } else {
                 current_text.push(ch);
-                self.pos += 1;
+                self.advance_char();
             }
         }
 
@@ -976,7 +980,8 @@ impl Parser {
     fn expect_char(&mut self, expected: char) -> Result<(), String> {
         match self.peek_char() {
             Some(ch) if ch == expected => {
-                self.pos += 1;
+                // Advance by the byte length of the character, not just 1
+                self.pos += ch.len_utf8();
                 Ok(())
             }
             Some(ch) => Err(format!("Expected '{}', found '{}'", expected, ch)),
@@ -985,11 +990,21 @@ impl Parser {
     }
 
     fn peek_char(&self) -> Option<char> {
-        self.input.chars().nth(self.pos)
+        // self.pos is a byte index, not a char index
+        // We need to slice at the byte position and get the first char
+        self.input[self.pos..].chars().next()
     }
 
     fn peek_ahead(&self, offset: usize) -> Option<char> {
-        self.input.chars().nth(self.pos + offset)
+        // Same here - slice at byte position then skip offset characters
+        self.input[self.pos..].chars().nth(offset)
+    }
+
+    /// Advance position by one character (handling multi-byte UTF-8)
+    fn advance_char(&mut self) {
+        if let Some(ch) = self.peek_char() {
+            self.pos += ch.len_utf8();
+        }
     }
 
     fn peek_word(&self) -> Option<&str> {
