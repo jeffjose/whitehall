@@ -66,23 +66,24 @@
 
 ---
 
-## Phase 4: Development Loop (🔄 In Progress - v0.4)
+## Phase 4: Development Loop (✓ Completed - v0.4)
 **Goal: Fast iteration**
 
-- [ ] `whitehall build` - Transpile project to Kotlin + generate Gradle scaffold
-- [ ] `whitehall watch` - File watching and auto-rebuild
-- [ ] `whitehall run` - Build + deploy to emulator/device
+- [x] `whitehall build` - Transpile project to Kotlin + generate Gradle scaffold
+- [x] `whitehall watch` - File watching and auto-rebuild
+- [x] `whitehall run` - Build + deploy to emulator/device
 - [ ] Better error reporting with source maps
 - [ ] `whitehall clean`
 
 **Success metric:** Can develop a simple app using only Whitehall CLI
 
-**Status**: Currently implementing - see `docs/BUILD.md` for detailed plan. Five phases:
-- Phase 1: Foundation (shared build pipeline)
-- Phase 2: `build` command
-- Phase 3: `watch` command
-- Phase 4: `run` command
-- Phase 5: Polish and documentation
+**Status**: ✓ All core CLI commands implemented and working:
+- ✅ `whitehall init` - Creates project structure
+- ✅ `whitehall build` - Transpiles .wh → .kt + generates Android scaffold
+- ✅ `whitehall watch` - File watching with auto-rebuild (notify crate)
+- ✅ `whitehall run` - Builds, runs Gradle, installs APK, launches app
+
+**Next**: End-to-end testing with real apps to verify the complete workflow
 
 ---
 
