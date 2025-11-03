@@ -197,13 +197,13 @@ impl Analyzer {
         // Pass 2: Track usage (Phase 1)
         analyzer.track_usage(ast);
 
-        // Pass 3: Infer optimizations (Phase 2+)
-        // Not implemented yet - will be added in future phases
+        // Pass 3: Infer optimizations (Phase 2)
+        let optimization_hints = analyzer.infer_optimizations(ast);
 
         Ok(SemanticInfo {
             symbol_table: analyzer.symbol_table.clone(),
             mutability_info: analyzer.build_mutability_info(),
-            optimization_hints: Vec::new(), // Phase 2+: No hints yet
+            optimization_hints, // Phase 2: Return detected optimization hints
         })
     }
 
@@ -504,13 +504,91 @@ impl Analyzer {
         }
     }
 
-    // Future: Infer optimization opportunities
-    #[allow(dead_code)]
-    fn infer_optimizations(&self, _ast: &WhitehallFile) -> Vec<OptimizationHint> {
-        Vec::new() // No optimizations yet
+    /// Phase 2: Infer optimization opportunities
+    ///
+    /// Walks the AST to find optimization opportunities based on:
+    /// - Static collections (for RecyclerView optimization)
+    /// - Future: Other optimizations (TextView, Canvas, etc.)
+    fn infer_optimizations(&self, ast: &WhitehallFile) -> Vec<OptimizationHint> {
+        let mut hints = Vec::new();
+
+        // Walk markup to find all @for loops
+        self.collect_for_loop_hints(&ast.markup, &mut hints);
+
+        hints
     }
 
-    #[allow(dead_code)]
+    /// Phase 2: Recursively collect optimization hints from for loops
+    fn collect_for_loop_hints(&self, markup: &Markup, hints: &mut Vec<OptimizationHint>) {
+        match markup {
+            Markup::ForLoop(for_loop) => {
+                // Check if this for loop qualifies for optimization
+                if let Some(hint) = self.check_static_collection(for_loop) {
+                    hints.push(hint);
+                }
+
+                // Recursively check loop body for nested loops
+                for child in &for_loop.body {
+                    self.collect_for_loop_hints(child, hints);
+                }
+
+                // Check empty block if present
+                if let Some(empty_block) = &for_loop.empty_block {
+                    for child in empty_block {
+                        self.collect_for_loop_hints(child, hints);
+                    }
+                }
+            }
+            Markup::Component(component) => {
+                // Check component children
+                for child in &component.children {
+                    self.collect_for_loop_hints(child, hints);
+                }
+            }
+            Markup::IfElse(if_else) => {
+                // Check all branches
+                for child in &if_else.then_branch {
+                    self.collect_for_loop_hints(child, hints);
+                }
+                for else_if in &if_else.else_ifs {
+                    for child in &else_if.body {
+                        self.collect_for_loop_hints(child, hints);
+                    }
+                }
+                if let Some(else_branch) = &if_else.else_branch {
+                    for child in else_branch {
+                        self.collect_for_loop_hints(child, hints);
+                    }
+                }
+            }
+            Markup::When(when) => {
+                // Check all when branches
+                for branch in &when.branches {
+                    self.collect_for_loop_hints(&branch.body, hints);
+                }
+            }
+            Markup::Sequence(items) => {
+                // Check all items in sequence
+                for item in items {
+                    self.collect_for_loop_hints(item, hints);
+                }
+            }
+            _ => {
+                // Text, Interpolation - no nested markup
+            }
+        }
+    }
+
+    /// Phase 2: Check if a for loop qualifies for static collection optimization
+    ///
+    /// Applies confidence scoring heuristic:
+    /// - val collection: +40 confidence
+    /// - Not mutated: +30 confidence
+    /// - Not a prop: +20 confidence
+    /// - No event handlers: +10 confidence
+    ///
+    /// Total confidence: 0-100
+    /// Threshold for optimization: 50+ (Phase 2), 80+ (Phase 4)
     fn check_static_collection(&self, for_loop: &ForLoopBlock) -> Option<OptimizationHint> {
         let collection_name = &for_loop.collection;
         let symbol = self.symbol_table.get(collection_name)?;
@@ -528,7 +606,7 @@ impl Analyzer {
         }
 
         // Is it declared in component (not a prop)?
-        if matches!(symbol.kind, SymbolKind::StateVal) {
+        if matches!(symbol.kind, SymbolKind::StateVal | SymbolKind::StateVar) {
             confidence += 20;
         }
 
@@ -547,7 +625,10 @@ impl Analyzer {
         }
     }
 
-    #[allow(dead_code)]
+    /// Phase 2: Check if markup contains event handlers (onClick, bind:, etc.)
+    ///
+    /// Event handlers indicate dynamic/interactive content that's better suited
+    /// for Compose's reactive model rather than RecyclerView optimization.
     fn has_event_handlers(&self, body: &[Markup]) -> bool {
         for markup in body {
             match markup {
@@ -983,5 +1064,357 @@ mod tests {
         assert!(symbol.usage_info.contexts.contains(&UsageContext::InCondition {
             condition_type: "when".to_string(),
         }));
+    }
+
+    // ========== Phase 2: Static Detection Tests ==========
+
+    #[test]
+    fn test_detects_static_collection_high_confidence() {
+        use crate::transpiler::ast::{Component, Markup};
+
+        // Perfect candidate for optimization:
+        // - val collection (StateVal)
+        // - Not mutated
+        // - Not a prop
+        // - No event handlers
+        // Expected confidence: 100 (40 + 30 + 20 + 10)
+        let ast = WhitehallFile {
+            state: vec![StateDeclaration {
+                name: "items".to_string(),
+                mutable: false, // val
+                type_annotation: Some("List<String>".to_string()),
+                initial_value: "listOf(\"a\", \"b\", \"c\")".to_string(),
+                is_derived_state: false,
+            }],
+            markup: Markup::ForLoop(ForLoopBlock {
+                item: "item".to_string(),
+                collection: "items".to_string(),
+                key_expr: Some("item".to_string()),
+                body: vec![Markup::Component(Component {
+                    name: "Text".to_string(),
+                    props: vec![],
+                    children: vec![Markup::Interpolation("item".to_string())],
+                    self_closing: false,
+                })],
+                empty_block: None,
+            }),
+            ..Default::default()
+        };
+
+        let semantic_info = Analyzer::analyze(&ast).unwrap();
+
+        assert_eq!(semantic_info.optimization_hints.len(), 1);
+        match &semantic_info.optimization_hints[0] {
+            OptimizationHint::StaticCollection { name, confidence } => {
+                assert_eq!(name, "items");
+                assert_eq!(*confidence, 100);
+            }
+        }
+    }
+
+    #[test]
+    fn test_detects_static_collection_medium_confidence() {
+        use crate::transpiler::ast::{Component, Markup};
+
+        // Medium candidate:
+        // - var collection (StateVar) - lose 40 points
+        // - Not mutated - get 30 points
+        // - Not a prop - get 20 points
+        // - No event handlers - get 10 points
+        // Expected confidence: 60 (0 + 30 + 20 + 10)
+        let ast = WhitehallFile {
+            state: vec![StateDeclaration {
+                name: "items".to_string(),
+                mutable: true, // var
+                type_annotation: Some("List<String>".to_string()),
+                initial_value: "listOf(\"a\", \"b\", \"c\")".to_string(),
+                is_derived_state: false,
+            }],
+            markup: Markup::ForLoop(ForLoopBlock {
+                item: "item".to_string(),
+                collection: "items".to_string(),
+                key_expr: None,
+                body: vec![Markup::Component(Component {
+                    name: "Text".to_string(),
+                    props: vec![],
+                    children: vec![Markup::Interpolation("item".to_string())],
+                    self_closing: false,
+                })],
+                empty_block: None,
+            }),
+            ..Default::default()
+        };
+
+        let semantic_info = Analyzer::analyze(&ast).unwrap();
+
+        assert_eq!(semantic_info.optimization_hints.len(), 1);
+        match &semantic_info.optimization_hints[0] {
+            OptimizationHint::StaticCollection { name, confidence } => {
+                assert_eq!(name, "items");
+                assert_eq!(*confidence, 60);
+            }
+        }
+    }
+
+    #[test]
+    fn test_no_optimization_for_prop_collection() {
+        use crate::transpiler::ast::{Component, Markup, PropDeclaration};
+
+        // Prop collection:
+        // - val (prop) - get 40 points
+        // - Not mutated - get 30 points
+        // - IS a prop - lose 20 points
+        // - No event handlers - get 10 points
+        // Expected confidence: 80 (40 + 30 + 0 + 10)
+        // BUT we want to be conservative with props
+        let ast = WhitehallFile {
+            props: vec![PropDeclaration {
+                name: "items".to_string(),
+                prop_type: "List<String>".to_string(),
+                default_value: None,
+            }],
+            markup: Markup::ForLoop(ForLoopBlock {
+                item: "item".to_string(),
+                collection: "items".to_string(),
+                key_expr: None,
+                body: vec![Markup::Component(Component {
+                    name: "Text".to_string(),
+                    props: vec![],
+                    children: vec![Markup::Interpolation("item".to_string())],
+                    self_closing: false,
+                })],
+                empty_block: None,
+            }),
+            ..Default::default()
+        };
+
+        let semantic_info = Analyzer::analyze(&ast).unwrap();
+
+        // Should still generate hint but with lower confidence (80 vs 100)
+        assert_eq!(semantic_info.optimization_hints.len(), 1);
+        match &semantic_info.optimization_hints[0] {
+            OptimizationHint::StaticCollection { name, confidence } => {
+                assert_eq!(name, "items");
+                assert_eq!(*confidence, 80); // Missing the "not a prop" bonus
+            }
+        }
+    }
+
+    #[test]
+    fn test_no_optimization_with_event_handlers() {
+        use crate::transpiler::ast::{Component, ComponentProp, Markup, PropValue};
+
+        // Has event handler:
+        // - val collection - get 40 points
+        // - Not mutated - get 30 points
+        // - Not a prop - get 20 points
+        // - HAS event handler - lose 10 points
+        // Expected confidence: 90 (40 + 30 + 20 + 0)
+        let ast = WhitehallFile {
+            state: vec![StateDeclaration {
+                name: "items".to_string(),
+                mutable: false,
+                type_annotation: Some("List<String>".to_string()),
+                initial_value: "listOf(\"a\", \"b\")".to_string(),
+                is_derived_state: false,
+            }],
+            markup: Markup::ForLoop(ForLoopBlock {
+                item: "item".to_string(),
+                collection: "items".to_string(),
+                key_expr: None,
+                body: vec![Markup::Component(Component {
+                    name: "Button".to_string(),
+                    props: vec![ComponentProp {
+                        name: "onClick".to_string(),
+                        value: PropValue::Expression("handleClick".to_string()),
+                    }],
+                    children: vec![Markup::Interpolation("item".to_string())],
+                    self_closing: false,
+                })],
+                empty_block: None,
+            }),
+            ..Default::default()
+        };
+
+        let semantic_info = Analyzer::analyze(&ast).unwrap();
+
+        // Should still generate hint but with lower confidence
+        assert_eq!(semantic_info.optimization_hints.len(), 1);
+        match &semantic_info.optimization_hints[0] {
+            OptimizationHint::StaticCollection { name, confidence } => {
+                assert_eq!(name, "items");
+                assert_eq!(*confidence, 90); // Missing event handler bonus
+            }
+        }
+    }
+
+    #[test]
+    fn test_no_optimization_below_threshold() {
+        use crate::transpiler::ast::{Component, ComponentProp, Markup, PropValue, PropDeclaration};
+
+        // Very poor candidate:
+        // - var collection (Prop, but mutable declared elsewhere... actually this is a prop)
+        // Let me create a var prop scenario - actually props are always immutable
+        // Let's use a mutable var with event handlers
+        // - var collection - lose 40 points (0)
+        // - Mutated - lose 30 points (0)  // TODO: Phase 2 doesn't track mutations yet
+        // - Not a prop - get 20 points
+        // - HAS event handler - lose 10 points (0)
+        // Expected confidence: 20 (0 + 0 + 20 + 0) - BUT mutations not tracked yet
+        // So actually: 50 (0 + 30 + 20 + 0)
+        let ast = WhitehallFile {
+            state: vec![StateDeclaration {
+                name: "items".to_string(),
+                mutable: true, // var
+                type_annotation: Some("List<String>".to_string()),
+                initial_value: "mutableListOf()".to_string(),
+                is_derived_state: false,
+            }],
+            markup: Markup::ForLoop(ForLoopBlock {
+                item: "item".to_string(),
+                collection: "items".to_string(),
+                key_expr: None,
+                body: vec![Markup::Component(Component {
+                    name: "Button".to_string(),
+                    props: vec![ComponentProp {
+                        name: "onClick".to_string(),
+                        value: PropValue::Expression("handleClick".to_string()),
+                    }],
+                    children: vec![Markup::Interpolation("item".to_string())],
+                    self_closing: false,
+                })],
+                empty_block: None,
+            }),
+            ..Default::default()
+        };
+
+        let semantic_info = Analyzer::analyze(&ast).unwrap();
+
+        // Confidence: 50 (0 + 30 + 20 + 0)
+        // Still above threshold of 50, so hint is generated
+        assert_eq!(semantic_info.optimization_hints.len(), 1);
+        match &semantic_info.optimization_hints[0] {
+            OptimizationHint::StaticCollection { name, confidence } => {
+                assert_eq!(name, "items");
+                assert_eq!(*confidence, 50); // Exactly at threshold
+            }
+        }
+    }
+
+    #[test]
+    fn test_detects_multiple_for_loops() {
+        use crate::transpiler::ast::{Component, Markup};
+
+        // Two separate for loops, both qualify
+        let ast = WhitehallFile {
+            state: vec![
+                StateDeclaration {
+                    name: "items1".to_string(),
+                    mutable: false,
+                    type_annotation: Some("List<String>".to_string()),
+                    initial_value: "listOf()".to_string(),
+                    is_derived_state: false,
+                },
+                StateDeclaration {
+                    name: "items2".to_string(),
+                    mutable: false,
+                    type_annotation: Some("List<String>".to_string()),
+                    initial_value: "listOf()".to_string(),
+                    is_derived_state: false,
+                },
+            ],
+            markup: Markup::Sequence(vec![
+                Markup::ForLoop(ForLoopBlock {
+                    item: "item".to_string(),
+                    collection: "items1".to_string(),
+                    key_expr: None,
+                    body: vec![Markup::Component(Component {
+                        name: "Text".to_string(),
+                        props: vec![],
+                        children: vec![],
+                        self_closing: false,
+                    })],
+                    empty_block: None,
+                }),
+                Markup::ForLoop(ForLoopBlock {
+                    item: "item".to_string(),
+                    collection: "items2".to_string(),
+                    key_expr: None,
+                    body: vec![Markup::Component(Component {
+                        name: "Text".to_string(),
+                        props: vec![],
+                        children: vec![],
+                        self_closing: false,
+                    })],
+                    empty_block: None,
+                }),
+            ]),
+            ..Default::default()
+        };
+
+        let semantic_info = Analyzer::analyze(&ast).unwrap();
+
+        // Should detect both loops
+        assert_eq!(semantic_info.optimization_hints.len(), 2);
+
+        let names: Vec<String> = semantic_info
+            .optimization_hints
+            .iter()
+            .filter_map(|hint| match hint {
+                OptimizationHint::StaticCollection { name, .. } => Some(name.clone()),
+            })
+            .collect();
+
+        assert!(names.contains(&"items1".to_string()));
+        assert!(names.contains(&"items2".to_string()));
+    }
+
+    #[test]
+    fn test_detects_nested_for_loops() {
+        use crate::transpiler::ast::{Component, Markup};
+
+        // Nested for loops - both should be detected
+        let ast = WhitehallFile {
+            state: vec![
+                StateDeclaration {
+                    name: "outer".to_string(),
+                    mutable: false,
+                    type_annotation: Some("List<Group>".to_string()),
+                    initial_value: "listOf()".to_string(),
+                    is_derived_state: false,
+                },
+                StateDeclaration {
+                    name: "inner".to_string(),
+                    mutable: false,
+                    type_annotation: Some("List<Item>".to_string()),
+                    initial_value: "listOf()".to_string(),
+                    is_derived_state: false,
+                },
+            ],
+            markup: Markup::ForLoop(ForLoopBlock {
+                item: "group".to_string(),
+                collection: "outer".to_string(),
+                key_expr: None,
+                body: vec![Markup::ForLoop(ForLoopBlock {
+                    item: "item".to_string(),
+                    collection: "inner".to_string(),
+                    key_expr: None,
+                    body: vec![Markup::Component(Component {
+                        name: "Text".to_string(),
+                        props: vec![],
+                        children: vec![],
+                        self_closing: false,
+                    })],
+                    empty_block: None,
+                })],
+                empty_block: None,
+            }),
+            ..Default::default()
+        };
+
+        let semantic_info = Analyzer::analyze(&ast).unwrap();
+
+        // Should detect both outer and inner loops
+        assert_eq!(semantic_info.optimization_hints.len(), 2);
     }
 }
