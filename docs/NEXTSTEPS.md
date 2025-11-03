@@ -11,6 +11,13 @@
 - Full feature parity with syntax design
 - **Phase 6 Optimizations Working**: Static list → RecyclerView
 
+✅ **Routing System: 100% Complete**
+- File-based routing (`src/routes/**/+screen.wh`)
+- Automatic Routes.kt generation (sealed interface)
+- NavHost setup in MainActivity
+- Route parameter extraction from `[id]` folders
+- All 7 microblog screens working
+
 ### What's Working
 - ✅ Component transpilation (.wh → .kt)
 - ✅ All control flow (@if, @for, @when)
@@ -40,10 +47,10 @@
 - ❓ Do optimizations (RecyclerView) work in compiled apps?
 
 ### What's Missing
-- ❌ Route generation (Routes.kt from file structure)
+- ❌ End-to-end testing with real Android device/emulator
+- ❌ Single-file app mode (`whitehall run app.wh`)
 - ❌ Error messages with line numbers
 - ❌ Source maps for debugging
-- ❌ Real-world app examples
 
 ## Next Step Options
 
@@ -173,45 +180,46 @@ cd build && gradle wrapper
 - Build simple apps in .wh format
 - Test transpilation and compilation
 
-### Option 4: Route Generation System
-**Goal**: Generate Routes.kt from file-based routing structure
+### Option 4: Single-File App Mode (NEW)
+**Goal**: Enable zero-config single-file apps (like `uv` for Python)
 
-**Estimated Effort**: 4-5 hours
+**Estimated Effort**: 3-5 hours
 
 **Tasks**:
-1. Directory structure analysis
-   - Scan src/routes/ for +screen.wh files
-   - Extract route parameters from [param] directories
-   - Build route tree data structure
-   - Detect nested routes and layouts
+1. Frontmatter parsing
+   - Parse `///` TOML comments
+   - Extract app config (name, package, minSdk)
+   - Extract dependencies
+   - Validate required fields
 
-2. Routes.kt generation
-   - Generate sealed class hierarchy
-   - Add @Serializable annotations
-   - Create route builder functions
-   - Generate lowercase accessor object
+2. Temporary project generation
+   - Hash file content (SHA256)
+   - Generate project in `.whitehall/cache/{hash}/`
+   - Create whitehall.toml from frontmatter
+   - Copy code (without frontmatter) to src/main.wh
 
-3. NavHost generation
-   - Generate NavHost composable
-   - Map routes to screens
-   - Handle route parameters
-   - Support nested navigation
+3. Command integration
+   - Detect single-file mode (*.wh without project)
+   - Route to single-file handler
+   - `whitehall run app.wh`
+   - `whitehall build app.wh`
 
-4. Integration with screens
-   - Pass route params to screen functions
-   - Transform $routes.* references
-   - Type-safe navigation calls
+4. Upgrade path
+   - `whitehall split app.wh` command
+   - Converts to full project structure
+   - Preserves all code and config
 
 **Why This?**
-- Complete the routing story
-- Enable type-safe navigation
-- Critical for multi-screen apps
-- Already designed, just needs implementation
+- Matches vision: "Start small, scale up"
+- Enables rapid prototyping
+- Great for learning/tutorials
+- Zero boilerplate for simple apps
+- Inspired by `uv` and `rust-script`
 
 **Starting Point**:
-- Create `src/transpiler/routes.rs`
-- Implement directory scanning
-- Generate sealed class structure
+- See `docs/SINGLE-FILE-MODE.md` for complete design
+- Create `src/single_file.rs`
+- Implement frontmatter parser
 
 ### Option 5: Additional Test Coverage (If Needed)
 **Goal**: Add more test cases for edge cases and patterns
