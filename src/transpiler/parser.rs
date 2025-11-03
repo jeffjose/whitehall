@@ -194,6 +194,16 @@ impl Parser {
         };
 
         self.skip_whitespace();
+        if self.peek_char() != Some('=') {
+            let context = &self.input[self.pos..self.pos.saturating_add(50).min(self.input.len())];
+            return Err(format!(
+                "Expected '=' after variable '{}' with type {:?}, found: {:?} (context: {:?})",
+                name,
+                type_annotation,
+                self.peek_char(),
+                context
+            ));
+        }
         self.expect_char('=')?;
         self.skip_whitespace();
 
@@ -427,10 +437,17 @@ impl Parser {
         }
 
         self.skip_whitespace();
-        self.expect_char('=')?;
-        self.skip_whitespace();
 
-        let value = if self.peek_char() == Some('"') {
+        // Check if this is a boolean prop (no value, like <Column fill>)
+        let value = if self.peek_char() == Some('>') || self.peek_char() == Some('/') {
+            // Boolean prop without explicit value, treat as {true}
+            PropValue::Expression("true".to_string())
+        } else {
+            // Prop with explicit value
+            self.expect_char('=')?;
+            self.skip_whitespace();
+
+            if self.peek_char() == Some('"') {
             // String literal: prop="value"
             self.expect_char('"')?;
             let mut str_value = String::new();
@@ -489,8 +506,9 @@ impl Parser {
                 }
                 PropValue::Expression(expr_value)
             }
-        } else {
-            return Err(format!("Expected prop value (either {{expr}} or \"string\")"));
+            } else {
+                return Err(format!("Expected prop value (either {{expr}} or \"string\")"));
+            }
         };
 
         Ok(ComponentProp { name, value })
