@@ -329,9 +329,10 @@ impl Parser {
         if self.peek_char() == Some('"') {
             self.parse_string()
         } else {
-            // Parse value (handle braces for complex expressions like filter { ... })
+            // Parse value (handle braces and parentheses for complex expressions)
             let start = self.pos;
             let mut brace_depth = 0;
+            let mut paren_depth = 0;
 
             while let Some(ch) = self.peek_char() {
                 if ch == '{' {
@@ -344,7 +345,17 @@ impl Parser {
                     } else {
                         break; // Closing brace not part of value
                     }
-                } else if ch == '\n' && brace_depth == 0 {
+                } else if ch == '(' {
+                    paren_depth += 1;
+                    self.advance_char();
+                } else if ch == ')' {
+                    if paren_depth > 0 {
+                        paren_depth -= 1;
+                        self.advance_char();
+                    } else {
+                        break; // Closing paren not part of value
+                    }
+                } else if ch == '\n' && brace_depth == 0 && paren_depth == 0 {
                     // Check if line ends with continuation operator (&&, ||, +, -, etc.)
                     let trimmed = self.input[start..self.pos].trim_end();
                     if trimmed.ends_with("&&") || trimmed.ends_with("||") ||
