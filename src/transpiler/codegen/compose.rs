@@ -1,6 +1,7 @@
 /// Compose backend - generates Jetpack Compose code
 
-use crate::transpiler::ast::{Markup, PropValue, WhitehallFile};
+use crate::transpiler::ast::{ForLoopBlock, Markup, PropValue, WhitehallFile};
+use crate::transpiler::optimizer::Optimization;
 
 pub struct ComposeBackend {
     package: String,
@@ -9,6 +10,7 @@ pub struct ComposeBackend {
     indent_level: usize,
     nullable_vars: std::collections::HashSet<String>,
     var_types: std::collections::HashMap<String, (String, String)>, // Maps variable name to (type, default_value)
+    optimizations: Vec<Optimization>, // Phase 6: Optimization plans for this component
 }
 
 impl ComposeBackend {
@@ -20,10 +22,11 @@ impl ComposeBackend {
             indent_level: 0,
             nullable_vars: std::collections::HashSet::new(),
             var_types: std::collections::HashMap::new(),
+            optimizations: Vec::new(), // Phase 6: Start with empty optimizations
         }
     }
 
-    /// Phase 5: Generate with optimization support
+    /// Phase 6: Generate with optimization support
     ///
     /// This method receives optimization plans and routes for loops accordingly:
     /// - RecyclerView optimization: Uses RecyclerViewGenerator + ViewBackend
@@ -31,11 +34,12 @@ impl ComposeBackend {
     pub fn generate_with_optimizations(
         &mut self,
         file: &WhitehallFile,
-        _optimizations: &[crate::transpiler::optimizer::Optimization],
+        optimizations: &[crate::transpiler::optimizer::Optimization],
     ) -> Result<String, String> {
-        // Phase 5: For now, just call the existing generate method
-        // RecyclerView routing will be added when we implement for loop generation
-        // The optimizations will be checked during for loop generation
+        // Phase 6: Store optimizations for use during for loop generation
+        self.optimizations = optimizations.to_vec();
+
+        // Generate code - for loop generation will check optimizations
         self.generate(file)
     }
 
@@ -500,6 +504,17 @@ impl ComposeBackend {
             Markup::ForLoop(for_loop) => {
                 let mut output = String::new();
                 let indent_str = "    ".repeat(indent);
+
+                // Phase 6: Check if this loop should use RecyclerView optimization
+                let should_use_recyclerview = self.optimizations.iter().any(|opt| {
+                    matches!(opt, Optimization::UseRecyclerView { collection_name, .. }
+                        if collection_name == &for_loop.collection)
+                });
+
+                if should_use_recyclerview {
+                    // Generate RecyclerView with AndroidView wrapper
+                    return self.generate_recyclerview_inline(for_loop, indent);
+                }
 
                 // Special handling for LazyColumn: use items() instead of forEach
                 if parent == Some("LazyColumn") {
@@ -1855,5 +1870,57 @@ impl ComposeBackend {
 
         // Not a layout component - generate normally
         self.generate_markup_with_indent(markup, indent)
+    }
+
+    /// Phase 6: Generate RecyclerView with AndroidView wrapper (inline optimization)
+    ///
+    /// This is called when we detect a UseRecyclerView optimization for a for loop.
+    /// Generates an AndroidView that creates and binds a RecyclerView instead of LazyColumn.
+    fn generate_recyclerview_inline(&self, for_loop: &ForLoopBlock, indent: usize) -> Result<String, String> {
+        let mut output = String::new();
+        let indent_str = "    ".repeat(indent);
+
+        // Generate AndroidView that creates RecyclerView
+        output.push_str(&format!("{}AndroidView(\n", indent_str));
+        output.push_str(&format!("{}    factory = {{ context ->\n", indent_str));
+        output.push_str(&format!("{}        RecyclerView(context).apply {{\n", indent_str));
+        output.push_str(&format!("{}            layoutManager = LinearLayoutManager(context)\n", indent_str));
+        output.push_str(&format!("{}            adapter = object : RecyclerView.Adapter<RecyclerView.ViewHolder>() {{\n", indent_str));
+        output.push_str(&format!("{}                override fun getItemCount() = {}.size\n", indent_str, for_loop.collection));
+        output.push_str(&format!("{}\n", indent_str));
+        output.push_str(&format!("{}                override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): RecyclerView.ViewHolder {{\n", indent_str));
+        output.push_str(&format!("{}                    val view = TextView(parent.context).apply {{\n", indent_str));
+        output.push_str(&format!("{}                        layoutParams = ViewGroup.LayoutParams(\n", indent_str));
+        output.push_str(&format!("{}                            ViewGroup.LayoutParams.MATCH_PARENT,\n", indent_str));
+        output.push_str(&format!("{}                            ViewGroup.LayoutParams.WRAP_CONTENT\n", indent_str));
+        output.push_str(&format!("{}                        )\n", indent_str));
+        output.push_str(&format!("{}                        setPadding(16.dpToPx(), 16.dpToPx(), 16.dpToPx(), 16.dpToPx())\n", indent_str));
+        output.push_str(&format!("{}                    }}\n", indent_str));
+        output.push_str(&format!("{}                    return object : RecyclerView.ViewHolder(view) {{}}\n", indent_str));
+        output.push_str(&format!("{}                }}\n", indent_str));
+        output.push_str(&format!("{}\n", indent_str));
+        output.push_str(&format!("{}                override fun onBindViewHolder(holder: RecyclerView.ViewHolder, position: Int) {{\n", indent_str));
+        output.push_str(&format!("{}                    val {} = {}[position]\n", indent_str, for_loop.item, for_loop.collection));
+        output.push_str(&format!("{}                    val textView = holder.itemView as TextView\n", indent_str));
+
+        // Extract text from body (simplified - assumes Text component)
+        // For now, just use the item variable directly
+        output.push_str(&format!("{}                    textView.text = {}.toString()\n", indent_str, for_loop.item));
+
+        output.push_str(&format!("{}                }}\n", indent_str));
+        output.push_str(&format!("{}            }}\n", indent_str));
+        output.push_str(&format!("{}        }}\n", indent_str));
+        output.push_str(&format!("{}    }}\n", indent_str));
+        output.push_str(&format!("{})\n", indent_str));
+
+        // Add DP extension helper
+        output.push_str(&format!("{}\n", indent_str));
+        output.push_str(&format!("{}// Extension for DP to PX conversion\n", indent_str));
+        output.push_str(&format!("{}private fun Int.dpToPx(): Int {{\n", indent_str));
+        output.push_str(&format!("{}    val density = Resources.getSystem().displayMetrics.density\n", indent_str));
+        output.push_str(&format!("{}    return (this * density).toInt()\n", indent_str));
+        output.push_str(&format!("{}}}\n", indent_str));
+
+        Ok(output)
     }
 }

@@ -137,9 +137,10 @@ pub enum UsageContext {
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum SymbolKind {
-    Prop,      // @prop val
-    StateVar,  // var
-    StateVal,  // val
+    Prop,         // @prop val
+    StateVar,     // var
+    StateVal,     // val
+    DerivedState, // val with derivedStateOf (reactive, should not optimize)
     Function,
 }
 
@@ -225,8 +226,17 @@ impl Analyzer {
 
         // Collect state
         for state in &ast.state {
+            // Phase 6: Detect computed/reactive values
+            let is_computed = state.initial_value.contains(".filter")
+                || state.initial_value.contains(".map")
+                || state.initial_value.contains(".firstOrNull")
+                || state.initial_value.contains("derivedStateOf");
+
             let kind = if state.mutable {
                 SymbolKind::StateVar
+            } else if state.is_derived_state || is_computed {
+                // Phase 6: Derived/computed state is reactive, treat separately
+                SymbolKind::DerivedState
             } else {
                 SymbolKind::StateVal
             };
@@ -596,7 +606,8 @@ impl Analyzer {
         let mut confidence = 0u8;
 
         // Is it a val (immutable)?
-        if !symbol.mutable {
+        // Phase 6: Exclude DerivedState and Prop - they can be reactive/mutable
+        if !symbol.mutable && !matches!(symbol.kind, SymbolKind::DerivedState | SymbolKind::Prop) {
             confidence += 40;
         }
 
@@ -1160,13 +1171,13 @@ mod tests {
     fn test_no_optimization_for_prop_collection() {
         use crate::transpiler::ast::{Component, Markup, PropDeclaration};
 
-        // Prop collection:
-        // - val (prop) - get 40 points
+        // Phase 6: Prop collection - props could be mutated by parent
+        // - val (prop) - get 0 points (props excluded from val bonus)
         // - Not mutated - get 30 points
-        // - IS a prop - lose 20 points
+        // - IS a prop - get 0 points (not StateVal/StateVar)
         // - No event handlers - get 10 points
-        // Expected confidence: 80 (40 + 30 + 0 + 10)
-        // BUT we want to be conservative with props
+        // Expected confidence: 40 (0 + 30 + 0 + 10)
+        // Below 50 threshold, so NO hint generated
         let ast = WhitehallFile {
             props: vec![PropDeclaration {
                 name: "items".to_string(),
@@ -1190,14 +1201,8 @@ mod tests {
 
         let semantic_info = Analyzer::analyze(&ast).unwrap();
 
-        // Should still generate hint but with lower confidence (80 vs 100)
-        assert_eq!(semantic_info.optimization_hints.len(), 1);
-        match &semantic_info.optimization_hints[0] {
-            OptimizationHint::StaticCollection { name, confidence } => {
-                assert_eq!(name, "items");
-                assert_eq!(*confidence, 80); // Missing the "not a prop" bonus
-            }
-        }
+        // Phase 6: Should NOT generate hint (confidence 40 < 50 threshold)
+        assert_eq!(semantic_info.optimization_hints.len(), 0);
     }
 
     #[test]
