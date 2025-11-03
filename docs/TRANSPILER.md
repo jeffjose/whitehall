@@ -1639,6 +1639,33 @@ The Whitehall transpiler is **production-ready** with all core features implemen
 - ✅ Comprehensive test coverage
 - ✅ Production-ready implementation
 
+### Recent Additions
+
+**Comment Support** (Added 2025-01-XX)
+- ✅ Single-line comments: `// comment text`
+- ✅ Multi-line comments: `/* comment text */`
+- Comments are stripped during parsing (not included in output)
+- Kotlin-style syntax for consistency with target language
+- Test: Updated all examples to use proper comment syntax
+
+**Function Return Type Annotations** (Added 2025-01-XX)
+- ✅ Optional return types: `fun name(params): ReturnType { ... }`
+- Parser extended to handle `: Type` after parameters
+- Code generator outputs return types in function signatures
+- Test: tests/transpiler-examples/26-function-return-type.md
+- Example: `fun formatTimestamp(ts: Long): String { ... }`
+
+### Known Limitations
+
+The transpiler currently has the following limitations:
+
+1. **Lambda Syntax**: Arrow functions like `(e) => { ... }` need conversion to Kotlin lambda syntax `{ e -> ... }`
+2. **Kotlin String Interpolation**: `${expression}` syntax not yet supported (use `{expression}` for now)
+3. **Complex Imports**: Destructuring imports like `import { A, B }` are parsed but may need additional handling
+4. **Val in Function Bodies**: Function-scoped `val` declarations are captured as strings, not parsed structurally
+
+These limitations primarily affect more complex examples like the microblog app. The core transpiler works well for simpler component-based code.
+
 ---
 
 *All core features complete. The transpiler successfully converts Whitehall syntax to idiomatic Kotlin/Compose code.*
