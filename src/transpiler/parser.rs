@@ -800,6 +800,7 @@ impl Parser {
         Ok(children)
     }
 
+    #[allow(dead_code)]
     fn parse_text_with_interpolation_until(&mut self, delimiter: char) -> Result<Vec<Markup>, String> {
         let mut children = Vec::new();
         let mut current_text = String::new();
@@ -860,6 +861,7 @@ impl Parser {
         Ok(self.input[start..self.pos].to_string())
     }
 
+    #[allow(dead_code)]
     fn parse_text_until(&mut self, delimiter: char) -> Result<String, String> {
         let start = self.pos;
         while let Some(ch) = self.peek_char() {

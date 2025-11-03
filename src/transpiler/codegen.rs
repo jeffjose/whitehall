@@ -316,7 +316,7 @@ impl CodeGenerator {
                         output.push_str(&"  ".repeat(original_indent / 2));
                     }
 
-                    let mut transformed_line = line.trim_start().replace("$screen.params.", "");
+                    let transformed_line = line.trim_start().replace("$screen.params.", "");
                     if transformed_line.trim().starts_with("launch ") || transformed_line.trim().starts_with("launch{") {
                         output.push_str("coroutineScope.");
                         output.push_str(transformed_line.trim());
@@ -370,7 +370,7 @@ impl CodeGenerator {
                             output.push_str(&"  ".repeat(original_indent / 2));
                         }
 
-                        let mut transformed_line = line.trim_start().replace("$screen.params.", "");
+                        let transformed_line = line.trim_start().replace("$screen.params.", "");
                         if transformed_line.trim().starts_with("launch ") || transformed_line.trim().starts_with("launch{") {
                             output.push_str("coroutineScope.");
                             output.push_str(transformed_line.trim());
@@ -738,7 +738,7 @@ impl CodeGenerator {
                         let mut modifiers = Vec::new();
 
                         // Add size modifier if width/height present
-                        if let (Some(w), Some(h)) = (width, height) {
+                        if let (Some(w), Some(_h)) = (width, height) {
                             modifiers.push(format!(".size({}.dp)", w));
                         }
 
@@ -830,7 +830,7 @@ impl CodeGenerator {
                                 }
 
                                 // width/height → modifier = Modifier.size() (before contentScale)
-                                if let (Some(w), Some(h)) = (width, height) {
+                                if let (Some(w), Some(_h)) = (width, height) {
                                     params.push(format!("modifier = Modifier.size({}.dp)", w));
                                 }
 
@@ -848,7 +848,7 @@ impl CodeGenerator {
                                 }
 
                                 // width/height → modifier = Modifier.size() (simple case)
-                                if let (Some(w), Some(h)) = (width, height) {
+                                if let (Some(w), Some(_h)) = (width, height) {
                                     params.push(format!("modifier = Modifier.size({}.dp)", w));
                                 }
                             }
@@ -977,7 +977,7 @@ impl CodeGenerator {
             // $components -> com.example.app.components
             let rest = &path[1..]; // Remove $
             let base_package = self.package.rsplit('.').nth(1)
-                .and_then(|parent| self.package.strip_suffix(&format!(".{}", self.package.rsplit('.').next().unwrap_or(""))))
+                .and_then(|_parent| self.package.strip_suffix(&format!(".{}", self.package.rsplit('.').next().unwrap_or(""))))
                 .unwrap_or(&self.package);
 
             format!("{}.{}", base_package, rest.replace('.', "."))

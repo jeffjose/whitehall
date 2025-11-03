@@ -45,6 +45,7 @@ pub struct LifecycleHook {
 }
 
 #[derive(Debug, Clone, PartialEq)]
+#[allow(dead_code)] // Sequence variant reserved for future use
 pub enum Markup {
     Component(Component),
     Text(String),
