@@ -439,7 +439,13 @@ impl Parser {
         self.skip_whitespace();
 
         // Check if this is a boolean prop (no value, like <Column fill>)
-        let value = if self.peek_char() == Some('>') || self.peek_char() == Some('/') {
+        // Boolean props are followed by: >, /, or another identifier (another prop)
+        let next_char = self.peek_char();
+        let is_boolean_prop = next_char == Some('>')
+            || next_char == Some('/')
+            || (next_char.map_or(false, |c| c.is_alphabetic()));
+
+        let value = if is_boolean_prop && next_char != Some('=') {
             // Boolean prop without explicit value, treat as {true}
             PropValue::Expression("true".to_string())
         } else {
@@ -525,7 +531,10 @@ impl Parser {
                 // Parse closing tag
                 self.expect_char('<')?;
                 self.expect_char('/')?;
-                let closing_name = self.parse_identifier()?;
+                let closing_name = self.parse_identifier().map_err(|e| {
+                    let context = &self.input[self.pos..self.pos.saturating_add(20).min(self.input.len())];
+                    format!("Failed to parse closing tag name: {}. Context: {:?}", e, context)
+                })?;
                 self.expect_char('>')?;
 
                 if parent_name != closing_name {
@@ -540,8 +549,26 @@ impl Parser {
             let pos_before = self.pos;
 
             // Check for control flow (@if, @for, @when)
+            // But not @ in text content like "@username"
             if self.peek_char() == Some('@') {
-                children.push(self.parse_control_flow()?);
+                // Look ahead to see if this is a control flow keyword
+                let remaining = &self.input[self.pos..];
+                if remaining.starts_with("@if ")
+                    || remaining.starts_with("@for ")
+                    || remaining.starts_with("@when ")
+                {
+                    children.push(self.parse_control_flow()?);
+                } else {
+                    // @ in text content, parse as text
+                    let text_children = self.parse_text_with_interpolation_until_markup()?;
+                    if text_children.is_empty() && self.pos == pos_before {
+                        return Err(format!(
+                            "Failed to parse text starting with @ at position {}",
+                            self.pos
+                        ));
+                    }
+                    children.extend(text_children);
+                }
             }
             // Check for child component
             else if self.peek_char() == Some('<') {
@@ -803,8 +830,21 @@ impl Parser {
         let mut current_text = String::new();
 
         while let Some(ch) = self.peek_char() {
-            if ch == '<' || ch == '@' || ch == '}' {
+            // Stop at markup or control flow, but allow @ in text
+            if ch == '<' || ch == '}' {
                 break;
+            } else if ch == '@' {
+                // Check if this is a control flow keyword
+                let remaining = &self.input[self.pos..];
+                if remaining.starts_with("@if ")
+                    || remaining.starts_with("@for ")
+                    || remaining.starts_with("@when ")
+                {
+                    break;
+                }
+                // Otherwise, @ is part of text content
+                current_text.push(ch);
+                self.pos += 1;
             } else if ch == '{' {
                 // Save any accumulated text
                 if !current_text.is_empty() {
