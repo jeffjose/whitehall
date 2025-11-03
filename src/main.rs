@@ -19,7 +19,11 @@ enum Commands {
         name: String,
     },
     /// Build the project (transpile .wh files to Kotlin + generate Android project)
-    Build,
+    Build {
+        /// Path to whitehall.toml (defaults to ./whitehall.toml)
+        #[arg(long, default_value = "whitehall.toml")]
+        manifest_path: String,
+    },
 }
 
 fn main() -> Result<()> {
@@ -29,8 +33,8 @@ fn main() -> Result<()> {
         Commands::Init { name } => {
             commands::init::execute(&name)?;
         }
-        Commands::Build => {
-            commands::build::execute()?;
+        Commands::Build { manifest_path } => {
+            commands::build::execute(&manifest_path)?;
         }
     }
 
