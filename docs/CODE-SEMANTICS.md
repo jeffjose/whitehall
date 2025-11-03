@@ -1,10 +1,10 @@
 # Code Semantics & Optimization Architecture
 
-**Status**: ✅ Phase 0 Complete - Infrastructure Ready
+**Status**: ✅ Phase 0.5 Complete - View Backend Ready
 
 **Last Updated**: 2025-01-03
 
-**Current Progress**: Infrastructure plumbing complete, ready for incremental implementation
+**Current Progress**: View backend implemented, RecyclerView generator ready, starting Phases 1-5
 
 ---
 
@@ -33,15 +33,16 @@ val items = List(1000) { "Item $it" }
 
 ---
 
-## Current State: Phase 0 Complete ✅
+## Current State: Phase 0.5 Complete ✅
 
-### Updated Pipeline (v0.2 - Phase 0)
+### Updated Pipeline (v0.3 - Phase 0.5)
 
 ```
-.wh files → Parser → AST → Analyzer → SemanticInfo → Optimizer → OptimizedAST → CodeGen → .kt
-                              ↓                          ↓
-                        Symbol Table              (Empty optimizations)
-                        (Pass-through)            (Pass-through)
+.wh files → Parser → AST → Analyzer → SemanticInfo → Optimizer → OptimizedAST → CodeGen (Dual Backend) → .kt
+                              ↓                          ↓                            ↓
+                        Symbol Table              (Empty optimizations)      Compose Backend
+                        (Pass-through)            (Pass-through)             View Backend ✅
+                                                                              RecyclerView ✅
 ```
 
 **What exists:**
@@ -49,40 +50,52 @@ val items = List(1000) { "Item $it" }
 - ✅ AST: Structure representation
 - ✅ **Analyzer**: Symbol table collection (Phase 0: basic declarations only)
 - ✅ **Optimizer**: Optimization planning framework (Phase 0: no-op)
-- ✅ CodeGen: Direct translation to Kotlin/Compose (ignores optimizations for now)
+- ✅ **CodeGen (Dual Backend)**: Compose + View backends (Phase 0.5: ready for optimization)
+  - ✅ Compose Backend: Existing Jetpack Compose generation
+  - ✅ View Backend: Android View generation (8 components)
+  - ✅ RecyclerView Generator: RecyclerView + Adapter boilerplate
 
-**Phase 0 Status (Commit: 27400fd)**:
-- ✅ Infrastructure plumbing complete
+**Phase 0.5 Status (Commits: f72e8ab, 12b4fc1, 549d38c)**:
+- ✅ Refactored codegen into multi-backend architecture
+- ✅ Compose backend (renamed from codegen.rs, no logic changes)
+- ✅ View backend with 8 components (Card, Column, Row, Text, Button, TextField, Checkbox, Image)
+- ✅ RecyclerView generator with Adapter + ViewHolder boilerplate
 - ✅ All 23 transpiler tests pass
-- ✅ Zero regressions (generated Kotlin identical to before)
-- ✅ Analyzer collects props, state, functions into symbol table
-- ✅ Optimizer returns empty optimization list
-- ✅ CodeGen ignores optimizations (existing behavior preserved)
+- ✅ 11 unit tests (4 analyzer, 2 optimizer, 4 view, 3 recyclerview)
+- ✅ Zero regressions (Compose backend still default)
+- ✅ Documentation: docs/VIEW-BACKEND.md
 
 **What's next:**
-- ⏳ Usage tracking (where are variables accessed?)
-- ⏳ Mutation detection (what gets mutated?)
-- ⏳ Static collection detection (optimization opportunities)
-- ⏳ Optimization planning (decide what to optimize)
-- ⏳ RecyclerView generation (first actual optimization!)
+- ⏳ Phase 1: Usage tracking (where are variables accessed?)
+- ⏳ Phase 2: Static detection (optimization opportunities with confidence scoring)
+- ⏳ Phase 3: Hint generation (wire analyzer to optimizer)
+- ⏳ Phase 4: Optimization planning (decide what to optimize)
+- ⏳ Phase 5: RecyclerView integration (first actual optimization!)
 
 ### Current Transpiler Entry Point
 
 ```rust
-// src/transpiler/mod.rs
+// src/transpiler/mod.rs (Phase 0.5)
 pub fn transpile(
     input: &str,
     package: &str,
     component_name: &str,
     component_type: Option<&str>,
 ) -> Result<String, String> {
-    // Parse
+    // 1. Parse input to AST
     let mut parser = Parser::new(input);
     let ast = parser.parse()?;
 
-    // Generate (no analysis!)
+    // 2. Analyze: build semantic information (Phase 0: no-op pass-through)
+    let semantic_info = Analyzer::analyze(&ast)?;
+
+    // 3. Optimize: plan optimizations (Phase 0: no-op pass-through)
+    let optimized_ast = Optimizer::optimize(ast, semantic_info);
+
+    // 4. Generate Kotlin code (Phase 0.5: Dual backend, Compose default)
+    // Note: CodeGen currently ignores optimizations (Phase 0)
     let mut codegen = CodeGenerator::new(package, component_name, component_type);
-    codegen.generate(&ast)
+    codegen.generate(&optimized_ast.ast)
 }
 ```
 
@@ -1075,20 +1088,20 @@ Once infrastructure is in place, additional optimizations become easier:
   - Optimization hints framework with `OptimizationHint` enum
   - Declaration collection (props, state vars/vals, functions)
   - Stub methods ready for Phases 1-4 (`track_usage`, `infer_optimizations`, etc.)
-  - Unit tests (2 passing)
+  - Unit tests (4 passing)
 - ✅ `src/transpiler/optimizer.rs` (103 lines)
   - `OptimizedAST` wrapper with optimization metadata
   - `Optimization` enum (RecyclerView, TextView, Canvas variants)
   - Planning infrastructure ready for Phase 4
   - Unit tests (2 passing)
-- ✅ Updated `src/transpiler/mod.rs` (46 lines)
+- ✅ Updated `src/transpiler/mod.rs` (47 lines)
   - New pipeline: Parse → Analyze → Optimize → CodeGen
   - Clear phase progression comments
 - ✅ All 23 transpiler tests passing
 - ✅ Zero regressions, generated code identical to before
 
 **Documentation (475959b):**
-- ✅ `docs/CODE-SEMANTICS.md` (1112 lines)
+- ✅ `docs/CODE-SEMANTICS.md` (1200 lines)
   - Vision and architecture
   - Module designs with complete code examples
   - Phase-by-phase implementation plan
@@ -1106,33 +1119,61 @@ Once infrastructure is in place, additional optimizations become easier:
 - ✅ Testable format matching `tests/transpiler-examples/`
 - ✅ Both outputs always testable (not time-based)
 
-### ⏳ Next Steps
-
-**Phase 0.5: View Backend (Weeks 1-2)** - Build Android View generation (REQUIRED for RecyclerView)
-
-**Why needed**: RecyclerView needs Android Views, not Composables. See `docs/VIEW-BACKEND.md` for full architecture.
-
-1. Refactor `codegen.rs` into multi-backend architecture:
-   - Create `src/transpiler/codegen/` directory
-   - Move existing logic → `codegen/compose.rs`
-   - Create `codegen/mod.rs` with `Backend` trait
-   - Create `codegen/view.rs` for Android View generation
-2. Implement View backend:
-   - Card → MaterialCardView
-   - Column → LinearLayout(VERTICAL)
-   - Row → LinearLayout(HORIZONTAL)
-   - Text → TextView
-   - Button → Button
-3. Create `src/transpiler/recyclerview.rs`:
-   - RecyclerView wrapper generation
-   - Adapter class boilerplate
-   - ViewHolder creation
-4. Add unit tests for View backend
-5. **Still zero behavior changes** (not used yet)
-
-**Deliverables**: View backend functional, RecyclerView generator ready
-
 ---
+
+**Phase 0.5: View Backend (Commits: f72e8ab, 12b4fc1, 549d38c)** - 2025-01-03
+
+**Architecture (f72e8ab):**
+- ✅ Refactored `src/transpiler/codegen/` into multi-backend structure
+- ✅ `src/transpiler/codegen/mod.rs` (42 lines)
+  - CodeGenerator wrapper with backend routing
+  - Ready for backend selection based on optimizations
+- ✅ `src/transpiler/codegen/compose.rs` (renamed from codegen.rs)
+  - Existing Compose generation logic
+  - No behavior changes, all tests passing
+- ✅ `docs/VIEW-BACKEND.md` (806 lines)
+  - Complete architecture documentation
+  - Component mapping table
+  - Implementation strategy and challenges
+
+**View Backend (12b4fc1):**
+- ✅ `src/transpiler/codegen/view.rs` (600 lines)
+  - ViewBackend struct for Android View generation
+  - 8 components implemented:
+    - Card → MaterialCardView
+    - Column → LinearLayout(VERTICAL)
+    - Row → LinearLayout(HORIZONTAL)
+    - Text → TextView (fontSize, fontWeight, color)
+    - Button → Button (onClick, enabled)
+    - TextField → EditText (bind:value, placeholder)
+    - Checkbox → CheckBox (bind:checked, onChange)
+    - Image → ImageView
+  - Control flow support: @for, @if/@else, @when
+  - Automatic imports collection
+  - Unit tests (4 passing)
+
+**RecyclerView Generator (549d38c):**
+- ✅ `src/transpiler/recyclerview.rs` (283 lines)
+  - RecyclerViewGenerator for static list optimization
+  - Complete RecyclerView + Adapter boilerplate generation
+  - AndroidView wrapper for Compose interop
+  - ViewHolder pattern implementation
+  - Adapter class with getItemCount(), onCreateViewHolder(), onBindViewHolder()
+  - DP to PX conversion helper (dpToPx extension)
+  - Unit tests (3 passing)
+- ✅ Updated `src/transpiler/mod.rs` to expose recyclerview module
+
+**Testing:**
+- ✅ All 23 transpiler tests passing
+- ✅ 11 unit tests total (4 analyzer, 2 optimizer, 4 view, 3 recyclerview)
+- ✅ Zero regressions (Compose backend still default)
+
+**Deliverables:**
+- ✅ Dual backend architecture functional
+- ✅ View backend ready for optimization integration
+- ✅ RecyclerView generator ready for Phase 5
+
+### ⏳ Next Steps
 
 **Phase 1: Usage Tracking (Week 3)** - Enable variable access tracking
 1. Implement `Analyzer::track_usage()` to walk markup AST
