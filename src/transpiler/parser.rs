@@ -158,7 +158,7 @@ impl Parser {
                         break;
                     }
                 }
-                '=' | '\n' if paren_depth == 0 && angle_depth == 0 && bracket_depth == 0 => break,
+                '=' | '\n' | '{' if paren_depth == 0 && angle_depth == 0 && bracket_depth == 0 => break,
                 '-' if self.peek_ahead(1) == Some('>') => {
                     // -> is part of function type, continue parsing
                     self.pos += 2; // Skip ->
@@ -213,7 +213,7 @@ impl Parser {
     }
 
     fn parse_function_declaration(&mut self) -> Result<FunctionDeclaration, String> {
-        // Parse: fun name(params) { body }
+        // Parse: fun name(params): ReturnType { body } or fun name(params) { body }
         self.skip_whitespace();
         let name = self.parse_identifier()?;
         self.skip_whitespace();
@@ -229,6 +229,17 @@ impl Parser {
         }
         let params = self.input[param_start..self.pos].trim().to_string();
         self.expect_char(')')?;
+        self.skip_whitespace();
+
+        // Check for optional return type annotation
+        let return_type = if self.peek_char() == Some(':') {
+            self.expect_char(':')?;
+            self.skip_whitespace();
+            Some(self.parse_type()?)
+        } else {
+            None
+        };
+
         self.skip_whitespace();
 
         // Parse body (everything between { and })
@@ -261,6 +272,7 @@ impl Parser {
         Ok(FunctionDeclaration {
             name,
             params,
+            return_type,
             body: body.trim().to_string(),
         })
     }

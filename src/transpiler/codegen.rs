@@ -249,7 +249,12 @@ impl CodeGenerator {
             // Generate function declarations before lifecycle
             for func in &file.functions {
                 output.push_str(&self.indent());
-                output.push_str(&format!("fun {}({}) {{\n", func.name, func.params));
+                let return_type_str = if let Some(ref rt) = func.return_type {
+                    format!(": {}", rt)
+                } else {
+                    String::new()
+                };
+                output.push_str(&format!("fun {}({}){} {{\n", func.name, func.params, return_type_str));
                 // Output function body with proper indentation and transformations
                 for line in func.body.lines() {
                     output.push_str(&self.indent());
@@ -392,7 +397,12 @@ impl CodeGenerator {
         if !functions_first && !file.functions.is_empty() {
             for func in &file.functions {
                 output.push_str(&self.indent());
-                output.push_str(&format!("fun {}({}) {{\n", func.name, func.params));
+                let return_type_str = if let Some(ref rt) = func.return_type {
+                    format!(": {}", rt)
+                } else {
+                    String::new()
+                };
+                output.push_str(&format!("fun {}({}){} {{\n", func.name, func.params, return_type_str));
                 // Output function body with proper indentation and transformations
                 for line in func.body.lines() {
                     output.push_str(&self.indent());
