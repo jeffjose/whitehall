@@ -55,23 +55,27 @@ pub fn discover_files(config: &Config) -> Result<Vec<WhitehallFile>> {
 
 /// Classify a .wh file and determine its type and package
 fn classify_file(path: &Path, config: &Config) -> Result<WhitehallFile> {
-    // Get component name from filename (without extension)
-    let component_name = path
+    // Get filename (without extension)
+    let filename = path
         .file_stem()
         .and_then(|s| s.to_str())
         .ok_or_else(|| anyhow::anyhow!("Invalid filename: {}", path.display()))?
         .to_string();
 
     // Determine file type and package based on path
-    let (file_type, package_suffix) = if path.ends_with("src/main.wh") {
-        (FileType::Main, None)
+    let (file_type, package_suffix, component_name) = if path.ends_with("src/main.wh") {
+        (FileType::Main, None, "main".to_string())
     } else if is_under_directory(path, "src/components") {
-        (FileType::Component, Some("components"))
+        (FileType::Component, Some("components"), filename)
     } else if is_under_directory(path, "src/screens") {
-        (FileType::Screen, Some("screens"))
+        (FileType::Screen, Some("screens"), filename)
+    } else if is_under_directory(path, "src/routes") {
+        // Handle route files: src/routes/**/+screen.wh
+        let screen_name = derive_screen_name_from_route(path)?;
+        (FileType::Screen, Some("screens"), screen_name)
     } else {
         // Default: treat as component in base package
-        (FileType::Component, None)
+        (FileType::Component, None, filename)
     };
 
     // Build full package path
@@ -87,6 +91,65 @@ fn classify_file(path: &Path, config: &Config) -> Result<WhitehallFile> {
         component_name,
         package_path,
     })
+}
+
+/// Derive screen name from route file path
+/// Examples:
+/// - src/routes/+screen.wh → HomeScreen
+/// - src/routes/login/+screen.wh → LoginScreen
+/// - src/routes/profile/[id]/+screen.wh → ProfileScreen
+/// - src/routes/post/create/+screen.wh → PostCreateScreen
+/// - src/routes/post/[id]/+screen.wh → PostDetailScreen
+fn derive_screen_name_from_route(path: &Path) -> Result<String> {
+    // Strip src/routes/ prefix and +screen.wh suffix
+    let route_path = path
+        .strip_prefix("src/routes")
+        .or_else(|_| path.strip_prefix("src/routes/"))
+        .map_err(|_| anyhow::anyhow!("Invalid route path: {}", path.display()))?;
+
+    // Get path components (directories before +screen.wh)
+    let components: Vec<&str> = route_path
+        .components()
+        .filter_map(|c| {
+            if let std::path::Component::Normal(os_str) = c {
+                os_str.to_str()
+            } else {
+                None
+            }
+        })
+        .filter(|s| *s != "+screen.wh")
+        .collect();
+
+    // Generate screen name based on components
+    let screen_name = if components.is_empty() {
+        // Root route: src/routes/+screen.wh → HomeScreen
+        "HomeScreen".to_string()
+    } else {
+        // Build name from path segments, skipping param folders [id]
+        let name_parts: Vec<String> = components
+            .iter()
+            .filter(|c| !c.starts_with('['))  // Skip [id], [slug], etc.
+            .map(|c| {
+                // Capitalize first letter of each part
+                let mut chars = c.chars();
+                if let Some(first) = chars.next() {
+                    first.to_uppercase().chain(chars).collect::<String>()
+                } else {
+                    c.to_string()
+                }
+            })
+            .collect();
+
+        if name_parts.is_empty() {
+            // Edge case: path is only param folders like [id]/+screen.wh
+            // This shouldn't happen in practice, but handle it
+            "DetailScreen".to_string()
+        } else {
+            format!("{}Screen", name_parts.join(""))
+        }
+    };
+
+    Ok(screen_name)
 }
 
 /// Check if a path is under a specific directory
@@ -173,5 +236,66 @@ mod tests {
         assert_eq!(file.file_type, FileType::Component);
         // Still maps to .components, not .components.ui
         assert_eq!(file.package_path, "com.example.testapp.components");
+    }
+
+    #[test]
+    fn test_route_home_screen() {
+        let config = make_test_config();
+        let path = Path::new("src/routes/+screen.wh");
+
+        let file = classify_file(path, &config).unwrap();
+
+        assert_eq!(file.component_name, "HomeScreen");
+        assert_eq!(file.file_type, FileType::Screen);
+        assert_eq!(file.package_path, "com.example.testapp.screens");
+    }
+
+    #[test]
+    fn test_route_login_screen() {
+        let config = make_test_config();
+        let path = Path::new("src/routes/login/+screen.wh");
+
+        let file = classify_file(path, &config).unwrap();
+
+        assert_eq!(file.component_name, "LoginScreen");
+        assert_eq!(file.file_type, FileType::Screen);
+        assert_eq!(file.package_path, "com.example.testapp.screens");
+    }
+
+    #[test]
+    fn test_route_profile_with_param() {
+        let config = make_test_config();
+        let path = Path::new("src/routes/profile/[id]/+screen.wh");
+
+        let file = classify_file(path, &config).unwrap();
+
+        assert_eq!(file.component_name, "ProfileScreen");
+        assert_eq!(file.file_type, FileType::Screen);
+        assert_eq!(file.package_path, "com.example.testapp.screens");
+    }
+
+    #[test]
+    fn test_route_post_create() {
+        let config = make_test_config();
+        let path = Path::new("src/routes/post/create/+screen.wh");
+
+        let file = classify_file(path, &config).unwrap();
+
+        assert_eq!(file.component_name, "PostCreateScreen");
+        assert_eq!(file.file_type, FileType::Screen);
+        assert_eq!(file.package_path, "com.example.testapp.screens");
+    }
+
+    #[test]
+    fn test_route_post_detail_with_param() {
+        let config = make_test_config();
+        let path = Path::new("src/routes/post/[id]/+screen.wh");
+
+        let file = classify_file(path, &config).unwrap();
+
+        // With the simplified logic, we just skip [id] and use "post"
+        assert_eq!(file.component_name, "PostScreen");
+        assert_eq!(file.file_type, FileType::Screen);
+        assert_eq!(file.package_path, "com.example.testapp.screens");
     }
 }

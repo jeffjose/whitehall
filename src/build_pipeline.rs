@@ -5,6 +5,7 @@ use std::path::{Path, PathBuf};
 use crate::android_scaffold;
 use crate::config::Config;
 use crate::project::{discover_files, FileType, WhitehallFile};
+use crate::routes;
 use crate::transpiler;
 
 /// Represents the result of a build operation
@@ -65,7 +66,12 @@ pub fn execute_build(config: &Config, clean: bool) -> Result<BuildResult> {
         }
     }
 
-    // 5. Generate MainActivity if all files transpiled successfully
+    // 5. Generate Routes.kt from route structure
+    if errors.is_empty() {
+        generate_routes_file(config, output_dir)?;
+    }
+
+    // 6. Generate MainActivity if all files transpiled successfully
     if errors.is_empty() {
         generate_main_activity(config, output_dir, &files)?;
     }
@@ -224,6 +230,33 @@ class MainActivity : ComponentActivity() {{
 "#,
         config.android.package
     )
+}
+
+/// Generate Routes.kt file from route directory structure
+fn generate_routes_file(config: &Config, output_dir: &Path) -> Result<()> {
+    // Discover routes from src/routes/ directory
+    let discovered_routes = routes::discover_routes()?;
+
+    // If no routes found, skip generation
+    if discovered_routes.is_empty() {
+        return Ok(());
+    }
+
+    // Generate Routes.kt content
+    let routes_content = routes::generate_routes_kt(&discovered_routes, &config.android.package);
+
+    // Write to build/app/src/main/kotlin/{package}/routes/Routes.kt
+    let package_path = config.android.package.replace('.', "/");
+    let routes_dir = output_dir
+        .join("app/src/main/kotlin")
+        .join(package_path)
+        .join("routes");
+
+    fs::create_dir_all(&routes_dir)?;
+    let routes_file = routes_dir.join("Routes.kt");
+    fs::write(routes_file, routes_content)?;
+
+    Ok(())
 }
 
 #[cfg(test)]
