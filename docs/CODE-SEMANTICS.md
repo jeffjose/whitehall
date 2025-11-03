@@ -33,51 +33,57 @@ val items = List(1000) { "Item $it" }
 
 ---
 
-## Current State: Phase 1 Complete ✅
+## Current State: Phase 2 Complete ✅
 
-### Updated Pipeline (v0.4 - Phase 1)
+### Updated Pipeline (v0.5 - Phase 2)
 
 ```
 .wh files → Parser → AST → Analyzer → SemanticInfo → Optimizer → OptimizedAST → CodeGen (Dual Backend) → .kt
                               ↓                          ↓                            ↓
                         Symbol Table ✅           (Empty optimizations)      Compose Backend
                         Usage Tracking ✅         (Pass-through)             View Backend ✅
-                        Mutability Info                                      RecyclerView ✅
+                        Optimization Hints ✅                                RecyclerView ✅
 ```
 
 **What exists:**
 - ✅ Parser: Syntax analysis only
 - ✅ AST: Structure representation
-- ✅ **Analyzer**: Symbol table + usage tracking (Phase 1: records where variables accessed)
+- ✅ **Analyzer**: Symbol table + usage tracking + static detection (Phase 2: identifies optimization opportunities)
   - ✅ Symbol table with declaration collection
   - ✅ Usage tracking: access counts, contexts, usage flags
   - ✅ Expression parser for extracting variable names
-- ✅ **Optimizer**: Optimization planning framework (Phase 0: no-op)
+  - ✅ Static collection detection with confidence scoring (0-100)
+  - ✅ Optimization hints generation
+- ✅ **Optimizer**: Optimization planning framework (Phase 0-2: receives hints, no-op)
 - ✅ **CodeGen (Dual Backend)**: Compose + View backends (Phase 0.5: ready for optimization)
   - ✅ Compose Backend: Existing Jetpack Compose generation
   - ✅ View Backend: Android View generation (8 components)
   - ✅ RecyclerView Generator: RecyclerView + Adapter boilerplate
 
-**Phase 1 Status (Commit: 899c026)**:
-- ✅ UsageInfo struct: access_count, contexts, used_in_loops, used_in_conditions, used_in_keys
-- ✅ UsageContext enum: 7 context types for tracking variable access locations
-- ✅ track_usage() walks entire AST recording all variable accesses
-- ✅ record_expression_usage() parses expressions to extract variable names
-- ✅ Context tracking: maintains current_for_loop for loop body detection
-- ✅ 9 new comprehensive unit tests (interpolation, props, loops, conditions, etc.)
-- ✅ All 35 unit tests passing + 6 transpiler example tests
-- ✅ Zero regressions (no behavior changes)
+**Phase 2 Status (Commit: a66bf8f)**:
+- ✅ `infer_optimizations()` walks AST to find all @for loops (src/transpiler/analyzer.rs:512-519)
+- ✅ `collect_for_loop_hints()` recursively collects optimization hints (src/transpiler/analyzer.rs:522-580)
+- ✅ `check_static_collection()` applies confidence scoring heuristic (src/transpiler/analyzer.rs:592-626)
+- ✅ `has_event_handlers()` checks for onClick, bind:, etc. (src/transpiler/analyzer.rs:632-684)
+- ✅ Confidence scoring:
+  - val collection: +40 points
+  - Not mutated: +30 points
+  - Not a prop: +20 points
+  - No event handlers: +10 points
+  - Threshold: 50+ generates hint
+- ✅ 7 new comprehensive unit tests (high/medium confidence, props, handlers, threshold, multiple/nested loops)
+- ✅ All 42 unit tests passing + 6 transpiler example tests
+- ✅ Zero regressions (hints generated but not acted upon)
 
 **What's next:**
-- ⏳ Phase 2: Static detection (confidence scoring for optimization opportunities)
-- ⏳ Phase 3: Hint generation (wire analyzer to optimizer)
-- ⏳ Phase 4: Optimization planning (decide what to optimize based on threshold)
+- ⏳ Phase 3: Wire hints to optimizer (pass optimizations via SemanticInfo)
+- ⏳ Phase 4: Optimization planning (apply 80+ threshold, generate Optimization::UseRecyclerView)
 - ⏳ Phase 5: RecyclerView integration (first actual optimization!)
 
 ### Current Transpiler Entry Point
 
 ```rust
-// src/transpiler/mod.rs (Phase 1)
+// src/transpiler/mod.rs (Phase 2)
 pub fn transpile(
     input: &str,
     package: &str,
@@ -89,15 +95,18 @@ pub fn transpile(
     let ast = parser.parse()?;
 
     // 2. Analyze: build semantic information
-    //    - Phase 0: Collect declarations into symbol table
+    //    - Phase 0: Collect declarations into symbol table ✅
     //    - Phase 1: Track variable usage (where/how accessed) ✅
+    //    - Phase 2: Detect optimization opportunities (confidence scoring) ✅
     let semantic_info = Analyzer::analyze(&ast)?;
 
-    // 3. Optimize: plan optimizations (Phase 2+: not implemented yet)
+    // 3. Optimize: plan optimizations
+    //    - Phase 0-2: Receives hints but doesn't act (pass-through)
+    //    - Phase 3-4: Will consume hints and generate optimization plans
     let optimized_ast = Optimizer::optimize(ast, semantic_info);
 
     // 4. Generate Kotlin code (Phase 0.5: Dual backend, Compose default)
-    // Note: CodeGen currently ignores optimizations (Phase 0-1)
+    // Note: CodeGen currently ignores optimizations (Phase 0-2)
     let mut codegen = CodeGenerator::new(package, component_name, component_type);
     codegen.generate(&optimized_ast.ast)
 }
@@ -1218,19 +1227,59 @@ Once infrastructure is in place, additional optimizations become easier:
 - ✅ Complete usage tracking system functional
 - ✅ Ready for Phase 2 (static detection with confidence scoring)
 
-### ⏳ Next Steps
+---
 
-**Phase 2: Static Detection (Week 4)** - Identify optimization opportunities
-6. Implement `Analyzer::check_static_collection()` with confidence scoring
-7. Heuristics:
-   - `val` collection: +40 confidence
-   - Not mutated: +30 confidence
-   - Not a prop: +20 confidence
-   - No event handlers: +10 confidence
-8. Generate `OptimizationHint::StaticCollection` for high-confidence cases
-9. Add unit tests matching `tests/optimization-examples/`
-10. Log hints (don't act on them yet)
-11. Still zero behavior changes
+**Phase 2: Static Detection (Commit: a66bf8f)** - 2025-01-03
+
+**Implementation:**
+- ✅ `infer_optimizations()` (src/transpiler/analyzer.rs:512-519)
+  - Walks AST to find all @for loops
+  - Entry point for optimization opportunity detection
+- ✅ `collect_for_loop_hints()` (src/transpiler/analyzer.rs:522-580)
+  - Recursively collects hints from for loops
+  - Handles nested loops, components, if/else, when, sequences
+- ✅ `check_static_collection()` (src/transpiler/analyzer.rs:592-626)
+  - Applies confidence scoring heuristic
+  - Returns OptimizationHint if confidence >= 50
+- ✅ `has_event_handlers()` (src/transpiler/analyzer.rs:632-684)
+  - Checks for onClick, bind:, etc.
+  - Recursively scans all markup in loop body
+
+**Confidence Scoring Heuristic:**
+- ✅ val collection: +40 points
+- ✅ Not mutated: +30 points
+- ✅ Not a prop (StateVal/StateVar): +20 points
+- ✅ No event handlers: +10 points
+- ✅ Threshold: 50+ generates hint (Phase 2), 80+ will optimize (Phase 4)
+- ✅ Total possible: 0-100
+
+**Testing:**
+- ✅ 7 new comprehensive unit tests
+  - High confidence (100): val, not mutated, not prop, no handlers
+  - Medium confidence (60): var collection
+  - Prop collection (80): props get lower confidence
+  - Event handlers (90): interactive content penalty
+  - Threshold test (50): exactly at threshold
+  - Multiple loops: detects all independently
+  - Nested loops: recursive detection
+- ✅ All 42 unit tests passing
+- ✅ All 6 transpiler example tests passing
+- ✅ Zero regressions
+
+**Examples Validated:**
+- tests/optimization-examples/01-static-list-optimization.md
+  - Confidence: 100 (val, not mutated, not prop, no handlers)
+  - Will optimize in Phase 5
+- tests/optimization-examples/02-dynamic-list-no-optimization.md
+  - Confidence: 50 (var with handlers)
+  - Will not optimize in Phase 5 (below 80 threshold)
+
+**Deliverables:**
+- ✅ Static detection system fully functional
+- ✅ Optimization hints generated and stored in SemanticInfo
+- ✅ Ready for Phase 3 (wire hints to optimizer)
+
+### ⏳ Next Steps
 
 **Phase 3: Hint Generation (Week 5)** - Wire analyzer to optimizer
 12. Enable `infer_optimizations()` in analyzer
