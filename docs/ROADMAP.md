@@ -14,6 +14,70 @@
 
 **Success metric:** ✓ Can run `whitehall init my-app` and get a valid project structure
 
+**Future enhancements (Phase 0.5 - Project Scaffolding):**
+
+### `whitehall create` - Interactive Project Creation
+Inspired by `npm create svelte` and `cargo init` workflows:
+
+```bash
+whitehall create my-app
+# Interactive prompts:
+# → What type of app? (Basic / With routing / Full-featured)
+# → Package name? (com.example.myapp)
+# → Initialize git? (Yes / No)
+# → Template? (Counter / Todo / Blog / Blank)
+```
+
+**Features:**
+- [ ] Interactive CLI with `inquire` or `dialoguer` crate
+- [ ] Project type selection:
+  - **Basic**: Single screen, no routing
+  - **Routing**: Multi-screen with file-based routing
+  - **Full-featured**: Routing + API client + state management
+- [ ] Template selection from built-in and community templates
+- [ ] Package name validation (Android rules)
+- [ ] Git initialization option
+- [ ] Prettier output with progress indicators
+
+### Template Repository System
+Separate `whitehall-templates` repository (like `cargo-generate`):
+
+**Built-in templates:**
+```
+whitehall-templates/
+├── counter/           # Minimal counter app
+├── todo/              # Todo list with state
+├── blog/              # Multi-screen blog reader
+├── ecommerce/         # Full e-commerce example
+└── social-media/      # Social app with routing + API
+```
+
+**Usage:**
+```bash
+# Use built-in template
+whitehall init my-app --template counter
+
+# Use GitHub template (without git history)
+whitehall init my-app --template github:user/repo
+
+# Use local template
+whitehall init my-app --template ./path/to/template
+```
+
+**Implementation:**
+- [ ] Template cloning (without `.git` directory)
+- [ ] Variable substitution in templates (`{{package_name}}`, `{{app_name}}`)
+- [ ] Community template registry (JSON manifest)
+- [ ] Template validation and caching
+- [ ] `whitehall template list` - Show available templates
+- [ ] `whitehall template add <url>` - Add community template
+
+**Benefits:**
+- Templates separate from core Whitehall code
+- Easy community contributions
+- Real-world example projects
+- Faster project setup with best practices
+
 ---
 
 ## Phase 1: Validation (✓ Completed - v0.1)
@@ -133,9 +197,143 @@
 
 - [ ] `whitehall build --release` - Optimized builds
 - [ ] ProGuard/R8 integration
-- [ ] Code signing
+- [ ] Code signing configuration
 - [ ] `whitehall test` - Testing framework
 - [ ] CI/CD examples
+- [ ] `whitehall clean` - Clean build artifacts
+
+---
+
+## Phase 7: Distribution & Publishing (v0.7)
+**Goal: Seamless app distribution**
+
+### `whitehall publish` - Publish to Play Store
+One-command publishing to Google Play Store:
+
+```bash
+# First time setup
+whitehall publish --setup
+# → Configure Play Console API credentials
+# → Set up signing keys
+# → Configure tracks (internal/alpha/beta/production)
+
+# Publish to internal testing
+whitehall publish --track internal
+
+# Publish to production with rollout
+whitehall publish --track production --rollout 10%
+
+# Full release with release notes
+whitehall publish --track production --notes "Bug fixes and improvements"
+```
+
+**Features:**
+- [ ] App bundle (.aab) generation for optimal size
+- [ ] Play Console API integration (Google Play Developer API)
+- [ ] Automated screenshot upload from `screenshots/` directory
+- [ ] Release notes from `CHANGELOG.md` or git commits
+- [ ] Version bump automation (`whitehall.toml` version field)
+- [ ] Multi-track support:
+  - **Internal**: Quick testing with internal testers
+  - **Alpha**: Early access testing
+  - **Beta**: Public beta testing
+  - **Production**: Full release
+- [ ] Rollout percentage control (gradual rollouts)
+- [ ] Previous version rollback support
+- [ ] Status checks before publishing (tests, signing, etc.)
+
+**Configuration (`whitehall.toml`):**
+```toml
+[publish]
+play_console_credentials = ".secrets/play-console.json"
+track = "internal"  # Default track
+rollout_percentage = 100
+
+[publish.release_notes]
+from = "CHANGELOG.md"  # Or "git" for commit messages
+language = "en-US"
+```
+
+### `whitehall push` - Cloud Build Integration
+Push code to remote build systems that build and distribute:
+
+```bash
+# Setup CI/CD integration
+whitehall push --setup
+# → Choose platform (GitHub Actions / GitLab CI / Bitrise / Custom)
+# → Configure secrets (signing keys, API tokens)
+# → Generate workflow files
+
+# Push and trigger build
+whitehall push
+
+# Push to specific branch/environment
+whitehall push --branch staging
+whitehall push --env production
+
+# Watch build status
+whitehall push --watch
+```
+
+**Supported platforms:**
+- [ ] **GitHub Actions**: `.github/workflows/whitehall.yml` generation
+- [ ] **GitLab CI**: `.gitlab-ci.yml` generation
+- [ ] **Bitrise**: `bitrise.yml` generation
+- [ ] **Custom**: Webhook to custom build server
+
+**Features:**
+- [ ] Automatic workflow file generation
+- [ ] Secure secrets management
+- [ ] Build status notifications (Slack, Discord, Email)
+- [ ] Artifact storage (APK/AAB upload to cloud storage)
+- [ ] Automatic distribution after successful build
+- [ ] Build caching for faster CI/CD
+- [ ] Multi-environment support (dev, staging, prod)
+- [ ] Parallel builds for multiple architectures
+- [ ] Build logs streaming
+
+**Example GitHub Actions workflow (auto-generated):**
+```yaml
+name: Whitehall Build
+on:
+  push:
+    branches: [main]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: whitehall-lang/setup@v1
+      - run: whitehall build --release
+      - run: whitehall publish --track internal
+```
+
+### Additional Distribution
+- [ ] **Firebase App Distribution**: Beta testing distribution
+  ```bash
+  whitehall distribute firebase --groups "qa-team,beta-users"
+  ```
+- [ ] **App Center**: Microsoft App Center integration
+- [ ] **Direct APK distribution**: Self-hosted download links
+  ```bash
+  whitehall build --release --output my-app.apk
+  whitehall distribute s3 --bucket my-apps
+  # Generates: https://my-apps.s3.amazonaws.com/my-app.apk
+  ```
+- [ ] **QR code generation**: Instant download QR codes
+  ```bash
+  whitehall distribute qr --output install-qr.png
+  ```
+
+**Success metric:** Can publish app to Play Store with one command
+
+**Priority**: Low (after core features stable and tested)
+
+**Inspiration**:
+- Flutter's `flutter pub publish`
+- Fastlane for iOS/Android
+- Expo's `eas submit`
 
 ---
 
@@ -145,3 +343,4 @@
 - Component marketplace
 - Visual tooling
 - Multi-platform support (iOS?)
+- Desktop app generation (Compose Desktop)
