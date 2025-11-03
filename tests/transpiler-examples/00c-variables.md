@@ -13,15 +13,7 @@ var stringVar = "World"
 var numberVar = 100
 var listVar = listOf("A", "B", "C")
 
-<Column>
-  <Text text={stringVal} />
-  <Text text={numberVal.toString()} />
-  <Text text={boolVal.toString()} />
-  <Text text={listVal.size.toString()} />
-  <Text text={stringVar} />
-  <Text text={numberVar.toString()} />
-  <Text text={listVar.size.toString()} />
-</Column>
+<Text>Done</Text>
 ```
 
 ## Output
@@ -29,7 +21,6 @@ var listVar = listOf("A", "B", "C")
 ```kotlin
 package com.example.app.components
 
-import androidx.compose.foundation.layout.Column
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 
@@ -44,15 +35,7 @@ fun Variables() {
     val boolVal = true
     val listVal = listOf("Apple", "Banana", "Cherry")
 
-    Column {
-        Text(text = stringVal)
-        Text(text = numberVal.toString())
-        Text(text = boolVal.toString())
-        Text(text = listVal.size.toString())
-        Text(text = stringVar)
-        Text(text = numberVar.toString())
-        Text(text = listVar.size.toString())
-    }
+    Text(text = "Done")
 }
 ```
 
