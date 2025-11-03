@@ -33,15 +33,15 @@ val items = List(1000) { "Item $it" }
 
 ---
 
-## Current State: Phase 2 Complete ✅
+## Current State: Phase 4 Complete ✅
 
-### Updated Pipeline (v0.5 - Phase 2)
+### Updated Pipeline (v0.6 - Phase 4)
 
 ```
 .wh files → Parser → AST → Analyzer → SemanticInfo → Optimizer → OptimizedAST → CodeGen (Dual Backend) → .kt
                               ↓                          ↓                            ↓
-                        Symbol Table ✅           (Empty optimizations)      Compose Backend
-                        Usage Tracking ✅         (Pass-through)             View Backend ✅
+                        Symbol Table ✅           Optimization Plans ✅      Compose Backend (default)
+                        Usage Tracking ✅         (80+ confidence)           View Backend ✅
                         Optimization Hints ✅                                RecyclerView ✅
 ```
 
@@ -54,9 +54,13 @@ val items = List(1000) { "Item $it" }
   - ✅ Expression parser for extracting variable names
   - ✅ Static collection detection with confidence scoring (0-100)
   - ✅ Optimization hints generation
-- ✅ **Optimizer**: Optimization planning framework (Phase 0-2: receives hints, no-op)
-- ✅ **CodeGen (Dual Backend)**: Compose + View backends (Phase 0.5: ready for optimization)
-  - ✅ Compose Backend: Existing Jetpack Compose generation
+- ✅ **Optimizer**: Optimization planning (Phase 3-4: consumes hints, generates plans)
+  - ✅ Receives hints via SemanticInfo (Phase 3)
+  - ✅ Applies 80+ confidence threshold (Phase 4)
+  - ✅ Generates Optimization::UseRecyclerView for qualifying loops
+  - ✅ Filters out low-confidence cases
+- ✅ **CodeGen (Dual Backend)**: Compose + View backends (Phase 0-4: ignores optimizations)
+  - ✅ Compose Backend: Existing Jetpack Compose generation (default)
   - ✅ View Backend: Android View generation (8 components)
   - ✅ RecyclerView Generator: RecyclerView + Adapter boilerplate
 
@@ -75,15 +79,28 @@ val items = List(1000) { "Item $it" }
 - ✅ All 42 unit tests passing + 6 transpiler example tests
 - ✅ Zero regressions (hints generated but not acted upon)
 
+**Phase 3-4 Status (Commit: b24ae15)**:
+- ✅ Optimizer receives hints via SemanticInfo.optimization_hints (Phase 3)
+- ✅ `plan_optimizations()` consumes hints and applies threshold (Phase 4)
+- ✅ 80+ confidence threshold with detailed filtering logic
+- ✅ Generates `Optimization::UseRecyclerView` for qualifying loops
+- ✅ Threshold logic:
+  - val + not mutated + not prop + no handlers = 100 ✅ (optimizes)
+  - val + not mutated + not prop + handlers = 90 ✅ (optimizes)
+  - val + not mutated + prop + no handlers = 80 ✅ (optimizes)
+  - var + not mutated + not prop + no handlers = 60 ❌ (rejected)
+  - var + not mutated + not prop + handlers = 50 ❌ (rejected)
+- ✅ 6 new comprehensive unit tests (accepts/rejects thresholds, multiple hints, edge cases)
+- ✅ All 48 unit tests passing + 6 transpiler example tests
+- ✅ Zero regressions (optimizations generated but not acted upon)
+
 **What's next:**
-- ⏳ Phase 3: Wire hints to optimizer (pass optimizations via SemanticInfo)
-- ⏳ Phase 4: Optimization planning (apply 80+ threshold, generate Optimization::UseRecyclerView)
-- ⏳ Phase 5: RecyclerView integration (first actual optimization!)
+- ⏳ Phase 5: RecyclerView integration (consume optimization plans in CodeGen, first actual behavior change!)
 
 ### Current Transpiler Entry Point
 
 ```rust
-// src/transpiler/mod.rs (Phase 2)
+// src/transpiler/mod.rs (Phase 4)
 pub fn transpile(
     input: &str,
     package: &str,
@@ -101,12 +118,13 @@ pub fn transpile(
     let semantic_info = Analyzer::analyze(&ast)?;
 
     // 3. Optimize: plan optimizations
-    //    - Phase 0-2: Receives hints but doesn't act (pass-through)
-    //    - Phase 3-4: Will consume hints and generate optimization plans
+    //    - Phase 3: Receive hints via SemanticInfo ✅
+    //    - Phase 4: Consume hints, apply 80+ threshold, generate plans ✅
     let optimized_ast = Optimizer::optimize(ast, semantic_info);
 
     // 4. Generate Kotlin code (Phase 0.5: Dual backend, Compose default)
-    // Note: CodeGen currently ignores optimizations (Phase 0-2)
+    // Note: CodeGen currently ignores optimizations (Phase 0-4)
+    // Phase 5: Will consume optimizations and generate RecyclerView code
     let mut codegen = CodeGenerator::new(package, component_name, component_type);
     codegen.generate(&optimized_ast.ast)
 }
@@ -1279,24 +1297,57 @@ Once infrastructure is in place, additional optimizations become easier:
 - ✅ Optimization hints generated and stored in SemanticInfo
 - ✅ Ready for Phase 3 (wire hints to optimizer)
 
+---
+
+**Phase 3-4: Optimization Planning (Commit: b24ae15)** - 2025-01-03
+
+**Phase 3 - Hint Passing:**
+- ✅ Optimizer receives hints via `SemanticInfo.optimization_hints`
+- ✅ No code changes needed - infrastructure already in place
+- ✅ Hints flow from Analyzer through `Optimizer::optimize()` method
+
+**Phase 4 - Planning:**
+- ✅ `plan_optimizations()` (src/transpiler/optimizer.rs:69-90)
+  - Consumes hints and applies 80+ confidence threshold
+  - Generates `Optimization::UseRecyclerView` for qualifying loops
+  - Filters out low-confidence cases
+- ✅ Detailed threshold logic with score combinations
+- ✅ Comments explain which combinations pass/fail
+
+**Threshold Decision Matrix (>= 80):**
+- ✅ 100: val + not mutated + not prop + no handlers → Optimizes
+- ✅ 90: val + not mutated + not prop + handlers → Optimizes
+- ✅ 80: val + not mutated + prop + no handlers → Optimizes
+- ❌ 70: val + not mutated + prop + handlers → Rejected
+- ❌ 60: var + not mutated + not prop + no handlers → Rejected
+- ❌ 50: var + not mutated + not prop + handlers → Rejected
+
+**Testing:**
+- ✅ 6 new comprehensive unit tests
+  - test_optimizer_accepts_high_confidence_hint (100)
+  - test_optimizer_accepts_threshold_confidence (80)
+  - test_optimizer_rejects_medium_confidence (60)
+  - test_optimizer_rejects_low_confidence (50)
+  - test_optimizer_handles_multiple_hints (filters correctly)
+  - test_optimizer_edge_case_confidence_79 (just below threshold)
+- ✅ All 48 unit tests passing
+- ✅ All 6 transpiler example tests passing
+- ✅ Zero regressions
+
+**Examples Validated:**
+- tests/optimization-examples/01-static-list-optimization.md
+  - Confidence: 100 → Generates `Optimization::UseRecyclerView`
+  - Will generate RecyclerView in Phase 5
+- tests/optimization-examples/02-dynamic-list-no-optimization.md
+  - Confidence: 50 → No optimization (< 80 threshold)
+  - Will stay Compose in Phase 5 (correct!)
+
+**Deliverables:**
+- ✅ Optimization planning system fully functional
+- ✅ Optimizations generated and stored in OptimizedAST
+- ✅ Ready for Phase 5 (CodeGen integration)
+
 ### ⏳ Next Steps
-
-**Phase 3: Hint Generation (Week 5)** - Wire analyzer to optimizer
-12. Enable `infer_optimizations()` in analyzer
-13. Pass hints to optimizer via `SemanticInfo`
-14. Add debug logging showing detection decisions
-15. Validate against example 01 (should detect static, confidence 100)
-16. Validate against example 02 (should not detect, confidence 0)
-17. Still zero behavior changes (optimizer ignores hints)
-
-**Phase 4: Optimization Planning (Week 6)** - Plan which optimizations to apply
-18. Implement `Optimizer::plan_optimizations()` to consume hints
-19. Apply threshold: only optimize if confidence >= 80
-20. Generate `Optimization::UseRecyclerView` for qualifying loops
-21. Pass optimizations to CodeGen via `OptimizedAST`
-22. CodeGen logs but ignores optimizations
-23. Add unit tests for planning logic
-24. Still zero behavior changes (CodeGen not updated yet)
 
 **Phase 5: RecyclerView Integration (Weeks 7-8)** - First actual optimization! 🎉
 25. Update `CodeGenerator` to consume optimization metadata
