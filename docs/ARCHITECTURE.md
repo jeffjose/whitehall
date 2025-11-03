@@ -34,9 +34,11 @@
 
 ### 3. Execution Modes: Single-File vs Project
 
-Whitehall supports two distinct execution modes, inspired by the `rustc` vs `cargo` distinction:
+**Status**: Currently implementing project mode only. Single-file mode is planned for future.
 
-#### Single-File Mode
+Whitehall will eventually support two distinct execution modes, inspired by the `rustc` vs `cargo` distinction:
+
+#### Single-File Mode (🔜 Future)
 
 For learning, prototyping, and sharing. A complete Android app in one `.wh` file.
 
@@ -64,11 +66,11 @@ component App()
 
 **Usage:**
 ```bash
-whitehall run counter.wh        # Compile & run
-whitehall build counter.wh      # Build APK
+whitehall run counter.wh        # Compile & run (future)
+whitehall build counter.wh      # Build APK (future)
 ```
 
-**How it works:**
+**Planned implementation:**
 1. Parse TOML frontmatter (lines starting with `///`)
 2. Extract app config and dependencies
 3. Generate temporary project structure in `.whitehall/tmp/<hash>/`
@@ -77,32 +79,22 @@ whitehall build counter.wh      # Build APK
 6. Cache builds for fast re-runs
 7. Clean up on completion (keep cache)
 
-**Frontmatter format (uv-style):**
-- Lines starting with `///` are frontmatter
-- Must be at the top of the file
-- TOML format: `/// key = "value"`
-- Supports `[app]` and `[dependencies]` sections
-
-#### Project Mode
+#### Project Mode (🔄 Current Focus)
 
 For production apps with multiple screens, shared components, and team development.
 
 **Usage:**
 ```bash
-whitehall init my-app           # Create project
+whitehall init my-app           # ✅ Implemented
 cd my-app
-whitehall run                   # Build & run
+whitehall build                 # 🔄 In progress (see docs/BUILD.md)
+whitehall watch                 # 🔄 In progress
+whitehall run                   # 🔄 In progress
 ```
 
 **When to use each:**
-- **Single-file:** Tutorials, examples, quick experiments, sharing code snippets
-- **Project:** Real apps, multiple screens, shared state, team collaboration
-
-**Transition path:**
-```bash
-whitehall split counter.wh      # Convert to project
-# Creates counter/ directory with proper structure
-```
+- **Single-file (future):** Tutorials, examples, quick experiments, sharing code snippets
+- **Project (current):** All development (this is what we're building first)
 
 ### 4. Project Structure
 
@@ -143,7 +135,7 @@ my-app/
 
 ### 6. The .whitehall File Format
 
-**Current syntax** (see `docs/syntax/` for full specification):
+**Current syntax** (see `docs/TRANSPILER.md` for full specification and test examples in `tests/transpiler-examples/`):
 
 **LoginScreen.wh:**
 ```whitehall
@@ -181,12 +173,13 @@ my-app/
 
 **Key features:**
 - Markup-based UI (inspired by Svelte)
-- `<script>` section for logic
+- No `<script>` section - Kotlin code at top, markup below
 - `@prop val` for component props (Kotlin-native)
 - `var`/`val` for state (Kotlin keywords)
 - Filename determines component name
+- Full feature set: control flow (`@if`, `@for`, `@when`), data binding (`bind:value`), lifecycle hooks (`onMount`, `onDispose`)
 
-This transpiles to idiomatic Kotlin with Jetpack Compose.
+This transpiles to idiomatic Kotlin with Jetpack Compose. See `docs/TRANSPILER.md` for complete feature list and examples.
 
 ### 7. Scaling Considerations
 
