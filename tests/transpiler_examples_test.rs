@@ -238,7 +238,7 @@ mod tests {
                 filename
             );
 
-            println!("✓ Parsed {}: {} (file: {}, package: {})",
+            println!("[PASS] Parsed {}: {} (file: {}, package: {})",
                 filename,
                 test.name,
                 test.metadata.file,
@@ -253,6 +253,7 @@ mod tests {
 
         let test_files = load_test_files();
         let mut failures = Vec::new();
+        let total_tests = test_files.len();
 
         for (filename, content) in test_files {
             let test = parse_test_file(&content, &filename).expect("Failed to parse test file");
@@ -277,7 +278,7 @@ mod tests {
                         eprintln!("=========================\n");
                         failures.push(filename.clone());
                     } else {
-                        eprintln!("✓ {}", filename);
+                        eprintln!("[PASS] {}", filename);
                     }
                 }
                 Err(e) => {
@@ -289,6 +290,9 @@ mod tests {
                 }
             }
         }
+
+        let passed = total_tests - failures.len();
+        eprintln!("\n{}/{} tests passed", passed, total_tests);
 
         if !failures.is_empty() {
             eprintln!("\n");

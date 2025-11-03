@@ -1,0 +1,144 @@
+use anyhow::{Context, Result};
+use serde::Deserialize;
+use std::fs;
+
+#[derive(Debug, Deserialize)]
+pub struct Config {
+    pub project: ProjectConfig,
+    pub android: AndroidConfig,
+    #[serde(default)]
+    pub build: BuildConfig,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct ProjectConfig {
+    pub name: String,
+    pub version: String,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct AndroidConfig {
+    pub min_sdk: u32,
+    pub target_sdk: u32,
+    pub package: String,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct BuildConfig {
+    #[serde(default = "default_output_dir")]
+    pub output_dir: String,
+    #[serde(default = "default_optimize_level")]
+    pub optimize_level: String,
+}
+
+impl Default for BuildConfig {
+    fn default() -> Self {
+        Self {
+            output_dir: default_output_dir(),
+            optimize_level: default_optimize_level(),
+        }
+    }
+}
+
+fn default_output_dir() -> String {
+    "build".to_string()
+}
+
+fn default_optimize_level() -> String {
+    "default".to_string()
+}
+
+/// Load and parse whitehall.toml configuration file
+pub fn load_config(path: &str) -> Result<Config> {
+    let content = fs::read_to_string(path)
+        .context(format!("Failed to read {}", path))?;
+
+    let config: Config = toml::from_str(&content)
+        .context(format!("Failed to parse {}", path))?;
+
+    // Validate Android package name
+    validate_package_name(&config.android.package)?;
+
+    Ok(config)
+}
+
+/// Validate Android package name format
+fn validate_package_name(package: &str) -> Result<()> {
+    // Must have at least two parts (e.g., com.example)
+    let parts: Vec<&str> = package.split('.').collect();
+    if parts.len() < 2 {
+        anyhow::bail!(
+            "Invalid Android package name '{}'. Must have at least two parts (e.g., 'com.example')",
+            package
+        );
+    }
+
+    // Each part must start with lowercase letter and contain only lowercase, digits, underscores
+    for (i, part) in parts.iter().enumerate() {
+        if part.is_empty() {
+            anyhow::bail!(
+                "Invalid Android package name '{}'. Part {} is empty",
+                package,
+                i + 1
+            );
+        }
+
+        let first_char = part.chars().next().unwrap();
+        if !first_char.is_ascii_lowercase() {
+            anyhow::bail!(
+                "Invalid Android package name '{}'. Part '{}' must start with a lowercase letter",
+                package,
+                part
+            );
+        }
+
+        for ch in part.chars() {
+            if !ch.is_ascii_lowercase() && !ch.is_ascii_digit() && ch != '_' {
+                anyhow::bail!(
+                    "Invalid Android package name '{}'. Part '{}' contains invalid character '{}'",
+                    package,
+                    part,
+                    ch
+                );
+            }
+        }
+    }
+
+    Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_validate_package_name_valid() {
+        assert!(validate_package_name("com.example.app").is_ok());
+        assert!(validate_package_name("com.example.my_app").is_ok());
+        assert!(validate_package_name("com.example.app123").is_ok());
+    }
+
+    #[test]
+    fn test_validate_package_name_invalid() {
+        // Too few parts
+        assert!(validate_package_name("com").is_err());
+
+        // Starts with uppercase
+        assert!(validate_package_name("Com.example.app").is_err());
+        assert!(validate_package_name("com.Example.app").is_err());
+
+        // Contains invalid characters
+        assert!(validate_package_name("com.example.my-app").is_err());
+        assert!(validate_package_name("com.example.my app").is_err());
+
+        // Empty part
+        assert!(validate_package_name("com..app").is_err());
+    }
+
+    #[test]
+    fn test_default_build_config() {
+        let config = BuildConfig::default();
+        assert_eq!(config.output_dir, "build");
+        assert_eq!(config.optimize_level, "default");
+    }
+}
