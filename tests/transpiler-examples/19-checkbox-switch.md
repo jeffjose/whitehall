@@ -62,8 +62,8 @@ fun SettingsForm() {
 
     fun handleSubmit() {
         if (acceptTerms) {
-            // Submit logic
-        }
+              // Submit logic
+            }
     }
 
     Column(
@@ -78,7 +78,6 @@ fun SettingsForm() {
             )
             Text(text = "Enable feature")
         }
-
         Row(
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
@@ -86,9 +85,10 @@ fun SettingsForm() {
                 checked = acceptTerms,
                 onCheckedChange = { acceptTerms = it }
             )
-            Text(text = "I accept the terms and conditions")
+            Text(
+                text = "I accept the terms and conditions"
+            )
         }
-
         Row(
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
@@ -98,12 +98,11 @@ fun SettingsForm() {
                 onCheckedChange = { notifications = it }
             )
         }
-
         Button(
             onClick = { handleSubmit() },
             enabled = acceptTerms
         ) {
-            Text(text = "Submit")
+            Text("Submit")
         }
     }
 }

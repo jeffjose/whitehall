@@ -1133,6 +1133,18 @@ impl CodeGenerator {
                             component_imports.push(import);
                         }
                     }
+                    "Checkbox" => {
+                        let import = "androidx.compose.material3.Checkbox".to_string();
+                        if !component_imports.contains(&import) {
+                            component_imports.push(import);
+                        }
+                    }
+                    "Switch" => {
+                        let import = "androidx.compose.material3.Switch".to_string();
+                        if !component_imports.contains(&import) {
+                            component_imports.push(import);
+                        }
+                    }
                     "Scaffold" => {
                         let import = "androidx.compose.material3.Scaffold".to_string();
                         if !component_imports.contains(&import) {
@@ -1360,6 +1372,15 @@ impl CodeGenerator {
             return vec![
                 format!("value = {}", var_name),
                 format!("onValueChange = {{ {} = it }}", var_name),
+            ];
+        }
+
+        // Handle bind:checked special syntax (for Checkbox, Switch)
+        if prop_name == "bind:checked" {
+            let var_name = prop_value.trim();
+            return vec![
+                format!("checked = {}", var_name),
+                format!("onCheckedChange = {{ {} = it }}", var_name),
             ];
         }
 
