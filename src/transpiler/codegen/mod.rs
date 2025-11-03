@@ -3,13 +3,15 @@
 /// Supports multiple backends:
 /// - Compose: Generate Jetpack Compose code (default)
 /// - View: Generate Android View code (for RecyclerView optimization)
+///
+/// Phase 5: Consumes optimization plans and routes to appropriate backend
 
 pub mod compose;
 pub mod view;
 
-use crate::transpiler::ast::WhitehallFile;
+use crate::transpiler::optimizer::OptimizedAST;
 
-/// Main code generator - uses Compose backend by default
+/// Main code generator - routes to backends based on optimizations
 pub struct CodeGenerator {
     package: String,
     component_name: String,
@@ -17,7 +19,7 @@ pub struct CodeGenerator {
 }
 
 impl CodeGenerator {
-    /// Create generator with Compose backend (default)
+    /// Create generator
     pub fn new(package: &str, component_name: &str, component_type: Option<&str>) -> Self {
         CodeGenerator {
             package: package.to_string(),
@@ -26,16 +28,21 @@ impl CodeGenerator {
         }
     }
 
-    /// Generate Kotlin code using Compose backend
-    pub fn generate(&mut self, ast: &WhitehallFile) -> Result<String, String> {
-        // Use Compose backend for now (Phase 0.5)
-        // TODO: Support View backend selection based on optimizations
+    /// Phase 5: Generate Kotlin code with optimization support
+    ///
+    /// Routes to appropriate backend based on optimization plans:
+    /// - If optimizations present: May use View backend with RecyclerView
+    /// - Default: Compose backend
+    pub fn generate(&mut self, optimized_ast: &OptimizedAST) -> Result<String, String> {
+        // Phase 5: Pass optimizations to Compose backend
+        // Compose backend will check for RecyclerView optimizations
+        // and route for loops accordingly
         let mut backend = compose::ComposeBackend::new(
             &self.package,
             &self.component_name,
             self.component_type.as_deref(),
         );
 
-        backend.generate(ast)
+        backend.generate_with_optimizations(&optimized_ast.ast, &optimized_ast.optimizations)
     }
 }

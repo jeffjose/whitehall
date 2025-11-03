@@ -23,6 +23,22 @@ impl ComposeBackend {
         }
     }
 
+    /// Phase 5: Generate with optimization support
+    ///
+    /// This method receives optimization plans and routes for loops accordingly:
+    /// - RecyclerView optimization: Uses RecyclerViewGenerator + ViewBackend
+    /// - Default: Standard Compose generation
+    pub fn generate_with_optimizations(
+        &mut self,
+        file: &WhitehallFile,
+        _optimizations: &[crate::transpiler::optimizer::Optimization],
+    ) -> Result<String, String> {
+        // Phase 5: For now, just call the existing generate method
+        // RecyclerView routing will be added when we implement for loop generation
+        // The optimizations will be checked during for loop generation
+        self.generate(file)
+    }
+
     pub fn generate(&mut self, file: &WhitehallFile) -> Result<String, String> {
         let mut output = String::new();
 

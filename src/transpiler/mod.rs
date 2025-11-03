@@ -34,14 +34,16 @@ pub fn transpile(
     let mut parser = Parser::new(input);
     let ast = parser.parse()?;
 
-    // 2. Analyze: build semantic information (Phase 0: no-op pass-through)
+    // 2. Analyze: build semantic information
+    //    Phase 0-2: Collect symbols, track usage, detect optimizations
     let semantic_info = Analyzer::analyze(&ast)?;
 
-    // 3. Optimize: plan optimizations (Phase 0: no-op pass-through)
+    // 3. Optimize: plan optimizations
+    //    Phase 3-4: Receive hints, apply threshold, generate plans
     let optimized_ast = Optimizer::optimize(ast, semantic_info);
 
     // 4. Generate Kotlin code
-    // Note: CodeGen currently ignores optimizations (Phase 0)
+    //    Phase 5: Consume optimizations and route to appropriate backend
     let mut codegen = CodeGenerator::new(package, component_name, component_type);
-    codegen.generate(&optimized_ast.ast)
+    codegen.generate(&optimized_ast)
 }
