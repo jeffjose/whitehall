@@ -898,7 +898,13 @@ impl CodeGenerator {
 
                     // If Button with text prop, generate Text child
                     if let Some(text) = button_text {
-                        output.push_str(&format!("{}    Text(\"{}\")\n", indent_str, text));
+                        // Check if text is an R.string reference
+                        if text.starts_with("R.string.") {
+                            let transformed = self.transform_string_resource(&text);
+                            output.push_str(&format!("{}    Text(text = {})\n", indent_str, transformed));
+                        } else {
+                            output.push_str(&format!("{}    Text(\"{}\")\n", indent_str, text));
+                        }
                     }
 
                     // Generate regular children (pass component name as parent for context-aware generation)
@@ -976,6 +982,10 @@ impl CodeGenerator {
                         if !prop_imports.contains(&import) {
                             prop_imports.push(import);
                         }
+                    }
+                    if prop_expr.contains("R.string.") {
+                        self.add_import_if_missing(prop_imports, "androidx.compose.ui.res.stringResource");
+                        self.add_import_if_missing(component_imports, "com.example.app.R");
                     }
 
                     // Component-specific prop transformations that need imports
@@ -1222,6 +1232,13 @@ impl CodeGenerator {
                     self.collect_imports_recursive(&branch.body, prop_imports, component_imports);
                 }
             }
+            Markup::Interpolation(expr) => {
+                // Check for R.string references
+                if expr.contains("R.string.") {
+                    self.add_import_if_missing(prop_imports, "androidx.compose.ui.res.stringResource");
+                    self.add_import_if_missing(component_imports, "com.example.app.R");
+                }
+            }
             _ => {}
         }
     }
@@ -1244,7 +1261,8 @@ impl CodeGenerator {
                 Markup::Text(text) => return Ok(format!("\"{}\"", text)),
                 // Single interpolation - use bare expression (no quotes, no $)
                 Markup::Interpolation(expr) => {
-                    return Ok(self.add_null_assertions(expr));
+                    let transformed = self.transform_string_resource(expr);
+                    return Ok(self.add_null_assertions(&transformed));
                 }
                 _ => {}
             }
@@ -1256,7 +1274,8 @@ impl CodeGenerator {
             match child {
                 Markup::Text(text) => parts.push(text.to_string()),
                 Markup::Interpolation(expr) => {
-                    let transformed = self.add_null_assertions(expr);
+                    let str_res_transformed = self.transform_string_resource(expr);
+                    let transformed = self.add_null_assertions(&str_res_transformed);
                     // Simple variable without property access doesn't need braces
                     if !transformed.contains('.') && !transformed.contains("!!") {
                         parts.push(format!("${}", transformed));
@@ -1582,6 +1601,43 @@ impl CodeGenerator {
                 // Component-as-prop-value should be handled specially at call site
                 ""
             }
+        }
+    }
+
+    /// Transform R.string references to stringResource() calls
+    /// - R.string.xxx → stringResource(R.string.xxx)
+    /// - R.string.xxx(args) → stringResource(R.string.xxx, args)
+    fn transform_string_resource(&self, expr: &str) -> String {
+        let trimmed = expr.trim();
+
+        // Check if this is an R.string reference
+        if !trimmed.starts_with("R.string.") {
+            return expr.to_string();
+        }
+
+        // Find if there are function call parentheses
+        if let Some(paren_pos) = trimmed.find('(') {
+            // R.string.greeting(userName) → stringResource(R.string.greeting, userName)
+            let resource_name = &trimmed[..paren_pos];
+            let args_with_parens = &trimmed[paren_pos..];
+
+            // Extract args from parentheses
+            if args_with_parens.len() > 2 {
+                let args = &args_with_parens[1..args_with_parens.len()-1]; // Remove ( and )
+                if args.is_empty() {
+                    // No args: R.string.xxx() → stringResource(R.string.xxx)
+                    format!("stringResource({})", resource_name)
+                } else {
+                    // With args: R.string.xxx(a, b) → stringResource(R.string.xxx, a, b)
+                    format!("stringResource({}, {})", resource_name, args)
+                }
+            } else {
+                // Malformed, just wrap it
+                format!("stringResource({})", trimmed)
+            }
+        } else {
+            // Simple reference: R.string.xxx → stringResource(R.string.xxx)
+            format!("stringResource({})", trimmed)
         }
     }
 

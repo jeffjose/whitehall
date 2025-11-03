@@ -58,19 +58,14 @@ fun WelcomeScreen(
             fontSize = 24.sp,
             fontWeight = FontWeight.Bold
         )
-
         Text(
             text = stringResource(R.string.greeting, userName),
             color = MaterialTheme.colorScheme.secondary
         )
-
         Text(
             text = stringResource(R.string.items_count, itemCount)
         )
-
-        Button(
-            onClick = { navigate(Routes.Home) }
-        ) {
+        Button(onClick = { navigate(Routes.Home) }) {
             Text(text = stringResource(R.string.action_continue))
         }
     }
