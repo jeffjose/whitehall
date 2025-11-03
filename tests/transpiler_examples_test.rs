@@ -5,6 +5,7 @@
 
 use std::fs;
 use std::path::PathBuf;
+use similar::{ChangeTag, TextDiff};
 
 /// Test metadata extracted from ## Metadata section
 #[derive(Debug)]
@@ -197,6 +198,30 @@ fn normalize_whitespace(s: &str) -> String {
         .join("\n")
 }
 
+/// Print a colored diff between expected and actual output
+fn print_colored_diff(expected: &str, actual: &str) {
+    let diff = TextDiff::from_lines(expected, actual);
+
+    eprintln!("\n{}", "=".repeat(80));
+    for change in diff.iter_all_changes() {
+        let sign = match change.tag() {
+            ChangeTag::Delete => "-",
+            ChangeTag::Insert => "+",
+            ChangeTag::Equal => " ",
+        };
+
+        // Use ANSI color codes
+        let colored_line = match change.tag() {
+            ChangeTag::Delete => format!("\x1b[31m{} {}\x1b[0m", sign, change),
+            ChangeTag::Insert => format!("\x1b[32m{} {}\x1b[0m", sign, change),
+            ChangeTag::Equal => format!("{} {}", sign, change),
+        };
+
+        eprint!("{}", colored_line);
+    }
+    eprintln!("{}", "=".repeat(80));
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -272,31 +297,35 @@ mod tests {
             ) {
                 Ok(actual_output) => {
                     if normalize_whitespace(&actual_output) != normalize_whitespace(&test.expected_output) {
-                        eprintln!("\n=== MISMATCH in {} ===", filename);
-                        eprintln!("Expected:\n{}", test.expected_output);
-                        eprintln!("\nActual:\n{}", actual_output);
-                        eprintln!("=========================\n");
+                        eprintln!("\n\x1b[1;31m✗ MISMATCH in {}\x1b[0m", filename);
+                        print_colored_diff(&test.expected_output, &actual_output);
                         failures.push(filename.clone());
                     } else {
-                        eprintln!("[PASS] {}", filename);
+                        eprintln!("\x1b[32m✓\x1b[0m [PASS] {}", filename);
                     }
                 }
                 Err(e) => {
-                    eprintln!("\n=== TRANSPILATION ERROR in {} ===", filename);
-                    eprintln!("Error: {}", e);
-                    eprintln!("Input:\n{}", test.input);
-                    eprintln!("=========================\n");
+                    eprintln!("\n\x1b[1;31m✗ TRANSPILATION ERROR in {}\x1b[0m", filename);
+                    eprintln!("{}", "=".repeat(80));
+                    eprintln!("\x1b[31mError: {}\x1b[0m", e);
+                    eprintln!("\nInput:\n{}", test.input);
+                    eprintln!("{}", "=".repeat(80));
                     failures.push(filename.clone());
                 }
             }
         }
 
         let passed = total_tests - failures.len();
-        eprintln!("\n{}/{} tests passed", passed, total_tests);
 
-        if !failures.is_empty() {
-            eprintln!("\n");
-            panic!("\n{} tests failed:\n{}\n", failures.len(), failures.join("\n"));
+        if failures.is_empty() {
+            eprintln!("\n\x1b[1;32m✓ All {}/{} tests passed!\x1b[0m", passed, total_tests);
+        } else {
+            eprintln!("\n\x1b[1;33m{}/{} tests passed\x1b[0m", passed, total_tests);
+            eprintln!("\n\x1b[1;31mFailed tests:\x1b[0m");
+            for failure in &failures {
+                eprintln!("  \x1b[31m✗\x1b[0m {}", failure);
+            }
+            panic!("\n\x1b[1;31m{} test(s) failed\x1b[0m\n", failures.len());
         }
     }
 

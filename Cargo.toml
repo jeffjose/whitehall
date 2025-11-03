@@ -15,3 +15,4 @@ notify = "6.1"
 [dev-dependencies]
 tempfile = "3.10"
 serial_test = "3.1"
+similar = { version = "2.6", features = ["inline"] }
