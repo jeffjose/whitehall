@@ -101,7 +101,7 @@ import kotlinx.coroutines.launch
       Join Microblog
     </Text>
 
-    <!-- Username -->
+    // Username
     <Input
       value={username}
       onValueChange={validateUsername}
@@ -112,7 +112,7 @@ import kotlinx.coroutines.launch
       fill
     />
 
-    <!-- Email -->
+    // Email
     <Input
       value={email}
       onValueChange={validateEmail}
@@ -124,7 +124,7 @@ import kotlinx.coroutines.launch
       fill
     />
 
-    <!-- Password -->
+    // Password
     <Input
       value={password}
       onValueChange={validatePassword}
@@ -136,7 +136,7 @@ import kotlinx.coroutines.launch
       fill
     />
 
-    <!-- Confirm Password -->
+    // Confirm Password
     <Input
       value={confirmPassword}
       onValueChange={validateConfirmPassword}
@@ -154,7 +154,7 @@ import kotlinx.coroutines.launch
       fill
     />
 
-    <!-- Login link -->
+    // Login link
     <Row center spacing={4}>
       <Text color="secondary">Already have an account?</Text>
       <TextButton

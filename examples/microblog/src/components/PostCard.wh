@@ -39,7 +39,7 @@ import kotlinx.coroutines.launch
 
 <Card onClick={() => onPostClick?.invoke(post.id)}>
   <Column padding={12} spacing={8}>
-    <!-- Author header -->
+    // Author header
     <Row
       spacing={8}
       onClick={(e) => {
@@ -59,12 +59,12 @@ import kotlinx.coroutines.launch
       </Column>
     </Row>
 
-    <!-- Post content -->
+    // Post content
     <Text fontSize={15}>
       {post.content}
     </Text>
 
-    <!-- Actions -->
+    // Actions
     <Row spacing={16}>
       <Row spacing={4} onClick={(e) => {
         e.stopPropagation()

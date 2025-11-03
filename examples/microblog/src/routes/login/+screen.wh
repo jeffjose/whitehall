@@ -48,7 +48,7 @@ fun handleLogin() {
 
     <Spacer height={32} />
 
-    <!-- Username input -->
+    // Username input
     <Input
       bind:value={username}
       label="Username"
@@ -57,7 +57,7 @@ fun handleLogin() {
       fill
     />
 
-    <!-- Password input -->
+    // Password input
     <Input
       bind:value={password}
       label="Password"
@@ -67,7 +67,7 @@ fun handleLogin() {
       fill
     />
 
-    <!-- Error message -->
+    // Error message
     @if (errorMessage != null) {
       <Card backgroundColor="errorContainer">
         <Text color="error" padding={12}>
@@ -76,7 +76,7 @@ fun handleLogin() {
       </Card>
     }
 
-    <!-- Login button -->
+    // Login button
     <Button
       text={isLoading ? "Logging in..." : "Login"}
       onClick={handleLogin}
@@ -84,7 +84,7 @@ fun handleLogin() {
       fill
     />
 
-    <!-- Sign up link -->
+    // Sign up link
     <Row center spacing={4}>
       <Text color="secondary">Don't have an account?</Text>
       <TextButton

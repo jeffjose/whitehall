@@ -20,7 +20,7 @@
   }
 >
   <Column fill>
-    <!-- Account Section -->
+    // Account Section
     <Column padding={16} spacing={8}>
       <Text fontSize={12} fontWeight="bold" color="primary">
         ACCOUNT
@@ -45,7 +45,7 @@
 
     <Divider />
 
-    <!-- Preferences Section -->
+    // Preferences Section
     <Column padding={16} spacing={8}>
       <Text fontSize={12} fontWeight="bold" color="primary">
         PREFERENCES
@@ -78,7 +78,7 @@
 
     <Divider />
 
-    <!-- About Section -->
+    // About Section
     <Column padding={16} spacing={8}>
       <Text fontSize={12} fontWeight="bold" color="primary">
         ABOUT
@@ -111,7 +111,7 @@
 
     <Divider />
 
-    <!-- Logout -->
+    // Logout
     <Column padding={16}>
       <Button
         text="Logout"
@@ -121,7 +121,7 @@
       />
     </Column>
 
-    <!-- Version info -->
+    // Version info
     <Text
       fontSize={12}
       color="secondary"

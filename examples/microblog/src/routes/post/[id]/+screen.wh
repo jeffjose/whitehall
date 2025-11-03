@@ -71,7 +71,7 @@ import kotlinx.coroutines.launch
     <ErrorView message="Post not found" />
   } else {
     <Column fill>
-      <!-- Post content -->
+      // Post content
       <Column padding={12} spacing={8}>
         <Row
           spacing={8}
@@ -93,7 +93,7 @@ import kotlinx.coroutines.launch
           {post.content}
         </Text>
 
-        <!-- Stats -->
+        // Stats
         <Row spacing={16} padding={8}>
           <Row spacing={4}>
             <Icon name="favorite" size={20} color="secondary" />
@@ -113,7 +113,7 @@ import kotlinx.coroutines.launch
 
       <Divider />
 
-      <!-- Comment input -->
+      // Comment input
       <Row padding={12} spacing={8}>
         <Input
           bind:value={commentText}
@@ -131,7 +131,7 @@ import kotlinx.coroutines.launch
 
       <Divider />
 
-      <!-- Comments list -->
+      // Comments list
       <LazyColumn fill>
         @for (comment in comments, key = { it.id }) {
           <CommentItem comment={comment} />

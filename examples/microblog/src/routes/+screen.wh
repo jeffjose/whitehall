@@ -57,10 +57,10 @@ fun handlePostClick(postId: String) {
     <LoadingSpinner center />
   } else {
     <Column fill>
-      <!-- Pull to refresh indicator -->
+      // Pull to refresh indicator
       {isRefreshing && <LinearProgressIndicator />}
 
-      <!-- Feed -->
+      // Feed
       <LazyColumn fill>
         @for (post in posts, key = { it.id }) {
           <PostCard

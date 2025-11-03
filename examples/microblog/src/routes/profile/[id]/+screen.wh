@@ -47,7 +47,7 @@ fun handleFollow() {
     <ErrorView message="User not found" />
   } else {
     <Column fill>
-      <!-- Profile header -->
+      // Profile header
       <Column padding={16} spacing={12}>
         <Row center>
           <Avatar url={user.avatarUrl} size={80} />
@@ -68,7 +68,7 @@ fun handleFollow() {
           </Text>
         }
 
-        <!-- Stats -->
+        // Stats
         <Row center spacing={24}>
           <Column center>
             <Text fontSize={20} fontWeight="bold">
@@ -89,7 +89,7 @@ fun handleFollow() {
           </Column>
         </Row>
 
-        <!-- Follow button -->
+        // Follow button
         <Button
           text={user.isFollowing ? "Unfollow" : "Follow"}
           onClick={handleFollow}
@@ -100,7 +100,7 @@ fun handleFollow() {
 
       <Divider />
 
-      <!-- User's posts -->
+      // User's posts
       <LazyColumn fill>
         @for (post in posts, key = { it.id }) {
           <PostCard

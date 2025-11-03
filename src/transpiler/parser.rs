@@ -961,10 +961,50 @@ impl Parser {
     }
 
     fn skip_whitespace(&mut self) {
-        while let Some(ch) = self.peek_char() {
-            if ch.is_whitespace() {
-                self.pos += 1;
+        loop {
+            let start_pos = self.pos;
+
+            // Skip whitespace characters
+            while let Some(ch) = self.peek_char() {
+                if ch.is_whitespace() {
+                    self.pos += 1;
+                } else {
+                    break;
+                }
+            }
+
+            // Skip comments
+            if self.peek_char() == Some('/') {
+                if self.peek_ahead(1) == Some('/') {
+                    // Single-line comment: skip until newline
+                    self.pos += 2; // Skip //
+                    while let Some(ch) = self.peek_char() {
+                        if ch == '\n' {
+                            self.pos += 1; // Skip the newline too
+                            break;
+                        }
+                        self.pos += 1;
+                    }
+                } else if self.peek_ahead(1) == Some('*') {
+                    // Multi-line comment: skip until */
+                    self.pos += 2; // Skip /*
+                    while let Some(ch) = self.peek_char() {
+                        if ch == '*' && self.peek_ahead(1) == Some('/') {
+                            self.pos += 2; // Skip */
+                            break;
+                        }
+                        self.pos += 1;
+                    }
+                } else {
+                    // Not a comment, just a / character
+                    break;
+                }
             } else {
+                break;
+            }
+
+            // If we made no progress, stop (no more whitespace or comments)
+            if self.pos == start_pos {
                 break;
             }
         }
