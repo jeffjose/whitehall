@@ -1,6 +1,8 @@
 # Function Return Type Annotations
 
-## Input (.wh)
+Tests optional return type annotations on functions.
+
+## Input
 
 ```whitehall
 fun getMessage(): String {
@@ -17,11 +19,17 @@ fun getCount(x: Int): Int {
 </Column>
 ```
 
-## Expected Output (.kt)
+## Output
 
 ```kotlin
+package com.example.app.components
+
+import androidx.compose.foundation.layout.Column
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+
 @Composable
-fun Screen() {
+fun FunctionReturnType() {
     fun getMessage(): String {
         return "Hello, World!"
     }
@@ -31,8 +39,15 @@ fun Screen() {
     }
 
     Column {
-        Text(getMessage())
-        Text(getCount(5).toString())
+        Text(text = getMessage())
+        Text(text = getCount(5))
     }
 }
+```
+
+## Metadata
+
+```yaml
+file: FunctionReturnType.wh
+package: com.example.app.components
 ```
