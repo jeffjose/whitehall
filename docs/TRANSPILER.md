@@ -458,7 +458,7 @@ object routes {
 
 **Test Infrastructure**: ✅ Complete
 - Commit `e1ecf0a` established markdown-based test framework
-- 18 test cases defined in `tests/transpiler-examples/` (00, 00a, 00b, 01-17)
+- 21 test cases defined in `tests/transpiler-examples/` (00, 00a, 00b, 01-20)
 - Test harness can parse markdown and validate output
 - Tests serve dual purpose: validation + documentation
 
@@ -981,6 +981,44 @@ src/transpiler/
   - ⏸️ Ternary → .let transformation
 - Estimated effort: 2-3 hours
 
+#### Phase 9: Low-Hanging Fruit (Tests 18-20)
+**Goal**: Quick wins for common patterns that fit existing architecture
+
+**Status**: Tests defined, implementation pending
+
+**Test 18: String Resources** (`18-string-resources.md`)
+- Input: `{R.string.welcome}` for internationalization
+- Required:
+  - Transform R.string.* refs → `stringResource(R.string.*)`
+  - With args: `R.string.greeting(userName)` → `stringResource(R.string.greeting, userName)`
+  - Import `androidx.compose.ui.res.stringResource`
+- Pattern: Reuses existing R.drawable.* infrastructure from test 14
+- Estimated effort: 30-45 minutes (simple transformation)
+
+**Test 19: Checkbox/Switch** (`19-checkbox-switch.md`)
+- Input: `bind:checked={bool}` for boolean form inputs
+- Required:
+  - Transform to `checked = bool, onCheckedChange = { bool = it }`
+  - Handle Checkbox and Switch components
+- Pattern: Identical to bind:value, just different prop names
+- Estimated effort: 30-45 minutes (reuses bind: system)
+
+**Test 20: derivedStateOf** (`20-derived-state.md`)
+- Input: `val filtered: List<T> = derivedStateOf { ... }`
+- Required:
+  - Detect derivedStateOf keyword
+  - Wrap in `by remember { derivedStateOf { ... } }`
+  - Import androidx.compose.runtime.derivedStateOf
+- Pattern: Performance optimization for computed state
+- Estimated effort: 45-60 minutes (similar to existing state handling)
+
+**Rationale**: These are "quick wins" because:
+- String resources: Essential for i18n, simple text transformation
+- Checkbox/Switch: Common form pattern, reuses bind: infrastructure
+- derivedStateOf: Performance pattern, fits existing state generation
+
+**Total effort**: ~2-3 hours for all three tests
+
 ### Key Principles for Rebuild
 
 1. **One Test at a Time**: Don't move to next test until current passes
@@ -1394,6 +1432,11 @@ Tests are numbered and organized by feature:
 - `15-modifier-chains.md` - Chained and conditional modifiers
 - `16-lifecycle-cleanup.md` - onDispose for resource cleanup
 - `17-error-handling.md` - Try/catch in async operations
+
+**Low-Hanging Fruit (18-20)**:
+- `18-string-resources.md` - String resources for i18n
+- `19-checkbox-switch.md` - Checkbox/Switch with bind:checked
+- `20-derived-state.md` - derivedStateOf for optimized computed state
 
 #### Test Runner Implementation
 
