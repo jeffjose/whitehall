@@ -27,7 +27,7 @@ fun refreshWeather() {
       } else {
         <Column spacing={8}>
           <Text fontSize={48} fontWeight="bold">
-            {temperature}°F
+            {temperature} degrees
           </Text>
 
           <Text fontSize={20}>

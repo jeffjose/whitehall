@@ -835,10 +835,39 @@ impl Parser {
 
     fn parse_until_char(&mut self, delimiter: char) -> Result<String, String> {
         let start = self.pos;
+        let mut paren_depth = 0;
+        let mut brace_depth = 0;
+        let mut bracket_depth = 0;
+
         while let Some(ch) = self.peek_char() {
-            if ch == delimiter {
+            // Check if we've reached the delimiter at depth 0
+            if ch == delimiter && paren_depth == 0 && brace_depth == 0 && bracket_depth == 0 {
                 break;
             }
+
+            // Track nesting depth
+            match ch {
+                '(' => paren_depth += 1,
+                ')' => {
+                    if paren_depth > 0 {
+                        paren_depth -= 1;
+                    }
+                }
+                '{' => brace_depth += 1,
+                '}' => {
+                    if brace_depth > 0 {
+                        brace_depth -= 1;
+                    }
+                }
+                '[' => bracket_depth += 1,
+                ']' => {
+                    if bracket_depth > 0 {
+                        bracket_depth -= 1;
+                    }
+                }
+                _ => {}
+            }
+
             self.pos += 1;
         }
         Ok(self.input[start..self.pos].to_string())

@@ -58,6 +58,8 @@ impl CodeGenerator {
         // Add Composable or runtime imports
         if !file.state.is_empty() {
             imports.push("androidx.compose.runtime.*".to_string());
+            // Remove specific runtime imports since we're using wildcard
+            prop_imports.retain(|imp| !imp.starts_with("androidx.compose.runtime."));
         } else {
             imports.push("androidx.compose.runtime.Composable".to_string());
         }
@@ -992,6 +994,16 @@ impl CodeGenerator {
         prop_imports: &mut Vec<String>,
         component_imports: &mut Vec<String>,
     ) {
+        self.collect_imports_with_parent(markup, prop_imports, component_imports, None);
+    }
+
+    fn collect_imports_with_parent(
+        &self,
+        markup: &Markup,
+        prop_imports: &mut Vec<String>,
+        component_imports: &mut Vec<String>,
+        parent_component: Option<&str>,
+    ) {
         match markup {
             Markup::Component(comp) => {
                 // Check if we need imports from props based on transformations
@@ -1226,9 +1238,9 @@ impl CodeGenerator {
                     _ => {}
                 }
 
-                // Recurse into children
+                // Recurse into children, passing component name as parent
                 for child in &comp.children {
-                    self.collect_imports_recursive(child, prop_imports, component_imports);
+                    self.collect_imports_with_parent(child, prop_imports, component_imports, Some(&comp.name));
                 }
             }
             Markup::Sequence(items) => {
@@ -1255,14 +1267,19 @@ impl CodeGenerator {
                 }
             }
             Markup::ForLoop(for_loop) => {
+                // If loop has a key expression and is NOT inside LazyColumn, we need the key import
+                // LazyColumn uses items(collection, key = {...}) which doesn't need the import
+                if for_loop.key_expr.is_some() && parent_component != Some("LazyColumn") {
+                    self.add_import_if_missing(prop_imports, "androidx.compose.runtime.key");
+                }
                 // Recurse into loop body
                 for item in &for_loop.body {
-                    self.collect_imports_recursive(item, prop_imports, component_imports);
+                    self.collect_imports_with_parent(item, prop_imports, component_imports, parent_component);
                 }
                 // Recurse into empty block
                 if let Some(empty_block) = &for_loop.empty_block {
                     for item in empty_block {
-                        self.collect_imports_recursive(item, prop_imports, component_imports);
+                        self.collect_imports_with_parent(item, prop_imports, component_imports, parent_component);
                     }
                 }
             }
