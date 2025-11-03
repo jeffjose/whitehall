@@ -328,6 +328,9 @@ impl Parser {
         self.skip_whitespace();
         if self.peek_char() == Some('"') {
             self.parse_string()
+        } else if self.peek_char() == Some('[') {
+            // Array literal syntax: [1, 2, 3] -> will be converted to listOf() later
+            self.parse_array_literal()
         } else {
             // Parse value (handle braces and parentheses for complex expressions)
             let start = self.pos;
@@ -373,6 +376,42 @@ impl Parser {
             }
             Ok(self.input[start..self.pos].trim().to_string())
         }
+    }
+
+    fn parse_array_literal(&mut self) -> Result<String, String> {
+        // Parse [1, 2, 3] syntax and return as-is (will be transformed later)
+        self.expect_char('[')?;
+        let start = self.pos;
+        let mut bracket_depth = 1;
+
+        while let Some(ch) = self.peek_char() {
+            if ch == '[' {
+                bracket_depth += 1;
+                self.advance_char();
+            } else if ch == ']' {
+                bracket_depth -= 1;
+                if bracket_depth == 0 {
+                    let content = self.input[start..self.pos].trim().to_string();
+                    self.advance_char(); // consume closing ]
+                    return Ok(format!("[{}]", content));
+                }
+                self.advance_char();
+            } else if ch == '"' {
+                // Handle strings inside array to not break on ] inside string
+                self.advance_char();
+                while let Some(str_ch) = self.peek_char() {
+                    if str_ch == '"' {
+                        self.advance_char();
+                        break;
+                    }
+                    self.advance_char();
+                }
+            } else {
+                self.advance_char();
+            }
+        }
+
+        Err("Unterminated array literal".to_string())
     }
 
     fn parse_string(&mut self) -> Result<String, String> {

@@ -199,30 +199,34 @@ impl ComposeBackend {
         // Generate mutable state (var)
         for state in &mutable_state {
             output.push_str(&self.indent());
+
+            // Transform array literals: [1,2,3] -> mutableListOf(1,2,3)
+            let transformed_value = self.transform_array_literal(&state.initial_value, true);
+
             if let Some(ref type_ann) = state.type_annotation {
                 // Store type and default value for bind:value transformations
                 self.var_types.insert(
                     state.name.clone(),
-                    (type_ann.clone(), state.initial_value.clone())
+                    (type_ann.clone(), transformed_value.clone())
                 );
 
                 // With type annotation: var name by remember { mutableStateOf<Type>(value) }
                 output.push_str(&format!(
                     "var {} by remember {{ mutableStateOf<{}>({}) }}\n",
-                    state.name, type_ann, state.initial_value
+                    state.name, type_ann, transformed_value
                 ));
             } else {
                 // Try to infer type from initial value for bind:value support
-                let inferred_type = self.infer_type_from_value(&state.initial_value);
+                let inferred_type = self.infer_type_from_value(&transformed_value);
                 self.var_types.insert(
                     state.name.clone(),
-                    (inferred_type, state.initial_value.clone())
+                    (inferred_type, transformed_value.clone())
                 );
 
                 // Without type annotation: var name by remember { mutableStateOf(value) }
                 output.push_str(&format!(
                     "var {} by remember {{ mutableStateOf({}) }}\n",
-                    state.name, state.initial_value
+                    state.name, transformed_value
                 ));
             }
         }
@@ -235,6 +239,9 @@ impl ComposeBackend {
         for state in &computed_state {
             output.push_str(&self.indent());
 
+            // Transform array literals: [1,2,3] -> listOf(1,2,3)
+            let transformed_value = self.transform_array_literal(&state.initial_value, false);
+
             if state.is_derived_state {
                 // derivedStateOf needs special wrapping: val name by remember { derivedStateOf { ... } }
                 // Need to format with increased indent level for proper nesting
@@ -242,17 +249,17 @@ impl ComposeBackend {
 
                 // Temporarily increase indent for the derivedStateOf content
                 self.indent_level += 1;
-                let formatted_value = self.format_multiline_value(&state.initial_value);
+                let formatted_value = self.format_multiline_value(&transformed_value);
                 self.indent_level -= 1;
 
                 output.push_str(&format!("{}    {}\n", self.indent(), formatted_value));
                 output.push_str(&format!("{}}}\n", self.indent()));
             } else if let Some(ref type_ann) = state.type_annotation {
                 // Format multi-line values with proper indentation
-                let formatted_value = self.format_multiline_value(&state.initial_value);
+                let formatted_value = self.format_multiline_value(&transformed_value);
                 output.push_str(&format!("val {}: {} = {}\n", state.name, type_ann, formatted_value));
             } else {
-                output.push_str(&format!("val {} = {}\n", state.name, state.initial_value));
+                output.push_str(&format!("val {} = {}\n", state.name, transformed_value));
             }
         }
 
@@ -1681,6 +1688,67 @@ impl ComposeBackend {
                 params.insert(param_name);
             }
         }
+    }
+
+    /// Transform array literal [1, 2, 3] to listOf(1, 2, 3) or mutableListOf(1, 2, 3)
+    /// Recursively transforms nested arrays
+    fn transform_array_literal(&self, value: &str, is_mutable: bool) -> String {
+        let trimmed = value.trim();
+
+        // Check if it starts with [ and ends with ]
+        if trimmed.starts_with('[') && trimmed.ends_with(']') {
+            let content = &trimmed[1..trimmed.len()-1];
+
+            // Recursively transform nested arrays (always immutable for nested arrays)
+            let transformed_content = self.transform_nested_arrays(content);
+
+            let func_name = if is_mutable { "mutableListOf" } else { "listOf" };
+            format!("{}({})", func_name, transformed_content)
+        } else {
+            value.to_string()
+        }
+    }
+
+    /// Helper to recursively transform nested arrays
+    fn transform_nested_arrays(&self, content: &str) -> String {
+        let mut result = String::new();
+        let mut chars = content.chars().peekable();
+        let mut depth = 0;
+        let mut current_array = String::new();
+
+        while let Some(ch) = chars.next() {
+            match ch {
+                '[' => {
+                    if depth == 0 {
+                        // Start of a nested array
+                        current_array.clear();
+                        current_array.push(ch);
+                    } else {
+                        current_array.push(ch);
+                    }
+                    depth += 1;
+                }
+                ']' => {
+                    current_array.push(ch);
+                    depth -= 1;
+                    if depth == 0 {
+                        // End of nested array, transform it
+                        let transformed = self.transform_array_literal(&current_array, false);
+                        result.push_str(&transformed);
+                        current_array.clear();
+                    }
+                }
+                _ => {
+                    if depth > 0 {
+                        current_array.push(ch);
+                    } else {
+                        result.push(ch);
+                    }
+                }
+            }
+        }
+
+        result
     }
 
     fn format_multiline_value(&self, value: &str) -> String {
