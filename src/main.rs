@@ -18,6 +18,8 @@ enum Commands {
         /// Name of the project
         name: String,
     },
+    /// Build the project (transpile .wh files to Kotlin + generate Android project)
+    Build,
 }
 
 fn main() -> Result<()> {
@@ -26,6 +28,9 @@ fn main() -> Result<()> {
     match cli.command {
         Commands::Init { name } => {
             commands::init::execute(&name)?;
+        }
+        Commands::Build => {
+            commands::build::execute()?;
         }
     }
 

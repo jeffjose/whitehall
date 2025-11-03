@@ -83,6 +83,11 @@ fn transpile_file(
     _config: &Config,
     output_dir: &Path,
 ) -> Result<()> {
+    // Skip main.wh - it's handled separately in MainActivity generation
+    if file.file_type == FileType::Main {
+        return Ok(());
+    }
+
     // Read source file
     let source = fs::read_to_string(&file.path)
         .context(format!("Failed to read {}", file.path.display()))?;
@@ -142,6 +147,13 @@ fn generate_main_activity(
 
     // If we transpiled main.wh, we need to wrap it in MainActivity
     let activity_content = if main_file.is_some() {
+        // Strip package declaration from main_content since we'll add it ourselves
+        let main_content_no_package = main_content
+            .lines()
+            .skip_while(|line| line.trim().is_empty() || line.starts_with("package "))
+            .collect::<Vec<_>>()
+            .join("\n");
+
         format!(
             r#"package {}
 
@@ -162,7 +174,7 @@ class MainActivity : ComponentActivity() {{
 }}
 
 {}"#,
-            config.android.package, main_content
+            config.android.package, main_content_no_package
         )
     } else {
         main_content
