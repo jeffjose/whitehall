@@ -2,11 +2,15 @@
 ///
 /// Entry point for transpilation
 
+mod analyzer;
 mod ast;
 mod codegen;
+mod optimizer;
 mod parser;
 
+use analyzer::Analyzer;
 use codegen::CodeGenerator;
+use optimizer::Optimizer;
 use parser::Parser;
 
 /// Transpile Whitehall source code to Kotlin/Compose
@@ -25,11 +29,18 @@ pub fn transpile(
     component_name: &str,
     component_type: Option<&str>,
 ) -> Result<String, String> {
-    // Parse input to AST
+    // 1. Parse input to AST
     let mut parser = Parser::new(input);
     let ast = parser.parse()?;
 
-    // Generate Kotlin code
+    // 2. Analyze: build semantic information (Phase 0: no-op pass-through)
+    let semantic_info = Analyzer::analyze(&ast)?;
+
+    // 3. Optimize: plan optimizations (Phase 0: no-op pass-through)
+    let optimized_ast = Optimizer::optimize(ast, semantic_info);
+
+    // 4. Generate Kotlin code
+    // Note: CodeGen currently ignores optimizations (Phase 0)
     let mut codegen = CodeGenerator::new(package, component_name, component_type);
-    codegen.generate(&ast)
+    codegen.generate(&optimized_ast.ast)
 }
