@@ -1,20 +1,20 @@
 [project]
-name = "microblog"
+name = "Microblog"
 version = "0.1.0"
-package = "com.example.microblog"
 
 [android]
-min_sdk = 26
+min_sdk = 24
 target_sdk = 34
+package = "com.example.microblog"
 
-[imports.aliases]
-# Define $ prefix aliases for imports
-app = "com.example.microblog"
-components = "com.example.microblog.components"
-models = "com.example.microblog.models"
-lib = "com.example.microblog.lib"
+[build]
+output_dir = "build"
 
-[dependencies]
-# These will be added to generated build.gradle
-# androidx.compose.material3 = "1.2.0"
-# coil = "2.5.0"  # For image loading
+# Note: Import aliases ($app, $components, etc.) are automatically resolved by the transpiler
+# $components → com.example.microblog.components
+# $models → com.example.microblog.models
+# $lib → com.example.microblog.lib
+# $app → com.example.microblog
+
+# Note: Dependencies are currently hardcoded in the scaffold generator
+# Material3, Compose, Navigation, and Coil are included by default
