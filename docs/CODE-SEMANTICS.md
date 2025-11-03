@@ -33,49 +33,51 @@ val items = List(1000) { "Item $it" }
 
 ---
 
-## Current State: Phase 0.5 Complete ✅
+## Current State: Phase 1 Complete ✅
 
-### Updated Pipeline (v0.3 - Phase 0.5)
+### Updated Pipeline (v0.4 - Phase 1)
 
 ```
 .wh files → Parser → AST → Analyzer → SemanticInfo → Optimizer → OptimizedAST → CodeGen (Dual Backend) → .kt
                               ↓                          ↓                            ↓
-                        Symbol Table              (Empty optimizations)      Compose Backend
-                        (Pass-through)            (Pass-through)             View Backend ✅
-                                                                              RecyclerView ✅
+                        Symbol Table ✅           (Empty optimizations)      Compose Backend
+                        Usage Tracking ✅         (Pass-through)             View Backend ✅
+                        Mutability Info                                      RecyclerView ✅
 ```
 
 **What exists:**
 - ✅ Parser: Syntax analysis only
 - ✅ AST: Structure representation
-- ✅ **Analyzer**: Symbol table collection (Phase 0: basic declarations only)
+- ✅ **Analyzer**: Symbol table + usage tracking (Phase 1: records where variables accessed)
+  - ✅ Symbol table with declaration collection
+  - ✅ Usage tracking: access counts, contexts, usage flags
+  - ✅ Expression parser for extracting variable names
 - ✅ **Optimizer**: Optimization planning framework (Phase 0: no-op)
 - ✅ **CodeGen (Dual Backend)**: Compose + View backends (Phase 0.5: ready for optimization)
   - ✅ Compose Backend: Existing Jetpack Compose generation
   - ✅ View Backend: Android View generation (8 components)
   - ✅ RecyclerView Generator: RecyclerView + Adapter boilerplate
 
-**Phase 0.5 Status (Commits: f72e8ab, 12b4fc1, 549d38c)**:
-- ✅ Refactored codegen into multi-backend architecture
-- ✅ Compose backend (renamed from codegen.rs, no logic changes)
-- ✅ View backend with 8 components (Card, Column, Row, Text, Button, TextField, Checkbox, Image)
-- ✅ RecyclerView generator with Adapter + ViewHolder boilerplate
-- ✅ All 23 transpiler tests pass
-- ✅ 11 unit tests (4 analyzer, 2 optimizer, 4 view, 3 recyclerview)
-- ✅ Zero regressions (Compose backend still default)
-- ✅ Documentation: docs/VIEW-BACKEND.md
+**Phase 1 Status (Commit: 899c026)**:
+- ✅ UsageInfo struct: access_count, contexts, used_in_loops, used_in_conditions, used_in_keys
+- ✅ UsageContext enum: 7 context types for tracking variable access locations
+- ✅ track_usage() walks entire AST recording all variable accesses
+- ✅ record_expression_usage() parses expressions to extract variable names
+- ✅ Context tracking: maintains current_for_loop for loop body detection
+- ✅ 9 new comprehensive unit tests (interpolation, props, loops, conditions, etc.)
+- ✅ All 35 unit tests passing + 6 transpiler example tests
+- ✅ Zero regressions (no behavior changes)
 
 **What's next:**
-- ⏳ Phase 1: Usage tracking (where are variables accessed?)
-- ⏳ Phase 2: Static detection (optimization opportunities with confidence scoring)
+- ⏳ Phase 2: Static detection (confidence scoring for optimization opportunities)
 - ⏳ Phase 3: Hint generation (wire analyzer to optimizer)
-- ⏳ Phase 4: Optimization planning (decide what to optimize)
+- ⏳ Phase 4: Optimization planning (decide what to optimize based on threshold)
 - ⏳ Phase 5: RecyclerView integration (first actual optimization!)
 
 ### Current Transpiler Entry Point
 
 ```rust
-// src/transpiler/mod.rs (Phase 0.5)
+// src/transpiler/mod.rs (Phase 1)
 pub fn transpile(
     input: &str,
     package: &str,
@@ -86,14 +88,16 @@ pub fn transpile(
     let mut parser = Parser::new(input);
     let ast = parser.parse()?;
 
-    // 2. Analyze: build semantic information (Phase 0: no-op pass-through)
+    // 2. Analyze: build semantic information
+    //    - Phase 0: Collect declarations into symbol table
+    //    - Phase 1: Track variable usage (where/how accessed) ✅
     let semantic_info = Analyzer::analyze(&ast)?;
 
-    // 3. Optimize: plan optimizations (Phase 0: no-op pass-through)
+    // 3. Optimize: plan optimizations (Phase 2+: not implemented yet)
     let optimized_ast = Optimizer::optimize(ast, semantic_info);
 
     // 4. Generate Kotlin code (Phase 0.5: Dual backend, Compose default)
-    // Note: CodeGen currently ignores optimizations (Phase 0)
+    // Note: CodeGen currently ignores optimizations (Phase 0-1)
     let mut codegen = CodeGenerator::new(package, component_name, component_type);
     codegen.generate(&optimized_ast.ast)
 }
@@ -1173,14 +1177,48 @@ Once infrastructure is in place, additional optimizations become easier:
 - ✅ View backend ready for optimization integration
 - ✅ RecyclerView generator ready for Phase 5
 
-### ⏳ Next Steps
+---
 
-**Phase 1: Usage Tracking (Week 3)** - Enable variable access tracking
-1. Implement `Analyzer::track_usage()` to walk markup AST
-2. Record where variables are accessed in loops, conditions, components
-3. Mark which variables are used (but not yet tracking mutations)
-4. Add unit tests for usage tracking
-5. Still zero behavior changes (hints not generated yet)
+**Phase 1: Usage Tracking (Commit: 899c026)** - 2025-01-03
+
+**Implementation:**
+- ✅ `UsageInfo` struct (src/transpiler/analyzer.rs:71-104)
+  - access_count: usize
+  - contexts: HashSet<UsageContext>
+  - used_in_loops, used_in_conditions, used_in_keys: bool
+  - record_access() method to update usage information
+- ✅ `UsageContext` enum (src/transpiler/analyzer.rs:106-136)
+  - 7 context types: InForLoopCollection, InForLoopBody, InKeyExpression,
+    InCondition, InComponentProp, InInterpolation, InLifecycleHook
+  - Each variant carries relevant metadata (collection name, component name, etc.)
+- ✅ Updated `Symbol` to include usage_info field (src/transpiler/analyzer.rs:68)
+- ✅ `track_usage()` implementation (src/transpiler/analyzer.rs:274-505)
+  - Walks entire AST recording all variable accesses
+  - Maintains current_for_loop context for loop body detection
+  - record_variable_access() updates symbol usage information
+  - record_expression_usage() parses expressions to extract variable names
+  - Handles nested loops correctly by saving/restoring context
+
+**Coverage:**
+- ✅ Interpolations: {variable}
+- ✅ Component props: <Text text={title} />
+- ✅ For loop collections: @for (item in items)
+- ✅ For loop bodies: variables accessed inside @for
+- ✅ Key expressions: @for (item in items, key = { it.id })
+- ✅ Conditions: @if (isVisible), @when (status)
+- ✅ Lifecycle hooks: onMount { ... }
+
+**Testing:**
+- ✅ 9 new comprehensive unit tests
+- ✅ All 35 unit tests passing
+- ✅ All 6 transpiler example tests passing
+- ✅ Zero regressions
+
+**Deliverables:**
+- ✅ Complete usage tracking system functional
+- ✅ Ready for Phase 2 (static detection with confidence scoring)
+
+### ⏳ Next Steps
 
 **Phase 2: Static Detection (Week 4)** - Identify optimization opportunities
 6. Implement `Analyzer::check_static_collection()` with confidence scoring
