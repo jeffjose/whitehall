@@ -1066,46 +1066,130 @@ Once infrastructure is in place, additional optimizations become easier:
 
 ### ✅ Completed
 
-**Phase 0: Infrastructure (Commit: 27400fd)** - 2025-01-03
-- Created `analyzer.rs` with symbol table, mutability tracking, optimization hints framework
-- Created `optimizer.rs` with optimization planning infrastructure
-- Updated pipeline: Parse → Analyze → Optimize → CodeGen
-- All 23 transpiler tests passing
-- Zero regressions, generated code identical to before
-- Ready for incremental implementation
+**Phase 0: Infrastructure (Commits: 27400fd, 475959b, 4bddbb6)** - 2025-01-03
+
+**Code (27400fd):**
+- ✅ `src/transpiler/analyzer.rs` (407 lines)
+  - Symbol table with `SymbolTable`, `Symbol`, `SymbolKind`
+  - Mutability tracking with `MutabilityInfo`
+  - Optimization hints framework with `OptimizationHint` enum
+  - Declaration collection (props, state vars/vals, functions)
+  - Stub methods ready for Phases 1-4 (`track_usage`, `infer_optimizations`, etc.)
+  - Unit tests (2 passing)
+- ✅ `src/transpiler/optimizer.rs` (103 lines)
+  - `OptimizedAST` wrapper with optimization metadata
+  - `Optimization` enum (RecyclerView, TextView, Canvas variants)
+  - Planning infrastructure ready for Phase 4
+  - Unit tests (2 passing)
+- ✅ Updated `src/transpiler/mod.rs` (46 lines)
+  - New pipeline: Parse → Analyze → Optimize → CodeGen
+  - Clear phase progression comments
+- ✅ All 23 transpiler tests passing
+- ✅ Zero regressions, generated code identical to before
+
+**Documentation (475959b):**
+- ✅ `docs/CODE-SEMANTICS.md` (1112 lines)
+  - Vision and architecture
+  - Module designs with complete code examples
+  - Phase-by-phase implementation plan
+  - Testing strategy, challenges, success metrics
+  - Progress tracking section
+
+**Examples (4bddbb6):**
+- ✅ `tests/optimization-examples/01-static-list-optimization.md`
+  - Static list → RecyclerView optimization
+  - Input, Unoptimized Output, Optimized Output
+  - Confidence: 100/100, Performance: 30-40% faster
+- ✅ `tests/optimization-examples/02-dynamic-list-no-optimization.md`
+  - Dynamic list correctly stays Compose
+  - Confidence: 0/100, no optimization (correct!)
+- ✅ Testable format matching `tests/transpiler-examples/`
+- ✅ Both outputs always testable (not time-based)
 
 ### ⏳ Next Steps
 
-**Immediate (Phase 1-2):** Enable usage tracking and static detection
-1. Implement `track_usage()` to walk markup and record variable accesses
-2. Implement `check_static_collection()` with confidence scoring
-3. Generate optimization hints (logged but not acted upon)
-4. Add unit tests for detection logic
-5. Still maintain zero behavior changes
+**Phase 1: Usage Tracking (Week 2)** - Enable variable access tracking
+1. Implement `Analyzer::track_usage()` to walk markup AST
+2. Record where variables are accessed in loops, conditions, components
+3. Mark which variables are used (but not yet tracking mutations)
+4. Add unit tests for usage tracking
+5. Still zero behavior changes (hints not generated yet)
 
-**Short-term (Phase 3-4):** Enable optimization planning
-6. Wire optimizer to consume hints
-7. Plan RecyclerView optimizations for high-confidence static collections
-8. Pass optimization metadata to CodeGen
-9. Still maintain zero behavior changes (CodeGen ignores for now)
+**Phase 2: Static Detection (Week 3)** - Identify optimization opportunities
+6. Implement `Analyzer::check_static_collection()` with confidence scoring
+7. Heuristics:
+   - `val` collection: +40 confidence
+   - Not mutated: +30 confidence
+   - Not a prop: +20 confidence
+   - No event handlers: +10 confidence
+8. Generate `OptimizationHint::StaticCollection` for high-confidence cases
+9. Add unit tests matching `tests/optimization-examples/`
+10. Log hints (don't act on them yet)
+11. Still zero behavior changes
 
-**Medium-term (Phase 5):** First actual optimization
-10. Implement RecyclerView code generation in CodeGen
-11. Create benchmark test case (static list vs dynamic list)
-12. Measure performance improvement
-13. **First behavior change**: Static lists use RecyclerView instead of LazyColumn
+**Phase 3: Hint Generation (Week 4)** - Wire analyzer to optimizer
+12. Enable `infer_optimizations()` in analyzer
+13. Pass hints to optimizer via `SemanticInfo`
+14. Add debug logging showing detection decisions
+15. Validate against example 01 (should detect static, confidence 100)
+16. Validate against example 02 (should not detect, confidence 0)
+17. Still zero behavior changes (optimizer ignores hints)
 
-**Timeline estimate:** 2-3 weeks for Phases 1-5 complete
+**Phase 4: Optimization Planning (Week 5)** - Plan which optimizations to apply
+18. Implement `Optimizer::plan_optimizations()` to consume hints
+19. Apply threshold: only optimize if confidence >= 80
+20. Generate `Optimization::UseRecyclerView` for qualifying loops
+21. Pass optimizations to CodeGen via `OptimizedAST`
+22. CodeGen logs but ignores optimizations
+23. Add unit tests for planning logic
+24. Still zero behavior changes (CodeGen not updated yet)
+
+**Phase 5: RecyclerView Generation (Week 6-7)** - First actual optimization! 🎉
+25. Update `CodeGenerator` to consume optimization metadata
+26. Implement `generate_recyclerview()` for static lists
+27. Generate:
+    - RecyclerView with LinearLayoutManager
+    - Custom Adapter extending RecyclerView.Adapter
+    - ViewHolder with view creation
+    - Wrap in AndroidView for Compose interop
+28. Create test comparing outputs:
+    - Example 01: Should match Optimized Output
+    - Example 02: Should match Unoptimized Output (same as before)
+29. Create benchmark measuring performance difference
+30. **First behavior change**: High-confidence static lists use RecyclerView
+31. Add feature flag to disable if needed: `--no-optimizations`
+
+**Validation Targets:**
+- `tests/optimization-examples/01-static-list-optimization.md`
+  - Phase 0-4: Validates against Unoptimized Output ✅
+  - Phase 5: Validates against Optimized Output
+- `tests/optimization-examples/02-dynamic-list-no-optimization.md`
+  - All phases: Validates against Unoptimized Output ✅
+
+**Timeline estimate:** 6-7 weeks for Phases 1-5 complete
+
+**Success criteria for Phase 5:**
+- Example 01 generates RecyclerView (Optimized Output matches)
+- Example 02 generates Compose (Unoptimized Output matches)
+- 30-40% performance improvement measurable
+- Zero false positives (no wrong optimizations)
+- All existing 23 tests still pass
 
 ### 📊 Metrics
 
-| Metric | Target | Current |
-|--------|--------|---------|
-| Test coverage | 23/23 passing | ✅ 23/23 |
-| Compile time | <5% increase | ✅ 0% (no-op) |
-| Code generation | Identical to v0.1 | ✅ Identical |
-| Optimizations applied | 0% (Phase 0) | ✅ 0% |
-| Infrastructure complete | 100% | ✅ 100% |
+| Metric | Target | Phase 0 | Phase 1-4 | Phase 5 |
+|--------|--------|---------|-----------|---------|
+| Test coverage | 23/23 passing | ✅ 23/23 | 23/23 | 23/23 |
+| Optimization examples | 2 examples | ✅ 2/2 | 2/2 | 2/2 |
+| Compile time | <5% increase | ✅ 0% | ~2% | ~3% |
+| Code generation | - | Identical | Identical | **Different** |
+| Optimizations applied | - | ✅ 0% | 0% | ~5-10% |
+| Infrastructure complete | 100% | ✅ 100% | - | - |
+| Symbol table | Working | ✅ Yes | Yes | Yes |
+| Usage tracking | Working | ⏳ No | Yes | Yes |
+| Static detection | Working | ⏳ No | Yes | Yes |
+| Optimization planning | Working | ⏳ No | ⏳ No | Yes |
+| RecyclerView generation | Working | ⏳ No | ⏳ No | Yes |
 
 ---
 
