@@ -138,6 +138,9 @@ fn generate_main_activity(
     output_dir: &Path,
     files: &[WhitehallFile],
 ) -> Result<()> {
+    // Discover routes to determine if we need NavHost setup
+    let discovered_routes = routes::discover_routes()?;
+
     // Check if there's a main.wh file
     let main_file = files.iter().find(|f| f.file_type == FileType::Main);
 
@@ -146,6 +149,9 @@ fn generate_main_activity(
         let source = fs::read_to_string(&main_file.path)?;
         transpiler::transpile(&source, &config.android.package, "App", None)
             .map_err(|e| anyhow::anyhow!(e))?
+    } else if !discovered_routes.is_empty() {
+        // Generate MainActivity with NavHost for routing
+        generate_navhost_main_activity(config, &discovered_routes)
     } else {
         // Generate default MainActivity with basic content
         generate_default_main_activity(config)
@@ -197,6 +203,80 @@ class MainActivity : ComponentActivity() {{
     fs::write(output_path, activity_content)?;
 
     Ok(())
+}
+
+/// Generate MainActivity with NavHost for routing
+fn generate_navhost_main_activity(config: &Config, routes: &[routes::Route]) -> String {
+    // Generate composable calls for each route
+    let mut composable_entries = Vec::new();
+
+    for route in routes {
+        let screen_call = if route.params.is_empty() {
+            // No parameters: ProfileScreen(navController)
+            format!("{}(navController)", route.screen_name)
+        } else {
+            // With parameters: ProfileScreen(navController, it.id)
+            let params_str = route
+                .params
+                .iter()
+                .map(|p| format!("it.{}", p.name))
+                .collect::<Vec<_>>()
+                .join(", ");
+            format!("{}(navController, {})", route.screen_name, params_str)
+        };
+
+        let composable = format!(
+            "        composable<Routes.{}>{{ {} }}",
+            route.name, screen_call
+        );
+        composable_entries.push(composable);
+    }
+
+    let composables = composable_entries.join("\n");
+
+    // Find Home route for start destination (default to first route)
+    let start_destination = routes
+        .iter()
+        .find(|r| r.name == "Home")
+        .map(|r| format!("Routes.{}", r.name))
+        .unwrap_or_else(|| format!("Routes.{}", routes[0].name));
+
+    format!(
+        r#"package {}
+
+import android.os.Bundle
+import androidx.activity.ComponentActivity
+import androidx.activity.compose.setContent
+import androidx.compose.material3.MaterialTheme
+import androidx.navigation.compose.NavHost
+import androidx.navigation.compose.composable
+import androidx.navigation.compose.rememberNavController
+import {}.routes.Routes
+import {}.screens.*
+
+class MainActivity : ComponentActivity() {{
+    override fun onCreate(savedInstanceState: Bundle?) {{
+        super.onCreate(savedInstanceState)
+        setContent {{
+            MaterialTheme {{
+                val navController = rememberNavController()
+                NavHost(
+                    navController = navController,
+                    startDestination = {}
+                ) {{
+{}
+                }}
+            }}
+        }}
+    }}
+}}
+"#,
+        config.android.package,
+        config.android.package,
+        config.android.package,
+        start_destination,
+        composables
+    )
 }
 
 /// Generate a default MainActivity with basic "Hello, Whitehall!" content
