@@ -260,7 +260,7 @@ mod tests {
             // Derive component name from metadata.file
             let component_name = test.metadata.file.trim_end_matches(".wh");
 
-            println!("Testing: {} ({})", test.name, filename);
+            eprintln!("Testing: {} ({})", test.name, filename);
 
             // Call the transpiler
             match transpile(
@@ -271,27 +271,28 @@ mod tests {
             ) {
                 Ok(actual_output) => {
                     if normalize_whitespace(&actual_output) != normalize_whitespace(&test.expected_output) {
-                        println!("\n=== MISMATCH in {} ===", filename);
-                        println!("Expected:\n{}", test.expected_output);
-                        println!("\nActual:\n{}", actual_output);
-                        println!("=========================\n");
+                        eprintln!("\n=== MISMATCH in {} ===", filename);
+                        eprintln!("Expected:\n{}", test.expected_output);
+                        eprintln!("\nActual:\n{}", actual_output);
+                        eprintln!("=========================\n");
                         failures.push(filename.clone());
                     } else {
-                        println!("✓ {}", filename);
+                        eprintln!("✓ {}", filename);
                     }
                 }
                 Err(e) => {
-                    println!("\n=== TRANSPILATION ERROR in {} ===", filename);
-                    println!("Error: {}", e);
-                    println!("Input:\n{}", test.input);
-                    println!("=========================\n");
+                    eprintln!("\n=== TRANSPILATION ERROR in {} ===", filename);
+                    eprintln!("Error: {}", e);
+                    eprintln!("Input:\n{}", test.input);
+                    eprintln!("=========================\n");
                     failures.push(filename.clone());
                 }
             }
         }
 
         if !failures.is_empty() {
-            panic!("\n\n{} tests failed:\n{}\n", failures.len(), failures.join("\n"));
+            eprintln!("\n");
+            panic!("\n{} tests failed:\n{}\n", failures.len(), failures.join("\n"));
         }
     }
 
