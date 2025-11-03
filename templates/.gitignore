@@ -1,5 +1,6 @@
 # Whitehall build artifacts
 .whitehall/
+build/
 android/
 
 # Generated files

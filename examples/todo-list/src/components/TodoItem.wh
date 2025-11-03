@@ -1,0 +1,21 @@
+@prop val text: String
+@prop val completed: Boolean
+@prop val onToggle: () -> Unit
+@prop val onDelete: () -> Unit
+
+<Card padding={16}>
+  <Column spacing={8}>
+    <Checkbox
+      bind:checked={completed}
+    />
+
+    <Text fontSize={16}>
+      {text}
+    </Text>
+
+    <Button
+      text="Delete"
+      onClick={onDelete}
+    />
+  </Column>
+</Card>

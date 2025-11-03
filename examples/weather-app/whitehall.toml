@@ -1,0 +1,11 @@
+[project]
+name = "Weather App"
+version = "1.0.0"
+
+[android]
+min_sdk = 24
+target_sdk = 34
+package = "com.example.weather"
+
+[build]
+output_dir = "build"

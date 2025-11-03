@@ -1,0 +1,45 @@
+var city = "San Francisco"
+var temperature = 72
+var condition = "Sunny"
+var isLoading = false
+
+fun refreshWeather() {
+  isLoading = true
+  // Simulate API call
+  temperature = (60..80).random()
+  condition = listOf("Sunny", "Cloudy", "Rainy", "Windy").random()
+  isLoading = false
+}
+
+<Column padding={24} spacing={24}>
+  <Text fontSize={28} fontWeight="bold">
+    Weather App
+  </Text>
+
+  <Card padding={24}>
+    <Column spacing={16}>
+      <Text fontSize={24} fontWeight="bold">
+        {city}
+      </Text>
+
+      @if (isLoading) {
+        <Text>Loading...</Text>
+      } else {
+        <Column spacing={8}>
+          <Text fontSize={48} fontWeight="bold">
+            {temperature}°F
+          </Text>
+
+          <Text fontSize={20}>
+            {condition}
+          </Text>
+        </Column>
+      }
+    </Column>
+  </Card>
+
+  <Button
+    text="Refresh"
+    onClick={refreshWeather}
+  />
+</Column>

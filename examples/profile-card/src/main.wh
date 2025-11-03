@@ -1,0 +1,41 @@
+import $components.StatCard
+
+val name = "Jane Doe"
+val title = "Software Engineer"
+val bio = "Passionate about building great mobile apps with Compose and Whitehall!"
+val followers = "1.2K"
+val following = "350"
+val posts = "42"
+
+var isFollowing = false
+
+fun toggleFollow() {
+  isFollowing = !isFollowing
+}
+
+<Column padding={24} spacing={24}>
+  <Column spacing={8}>
+    <Text fontSize={28} fontWeight="bold">
+      {name}
+    </Text>
+
+    <Text fontSize={18}>
+      {title}
+    </Text>
+
+    <Text fontSize={14}>
+      {bio}
+    </Text>
+  </Column>
+
+  <Column spacing={12}>
+    <StatCard label="Followers" value={followers} />
+    <StatCard label="Following" value={following} />
+    <StatCard label="Posts" value={posts} />
+  </Column>
+
+  <Button
+    text={isFollowing ? "Unfollow" : "Follow"}
+    onClick={toggleFollow}
+  />
+</Column>

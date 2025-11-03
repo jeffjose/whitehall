@@ -1,0 +1,11 @@
+[project]
+name = "Todo List"
+version = "1.0.0"
+
+[android]
+min_sdk = 24
+target_sdk = 34
+package = "com.example.todolist"
+
+[build]
+output_dir = "build"

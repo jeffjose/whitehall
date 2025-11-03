@@ -1,0 +1,58 @@
+import $components.TodoItem
+
+var newTodo = ""
+var todos: List<String> = emptyList()
+var completedStates: List<Boolean> = emptyList()
+
+fun addTodo() {
+  @if (newTodo.isNotEmpty()) {
+    todos = todos + newTodo
+    completedStates = completedStates + false
+    newTodo = ""
+  }
+}
+
+fun toggleTodo(index: Int) {
+  completedStates = completedStates.mapIndexed { i, completed ->
+    if (i == index) !completed else completed
+  }
+}
+
+fun deleteTodo(index: Int) {
+  todos = todos.filterIndexed { i, _ -> i != index }
+  completedStates = completedStates.filterIndexed { i, _ -> i != index }
+}
+
+<Column padding={16} spacing={16}>
+  <Text fontSize={24} fontWeight="bold">
+    Todo List
+  </Text>
+
+  <Column spacing={8}>
+    <TextField
+      bind:value={newTodo}
+      label="New todo"
+      placeholder="Enter a task..."
+    />
+
+    <Button
+      text="Add Todo"
+      onClick={addTodo}
+    />
+  </Column>
+
+  @if (todos.isEmpty()) {
+    <Text>No todos yet. Add one above!</Text>
+  } else {
+    <Column spacing={8}>
+      @for (todo in todos, key = { todos.indexOf(it) }) {
+        <TodoItem
+          text={todo}
+          completed={completedStates[todos.indexOf(todo)]}
+          onToggle={() => toggleTodo(todos.indexOf(todo))}
+          onDelete={() => deleteTodo(todos.indexOf(todo))}
+        />
+      }
+    </Column>
+  }
+</Column>

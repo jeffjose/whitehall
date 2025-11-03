@@ -1,0 +1,14 @@
+@prop val label: String
+@prop val value: String
+
+<Card padding={16}>
+  <Column spacing={4}>
+    <Text fontSize={24} fontWeight="bold">
+      {value}
+    </Text>
+
+    <Text fontSize={14}>
+      {label}
+    </Text>
+  </Column>
+</Card>

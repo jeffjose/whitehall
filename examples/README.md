@@ -1,46 +1,43 @@
-# Whitehall Examples
+# Whitehall Example Apps
 
-This directory contains complete example applications demonstrating Whitehall syntax and patterns.
+This directory contains real-world example applications to test and demonstrate Whitehall features.
 
-## Complete Applications
+## Examples
 
-### Microblog
-**Location:** `microblog/`
+### 1. Counter (Minimal)
+**Location**: `counter/`
+**Features**: Basic state management, button clicks, simple UI
+**Complexity**: ⭐ Beginner
 
-A Twitter/Threads-style microblogging app demonstrating:
-- Authentication flow (login/signup)
-- File-based routing with Navigation 2.8+
-- Data fetching and state management
-- Forms with validation
-- Component composition and reuse
-- All control flow patterns (`@if`, `@for`, `@when`)
-- Data binding with `bind:value`
-- Lifecycle hooks
-- Event handling
+### 2. Todo List
+**Location**: `todo-list/`
+**Features**: Lists, components, dynamic state, conditional rendering
+**Complexity**: ⭐⭐ Intermediate
 
-**Purpose:** Validates Whitehall syntax with a realistic, complete application. Used to surface and finalize pending syntax decisions.
+### 3. Weather App
+**Location**: `weather-app/`
+**Features**: Cards, loading states, simulated data
+**Complexity**: ⭐⭐ Intermediate
 
-**Status:** 🚧 In Development
+### 4. Profile Card
+**Location**: `profile-card/`
+**Features**: Reusable components, props, conditional text
+**Complexity**: ⭐⭐ Intermediate
 
----
+### 5. Settings Screen
+**Location**: `settings-screen/`
+**Features**: Forms, switches, complex layouts
+**Complexity**: ⭐⭐⭐ Advanced
 
-## Running Examples
+## Testing Examples
 
-Once the Whitehall compiler is built:
+Build any example:
+\`\`\`bash
+cd examples/counter
+whitehall build
+\`\`\`
 
-```bash
-cd examples/microblog
-whitehall run
-```
-
-For now, these are reference implementations showing proposed syntax.
-
----
-
-## Other Examples
-
-Smaller, focused examples are in `docs/syntax/examples/`:
-- Individual components (Button, UserCard, Avatar)
-- Routing examples
-- Form examples (RegistrationForm)
-- List examples (UserList, ShoppingCart)
+Build from root with --manifest-path:
+\`\`\`bash
+whitehall build --manifest-path examples/counter/whitehall.toml
+\`\`\`
