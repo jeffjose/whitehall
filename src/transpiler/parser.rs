@@ -67,7 +67,7 @@ impl Parser {
             if ch == '\n' {
                 break;
             }
-            self.pos += 1;
+            self.advance_char();
         }
 
         let path = self.input[start..self.pos].trim().to_string();
@@ -119,28 +119,28 @@ impl Parser {
             match ch {
                 '(' => {
                     paren_depth += 1;
-                    self.pos += 1;
+                    self.advance_char();
                 }
                 ')' => {
                     if paren_depth > 0 {
                         paren_depth -= 1;
-                        self.pos += 1;
+                        self.advance_char();
                     } else {
                         break;
                     }
                 }
                 '<' => {
                     angle_depth += 1;
-                    self.pos += 1;
+                    self.advance_char();
                 }
                 '>' => {
                     if angle_depth > 0 {
                         angle_depth -= 1;
-                        self.pos += 1;
+                        self.advance_char();
                     } else {
                         // Could be part of -> operator, keep going if in parens
                         if paren_depth > 0 || bracket_depth > 0 {
-                            self.pos += 1;
+                            self.advance_char();
                         } else {
                             break;
                         }
@@ -148,12 +148,12 @@ impl Parser {
                 }
                 '[' => {
                     bracket_depth += 1;
-                    self.pos += 1;
+                    self.advance_char();
                 }
                 ']' => {
                     if bracket_depth > 0 {
                         bracket_depth -= 1;
-                        self.pos += 1;
+                        self.advance_char();
                     } else {
                         break;
                     }
@@ -161,9 +161,10 @@ impl Parser {
                 '=' | '\n' | '{' if paren_depth == 0 && angle_depth == 0 && bracket_depth == 0 => break,
                 '-' if self.peek_ahead(1) == Some('>') => {
                     // -> is part of function type, continue parsing
-                    self.pos += 2; // Skip ->
+                    self.advance_char(); // Skip -
+                    self.advance_char(); // Skip >
                 }
-                _ => self.pos += 1,
+                _ => self.advance_char(),
             }
         }
 
@@ -235,7 +236,7 @@ impl Parser {
             if self.peek_char().is_none() {
                 return Err("Unexpected EOF in function params".to_string());
             }
-            self.pos += 1;
+            self.advance_char();
         }
         let params = self.input[param_start..self.pos].trim().to_string();
         self.expect_char(')')?;
@@ -262,18 +263,18 @@ impl Parser {
                 Some('{') => {
                     body.push('{');
                     depth += 1;
-                    self.pos += 1;
+                    self.advance_char();
                 }
                 Some('}') => {
                     if depth > 1 {
                         body.push('}');
                     }
                     depth -= 1;
-                    self.pos += 1;
+                    self.advance_char();
                 }
                 Some(ch) => {
                     body.push(ch);
-                    self.pos += 1;
+                    self.advance_char();
                 }
                 None => return Err("Unexpected EOF in function body".to_string()),
             }
@@ -300,18 +301,18 @@ impl Parser {
                 Some('{') => {
                     body.push('{');
                     depth += 1;
-                    self.pos += 1;
+                    self.advance_char();
                 }
                 Some('}') => {
                     if depth > 1 {
                         body.push('}');
                     }
                     depth -= 1;
-                    self.pos += 1;
+                    self.advance_char();
                 }
                 Some(ch) => {
                     body.push(ch);
-                    self.pos += 1;
+                    self.advance_char();
                 }
                 None => return Err("Unexpected EOF in lifecycle hook body".to_string()),
             }
@@ -335,18 +336,28 @@ impl Parser {
             while let Some(ch) = self.peek_char() {
                 if ch == '{' {
                     brace_depth += 1;
-                    self.pos += 1;
+                    self.advance_char();
                 } else if ch == '}' {
                     if brace_depth > 0 {
                         brace_depth -= 1;
-                        self.pos += 1;
+                        self.advance_char();
                     } else {
                         break; // Closing brace not part of value
                     }
                 } else if ch == '\n' && brace_depth == 0 {
-                    break; // End of value at newline (unless inside braces)
+                    // Check if line ends with continuation operator (&&, ||, +, -, etc.)
+                    let trimmed = self.input[start..self.pos].trim_end();
+                    if trimmed.ends_with("&&") || trimmed.ends_with("||") ||
+                       trimmed.ends_with("+") || trimmed.ends_with("-") ||
+                       trimmed.ends_with("*") || trimmed.ends_with("/") ||
+                       trimmed.ends_with(",") {
+                        // Continue parsing on next line
+                        self.advance_char();
+                    } else {
+                        break; // End of value at newline
+                    }
                 } else {
-                    self.pos += 1;
+                    self.advance_char();
                 }
             }
             Ok(self.input[start..self.pos].trim().to_string())
@@ -360,7 +371,7 @@ impl Parser {
             if ch == '"' {
                 break;
             }
-            self.pos += 1;
+            self.advance_char();
         }
         let value = self.input[start..self.pos].to_string();
         self.expect_char('"')?;
@@ -431,7 +442,7 @@ impl Parser {
         // Check for colon (e.g., bind:value)
         if self.peek_char() == Some(':') {
             name.push(':');
-            self.pos += 1;
+            self.advance_char();
             let rest = self.parse_identifier()?;
             name.push_str(&rest);
         }
@@ -463,15 +474,15 @@ impl Parser {
                     break;
                 } else if ch == '\\' {
                     // Handle escape sequences
-                    self.pos += 1;
+                    self.advance_char();
                     if let Some(escaped) = self.peek_char() {
                         str_value.push('\\');
                         str_value.push(escaped);
-                        self.pos += 1;
+                        self.advance_char();
                     }
                 } else {
                     str_value.push(ch);
-                    self.pos += 1;
+                    self.advance_char();
                 }
             }
             PropValue::Expression(format!("\"{}\"", str_value))
@@ -496,18 +507,18 @@ impl Parser {
                     if ch == '{' {
                         depth += 1;
                         expr_value.push(ch);
-                        self.pos += 1;
+                        self.advance_char();
                     } else if ch == '}' {
                         depth -= 1;
                         if depth == 0 {
-                            self.pos += 1;
+                            self.advance_char();
                             break;
                         }
                         expr_value.push(ch);
-                        self.pos += 1;
+                        self.advance_char();
                     } else {
                         expr_value.push(ch);
-                        self.pos += 1;
+                        self.advance_char();
                     }
                 }
                 PropValue::Expression(expr_value)
@@ -531,14 +542,10 @@ impl Parser {
                 // Parse closing tag
                 self.expect_char('<')?;
                 self.expect_char('/')?;
-                eprintln!("[DEBUG] About to parse closing tag, pos={}, next 30 chars: {:?}",
-                         self.pos,
-                         &self.input[self.pos..self.pos.saturating_add(30).min(self.input.len())]);
                 let closing_name = self.parse_identifier().map_err(|e| {
                     let context = &self.input[self.pos..self.pos.saturating_add(20).min(self.input.len())];
                     format!("Failed to parse closing tag name: {}. Context: {:?}", e, context)
                 })?;
-                eprintln!("[DEBUG] Parsed closing tag name: {:?}", closing_name);
                 self.expect_char('>')?;
 
                 if parent_name != closing_name {
@@ -682,7 +689,7 @@ impl Parser {
                 break;
             }
             collection.push(ch);
-            self.pos += 1;
+            self.advance_char();
         }
         let collection = collection.trim().to_string();
 
@@ -762,7 +769,7 @@ impl Parser {
                         break;
                     }
                     cond.push(ch);
-                    self.pos += 1;
+                    self.advance_char();
                 }
                 Some(cond.trim().to_string())
             };
@@ -942,7 +949,7 @@ impl Parser {
                 _ => {}
             }
 
-            self.pos += 1;
+            self.advance_char();
         }
         Ok(self.input[start..self.pos].to_string())
     }
@@ -951,7 +958,7 @@ impl Parser {
         let start = self.pos;
         while let Some(ch) = self.peek_char() {
             if ch.is_alphanumeric() {
-                self.pos += 1;
+                self.advance_char();
             } else {
                 break;
             }
@@ -971,7 +978,7 @@ impl Parser {
             if ch == delimiter {
                 break;
             }
-            self.pos += 1;
+            self.advance_char();
         }
 
         Ok(self.input[start..self.pos].to_string())
@@ -1017,6 +1024,12 @@ impl Parser {
             Some("val")
         } else if remaining.starts_with("@prop") {
             Some("@prop")
+        } else if remaining.starts_with("fun ") {
+            Some("fun")
+        } else if remaining.starts_with("onMount") {
+            Some("onMount")
+        } else if remaining.starts_with("onDispose") {
+            Some("onDispose")
         } else {
             None
         }
@@ -1032,7 +1045,8 @@ impl Parser {
                 return true;
             }
             if next_pos < self.input.len() {
-                let next_char = self.input.chars().nth(next_pos);
+                // Use byte slicing instead of chars().nth() to avoid UTF-8 byte/char index mismatch
+                let next_char = self.input[next_pos..].chars().next();
                 if next_char.map_or(true, |c| c.is_whitespace()) {
                     self.pos = next_pos;
                     return true;
@@ -1052,7 +1066,7 @@ impl Parser {
             // Skip whitespace characters
             while let Some(ch) = self.peek_char() {
                 if ch.is_whitespace() {
-                    self.pos += 1;
+                    self.advance_char();
                 } else {
                     break;
                 }
@@ -1062,23 +1076,26 @@ impl Parser {
             if self.peek_char() == Some('/') {
                 if self.peek_ahead(1) == Some('/') {
                     // Single-line comment: skip until newline
-                    self.pos += 2; // Skip //
+                    self.advance_char(); // Skip first /
+                    self.advance_char(); // Skip second /
                     while let Some(ch) = self.peek_char() {
                         if ch == '\n' {
-                            self.pos += 1; // Skip the newline too
+                            self.advance_char(); // Skip the newline too
                             break;
                         }
-                        self.pos += 1;
+                        self.advance_char();
                     }
                 } else if self.peek_ahead(1) == Some('*') {
                     // Multi-line comment: skip until */
-                    self.pos += 2; // Skip /*
+                    self.advance_char(); // Skip /
+                    self.advance_char(); // Skip *
                     while let Some(ch) = self.peek_char() {
                         if ch == '*' && self.peek_ahead(1) == Some('/') {
-                            self.pos += 2; // Skip */
+                            self.advance_char(); // Skip *
+                            self.advance_char(); // Skip /
                             break;
                         }
-                        self.pos += 1;
+                        self.advance_char();
                     }
                 } else {
                     // Not a comment, just a / character

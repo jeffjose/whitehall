@@ -1,8 +1,8 @@
-/// Code generator for Kotlin/Compose output
+/// Compose backend - generates Jetpack Compose code
 
 use crate::transpiler::ast::{Markup, PropValue, WhitehallFile};
 
-pub struct CodeGenerator {
+pub struct ComposeBackend {
     package: String,
     component_name: String,
     component_type: Option<String>,
@@ -11,9 +11,9 @@ pub struct CodeGenerator {
     var_types: std::collections::HashMap<String, (String, String)>, // Maps variable name to (type, default_value)
 }
 
-impl CodeGenerator {
+impl ComposeBackend {
     pub fn new(package: &str, component_name: &str, component_type: Option<&str>) -> Self {
-        CodeGenerator {
+        ComposeBackend {
             package: package.to_string(),
             component_name: component_name.to_string(),
             component_type: component_type.map(|s| s.to_string()),
