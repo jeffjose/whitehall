@@ -33,14 +33,14 @@ val items = List(1000) { "Item $it" }
 
 ---
 
-## Current State: Phase 4 Complete ✅
+## Current State: Phase 5 Infrastructure Complete ✅
 
-### Updated Pipeline (v0.6 - Phase 4)
+### Updated Pipeline (v1.0 - Phase 5 Infrastructure)
 
 ```
-.wh files → Parser → AST → Analyzer → SemanticInfo → Optimizer → OptimizedAST → CodeGen (Dual Backend) → .kt
+.wh files → Parser → AST → Analyzer → SemanticInfo → Optimizer → OptimizedAST → CodeGen → .kt
                               ↓                          ↓                            ↓
-                        Symbol Table ✅           Optimization Plans ✅      Compose Backend (default)
+                        Symbol Table ✅           Optimization Plans ✅      Compose Backend (receives optimizations) ✅
                         Usage Tracking ✅         (80+ confidence)           View Backend ✅
                         Optimization Hints ✅                                RecyclerView ✅
 ```
@@ -59,10 +59,11 @@ val items = List(1000) { "Item $it" }
   - ✅ Applies 80+ confidence threshold (Phase 4)
   - ✅ Generates Optimization::UseRecyclerView for qualifying loops
   - ✅ Filters out low-confidence cases
-- ✅ **CodeGen (Dual Backend)**: Compose + View backends (Phase 0-4: ignores optimizations)
-  - ✅ Compose Backend: Existing Jetpack Compose generation (default)
+- ✅ **CodeGen (Dual Backend)**: Compose + View backends (Phase 5: receives optimizations)
+  - ✅ CodeGenerator: Routes OptimizedAST to backends
+  - ✅ Compose Backend: Receives optimization plans via generate_with_optimizations()
   - ✅ View Backend: Android View generation (8 components)
-  - ✅ RecyclerView Generator: RecyclerView + Adapter boilerplate
+  - ✅ RecyclerView Generator: RecyclerView + Adapter boilerplate (ready for use)
 
 **Phase 2 Status (Commit: a66bf8f)**:
 - ✅ `infer_optimizations()` walks AST to find all @for loops (src/transpiler/analyzer.rs:512-519)
@@ -94,8 +95,21 @@ val items = List(1000) { "Item $it" }
 - ✅ All 48 unit tests passing + 6 transpiler example tests
 - ✅ Zero regressions (optimizations generated but not acted upon)
 
-**What's next:**
-- ⏳ Phase 5: RecyclerView integration (consume optimization plans in CodeGen, first actual behavior change!)
+**Phase 5 Infrastructure Status (Commit: d57ab19)**:
+- ✅ Updated `CodeGenerator.generate()` to accept OptimizedAST (src/transpiler/codegen/mod.rs:36-47)
+- ✅ Updated `transpile()` to pass OptimizedAST to CodeGenerator (src/transpiler/mod.rs:48)
+- ✅ Added `ComposeBackend.generate_with_optimizations()` (src/transpiler/codegen/compose.rs:31-40)
+- ✅ Optimizations now flow end-to-end through pipeline
+- ✅ All 48 unit tests passing + 6 transpiler example tests
+- ✅ Zero regressions
+- ⚠️  Optimizations received but not acted upon yet (infrastructure only)
+
+**What's next (Future Work):**
+- Implement actual RecyclerView generation in generate_with_optimizations()
+- Check for UseRecyclerView optimizations during for loop generation
+- Route to RecyclerViewGenerator when optimization is present
+- Add integration tests comparing optimized vs unoptimized output
+- This would be the first actual behavior change!
 
 ### Current Transpiler Entry Point
 
