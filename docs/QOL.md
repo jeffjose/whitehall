@@ -54,27 +54,27 @@ var value = 42
 <Text>Use {{expr}} for interpolation</Text>
 ```
 
-## Proposed Improvements
-
-### 1. Spacer Shorthand ⭐
-**Impact: High | Complexity: Low**
-
+### Spacer Shortcuts
 ```kotlin
-// Current (verbose)
-<Spacer modifier={Modifier.height(16.dp)} />
-<Spacer modifier={Modifier.width(8.dp)} />
+// Short and clean syntax for spacing
+<Column>
+  <Text>First</Text>
+  <Spacer h={16} />        // vertical space (height)
+  <Text>Second</Text>
+  <Spacer w={24} />        // horizontal space (width)
+  <Text>Third</Text>
+  <Spacer />               // default 8dp height
+</Column>
 
-// Proposed
-<Space h={16} />        // vertical space
-<Space w={16} />        // horizontal space
-<Space />               // default 8dp
+// Transpiles to:
+Spacer(modifier = Modifier.height(16.dp))
+Spacer(modifier = Modifier.width(24.dp))
+Spacer(modifier = Modifier.height(8.dp))  // default
 ```
 
-**Why:** Extremely common, current syntax is verbose for such a simple concept.
+## Proposed Improvements
 
----
-
-### 2. Image from URL (simpler than AsyncImage)
+### 1. Image from URL (simpler than AsyncImage)
 **Impact: Medium | Complexity: Low**
 
 ```kotlin
@@ -91,25 +91,7 @@ var value = 42
 
 ---
 
-### 3. Spacer Shorthand ⭐
-**Impact: High | Complexity: Low**
-
-```kotlin
-// Current (verbose)
-<Spacer modifier={Modifier.height(16.dp)} />
-<Spacer modifier={Modifier.width(8.dp)} />
-
-// Proposed
-<Space h={16} />        // vertical space
-<Space w={16} />        // horizontal space
-<Space />               // default 8dp
-```
-
-**Why:** Extremely common, current syntax is verbose for such a simple concept.
-
----
-
-### 4. Divider Shorthand ⭐
+### 2. Divider Shorthand ⭐
 **Impact: Medium | Complexity: Low**
 
 ```kotlin
@@ -122,7 +104,7 @@ var value = 42
 
 ---
 
-### 5. Boolean Props (no ={true}) ⭐
+### 3. Boolean Props (no ={true}) ⭐
 **Impact: Medium | Complexity: Low**
 
 ```kotlin
@@ -140,7 +122,7 @@ var value = 42
 
 ---
 
-### 6. Smart TextField Variants
+### 4. Smart TextField Variants
 **Impact: Medium | Complexity: Medium**
 
 ```kotlin
@@ -160,7 +142,7 @@ var value = 42
 
 ---
 
-### 7. Alignment Shortcuts ⭐
+### 5. Alignment Shortcuts ⭐
 **Impact: High | Complexity: Low**
 
 ```kotlin
@@ -182,7 +164,7 @@ var value = 42
 
 ---
 
-### 8. Click Shorthand ⭐
+### 6. Click Shorthand ⭐
 **Impact: High | Complexity: Medium**
 
 Auto-wrap any component in clickable modifier.
@@ -201,7 +183,7 @@ Auto-wrap any component in clickable modifier.
 
 ---
 
-### 9. Loading/Disabled States on Button
+### 7. Loading/Disabled States on Button
 **Impact: Medium | Complexity: Medium**
 
 ```kotlin
@@ -222,7 +204,7 @@ Auto-wrap any component in clickable modifier.
 
 ---
 
-### 10. Conditional Variants/Styles
+### 8. Conditional Variants/Styles
 **Impact: Medium | Complexity: High**
 
 ```kotlin
@@ -240,7 +222,7 @@ Auto-wrap any component in clickable modifier.
 
 ---
 
-### 11. Quick Animations
+### 9. Quick Animations
 **Impact: Low | Complexity: High**
 
 ```kotlin
@@ -257,7 +239,7 @@ Auto-wrap any component in clickable modifier.
 
 ---
 
-### 12. Grid Layout
+### 10. Grid Layout
 **Impact: Medium | Complexity: Medium**
 
 ```kotlin
@@ -277,7 +259,7 @@ Auto-wrap any component in clickable modifier.
 
 ---
 
-### 13. Color with Opacity ⭐
+### 11. Color with Opacity ⭐
 **Impact: Medium | Complexity: Low**
 
 ```kotlin
@@ -297,7 +279,7 @@ Auto-wrap any component in clickable modifier.
 
 ---
 
-### 14. Event Shortcuts
+### 12. Event Shortcuts
 **Impact: Low | Complexity: Medium**
 
 ```kotlin
@@ -315,7 +297,7 @@ Auto-wrap any component in clickable modifier.
 
 ---
 
-### 15. Smart LazyColumn with ForEach
+### 13. Smart LazyColumn with ForEach
 **Impact: Low | Complexity: Low**
 
 ```kotlin
@@ -336,7 +318,7 @@ Auto-wrap any component in clickable modifier.
 
 ---
 
-### 16. Form Shortcuts
+### 14. Form Shortcuts
 **Impact: Low | Complexity: High**
 
 ```kotlin
@@ -353,7 +335,7 @@ Auto-wrap any component in clickable modifier.
 
 ---
 
-### 17. Safe Area / Insets
+### 15. Safe Area / Insets
 **Impact: Medium | Complexity: Medium**
 
 ```kotlin
@@ -371,7 +353,7 @@ Auto-wrap any component in clickable modifier.
 
 ---
 
-### 18. Aspect Ratio
+### 16. Aspect Ratio
 **Impact: Medium | Complexity: Low**
 
 ```kotlin
@@ -391,29 +373,28 @@ Auto-wrap any component in clickable modifier.
 
 ### 🔥 High Priority (High Impact, Low-Medium Complexity)
 
-1. **Spacer shortcuts** (<Space h={16} />) - Extremely common, very verbose now
-2. **Alignment shortcuts** ("center" vs "CenterHorizontally") - Much cleaner
-3. **onClick on any component** - Auto-wraps in clickable modifier
-4. **Boolean props** (enabled vs enabled={true}) - Cleaner syntax
-5. **Divider component** - Common UI element
+1. **Alignment shortcuts** ("center" vs "CenterHorizontally") - Much cleaner
+2. **onClick on any component** - Auto-wraps in clickable modifier
+3. **Boolean props** (enabled vs enabled={true}) - Cleaner syntax
+4. **Divider component** - Common UI element
 
 ### 🎯 Medium Priority (Good Impact, Medium Complexity)
 
-6. **Color opacity** (#FF0000/80 or black/50) - Common need
-7. **TextField type prop** - Better than manual keyboard options
-8. **Image component** (simpler than AsyncImage) - More intuitive
-9. **Safe area/insets** - Common for full-screen apps
-10. **Grid layout** - No built-in equivalent
-11. **Aspect ratio** - Common for media
+5. **Color opacity** (#FF0000/80 or black/50) - Common need
+6. **TextField type prop** - Better than manual keyboard options
+7. **Image component** (simpler than AsyncImage) - More intuitive
+8. **Safe area/insets** - Common for full-screen apps
+9. **Grid layout** - No built-in equivalent
+10. **Aspect ratio** - Common for media
 
 ### 🔮 Lower Priority (Nice to Have, Higher Complexity)
 
-12. **Loading state on Button** - Reduces boilerplate
-13. **Variants/styles system** - Requires design system
-14. **Form component** - Complex but powerful
-15. **Animations** - Complex implementation
-16. **Event shortcuts** - Alternative syntax
-17. **Smart LazyColumn** - Minor improvement
+11. **Loading state on Button** - Reduces boilerplate
+12. **Variants/styles system** - Requires design system
+13. **Form component** - Complex but powerful
+14. **Animations** - Complex implementation
+15. **Event shortcuts** - Alternative syntax
+16. **Smart LazyColumn** - Minor improvement
 
 ---
 

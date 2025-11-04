@@ -707,8 +707,35 @@ impl ComposeBackend {
                     None
                 };
 
+                // Special handling for Spacer with h/w shortcuts
+                if comp.name == "Spacer" {
+                    let h_prop = comp.props.iter().find(|p| p.name == "h");
+                    let w_prop = comp.props.iter().find(|p| p.name == "w");
+
+                    if let Some(h) = h_prop {
+                        // <Spacer h={16} /> → Spacer(modifier = Modifier.height(16.dp))
+                        let value = self.get_prop_expr(&h.value);
+                        params.push(format!("modifier = Modifier.height({}.dp)", value));
+                    } else if let Some(w) = w_prop {
+                        // <Spacer w={16} /> → Spacer(modifier = Modifier.width(16.dp))
+                        let value = self.get_prop_expr(&w.value);
+                        params.push(format!("modifier = Modifier.width({}.dp)", value));
+                    } else {
+                        // <Spacer /> → default to 8dp height
+                        params.push("modifier = Modifier.height(8.dp)".to_string());
+                    }
+
+                    // Handle any other props normally
+                    for prop in &comp.props {
+                        if prop.name != "h" && prop.name != "w" {
+                            let prop_expr = self.get_prop_expr(&prop.value);
+                            let transformed = self.transform_prop(&comp.name, &prop.name, prop_expr);
+                            params.extend(transformed?);
+                        }
+                    }
+                }
                 // Special handling for Scaffold with topBar
-                if comp.name == "Scaffold" {
+                else if comp.name == "Scaffold" {
                     for prop in &comp.props {
                         if prop.name == "topBar" {
                             match &prop.value {
@@ -1222,6 +1249,18 @@ impl ComposeBackend {
 
                     // Component-specific prop transformations that need imports
                     match (comp.name.as_str(), prop.name.as_str()) {
+                        ("Spacer", "h") => {
+                            // h → modifier = Modifier.height(N.dp)
+                            self.add_import_if_missing(prop_imports, "androidx.compose.ui.Modifier");
+                            self.add_import_if_missing(prop_imports, "androidx.compose.foundation.layout.height");
+                            self.add_import_if_missing(prop_imports, "androidx.compose.ui.unit.dp");
+                        }
+                        ("Spacer", "w") => {
+                            // w → modifier = Modifier.width(N.dp)
+                            self.add_import_if_missing(prop_imports, "androidx.compose.ui.Modifier");
+                            self.add_import_if_missing(prop_imports, "androidx.compose.foundation.layout.width");
+                            self.add_import_if_missing(prop_imports, "androidx.compose.ui.unit.dp");
+                        }
                         ("Column", "spacing") => {
                             // spacing → verticalArrangement = Arrangement.spacedBy(N.dp)
                             self.add_import_if_missing(prop_imports, "androidx.compose.foundation.layout.Arrangement");
@@ -1436,6 +1475,21 @@ impl ComposeBackend {
                         let import = "coil.compose.AsyncImage".to_string();
                         if !component_imports.contains(&import) {
                             component_imports.push(import);
+                        }
+                    }
+                    "Spacer" => {
+                        let import = "androidx.compose.foundation.layout.Spacer".to_string();
+                        if !component_imports.contains(&import) {
+                            component_imports.push(import);
+                        }
+                        // Spacer always needs Modifier and dp
+                        self.add_import_if_missing(prop_imports, "androidx.compose.ui.Modifier");
+                        self.add_import_if_missing(prop_imports, "androidx.compose.ui.unit.dp");
+
+                        // If no h/w props, we use default height, so import it
+                        let has_h_or_w = comp.props.iter().any(|p| p.name == "h" || p.name == "w");
+                        if !has_h_or_w {
+                            self.add_import_if_missing(prop_imports, "androidx.compose.foundation.layout.height");
                         }
                     }
                     _ => {}

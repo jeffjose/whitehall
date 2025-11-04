@@ -78,8 +78,31 @@ const examples = {
   </Text>
 </Column>`
     },
+    'spacer': {
+        name: '05. Spacer Shortcuts',
+        code: `// Spacer with h (height) and w (width) shortcuts
+<Column>
+  <Text fontSize={20} fontWeight="bold">Spacer Examples</Text>
+
+  <Text>First item</Text>
+  <Spacer h={16} />
+  <Text>16dp vertical space above</Text>
+
+  <Spacer h={32} />
+  <Text>32dp vertical space above</Text>
+
+  <Spacer />
+  <Text>Default 8dp space above</Text>
+
+  <Row>
+    <Text>Left</Text>
+    <Spacer w={24} />
+    <Text>24dp horizontal space</Text>
+  </Row>
+</Column>`
+    },
     'button': {
-        name: '05. Buttons & State',
+        name: '17. Buttons & State',
         code: `// Reactive state: just declare 'var' and modify it!
 var count = 0
 
@@ -101,7 +124,7 @@ var count = 0
 </Column>`
     },
     'binding': {
-        name: '06. Two-Way Binding',
+        name: '17. Two-Way Binding',
         code: `var name = ""
 
 // bind:value creates two-way binding - changes flow both ways!
@@ -118,7 +141,7 @@ var count = 0
 </Column>`
     },
     'multistate': {
-        name: '07. Multiple State',
+        name: '17. Multiple State',
         code: `// Manage multiple reactive variables independently
 var likes = 0
 var dislikes = 0
@@ -145,7 +168,7 @@ var dislikes = 0
 </Column>`
     },
     'conditional': {
-        name: '08. Conditionals',
+        name: '17. Conditionals',
         code: `var isLoggedIn = false
 
 // @if for conditional rendering (like Kotlin 'if' expressions)
@@ -164,7 +187,7 @@ var dislikes = 0
 </Column>`
     },
     'list': {
-        name: '09. Lists & Loops',
+        name: '17. Lists & Loops',
         code: `var items = ["Apple", "Banana", "Cherry", "Date"]
 
 // @for loops over collections
@@ -179,7 +202,7 @@ var dislikes = 0
 </Column>`
     },
     'interactive-list': {
-        name: '10. Interactive List',
+        name: '17. Interactive List',
         code: `var items = ["Apple", "Banana", "Cherry"]
 var newItem = ""
 
@@ -216,7 +239,7 @@ var newItem = ""
 </Column>`
     },
     'derived': {
-        name: '11. Derived State',
+        name: '17. Derived State',
         code: `// Use 'var' for mutable state, 'val' for derived/computed values
 var price = 10
 var quantity = 1
@@ -247,7 +270,7 @@ val finalPrice = total * (1 - discount)
 </Column>`
     },
     'todo': {
-        name: '12. Todo App',
+        name: '17. Todo App',
         code: `var todos = ["Buy milk", "Write code"]
 var newTodo = ""
 
@@ -289,7 +312,7 @@ var newTodo = ""
 </Column>`
     },
     'form': {
-        name: '13. Form Validation',
+        name: '17. Form Validation',
         code: `var name = ""
 var email = ""
 var age = ""
@@ -328,7 +351,7 @@ val canSubmit = name.isNotEmpty() && isValidEmail && isValidAge && agreed
 </Column>`
     },
     'counter-list': {
-        name: '14. List Mutations',
+        name: '17. List Mutations',
         code: `var counters = [0, 0, 0]
 
 // Working with list indices for complex updates
@@ -365,7 +388,7 @@ val canSubmit = name.isNotEmpty() && isValidEmail && isValidAge && agreed
 </Column>`
     },
     'shopping': {
-        name: '15. Complex Data',
+        name: '17. Complex Data',
         code: `// Work with maps and complex data structures
 var cart = [
   { "name": "Laptop", "price": 999, "qty": 1 },
@@ -407,7 +430,7 @@ val total = cart.sumOf { it["price"] as Int * it["qty"] as Int }
 </Column>`
     },
     'tabs': {
-        name: '16. Navigation',
+        name: '17. Navigation',
         code: `// Simple tab navigation with conditional rendering
 var activeTab = "home"
 
