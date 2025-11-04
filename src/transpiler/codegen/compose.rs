@@ -1546,12 +1546,8 @@ impl ComposeBackend {
                 Markup::Interpolation(expr) => {
                     let str_res_transformed = self.transform_string_resource(expr);
                     let transformed = self.add_null_assertions(&str_res_transformed);
-                    // Simple variable without property access doesn't need braces
-                    if !transformed.contains('.') && !transformed.contains("!!") {
-                        parts.push(format!("${}", transformed));
-                    } else {
-                        parts.push(format!("${{{}}}", transformed));
-                    }
+                    // Always use braces for safety - handles literals, keywords, and expressions
+                    parts.push(format!("${{{}}}", transformed));
                 }
                 _ => return Err("Unexpected child in text".to_string()),
             }

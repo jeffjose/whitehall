@@ -132,7 +132,7 @@ fun ProductFilter(
         }
 
         Text(
-            text = "${filteredProducts.size} products - Total: \$$totalPrice",
+            text = "${filteredProducts.size} products - Total: \$${totalPrice}",
             fontSize = 16.sp,
             fontWeight = FontWeight.Bold
         )

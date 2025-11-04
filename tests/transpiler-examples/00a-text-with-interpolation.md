@@ -22,7 +22,7 @@ import androidx.compose.runtime.*
 fun TextWithInterpolation() {
     var name by remember { mutableStateOf("World") }
 
-    Text(text = "Hello, $name!")
+    Text(text = "Hello, ${name}!")
 }
 ```
 
