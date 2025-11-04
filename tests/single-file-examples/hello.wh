@@ -1,0 +1,8 @@
+#!/usr/bin/env whitehall
+/// [app]
+/// name = "Hello World"
+/// package = "com.example.hello"
+
+<Column padding={16}>
+  <Text>Hello, Whitehall!</Text>
+</Column>

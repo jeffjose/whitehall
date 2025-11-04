@@ -1,0 +1,37 @@
+#!/usr/bin/env whitehall
+/// [app]
+/// name = "Simple Todo"
+/// package = "com.example.simpletodo"
+/// min_sdk = 26
+/// target_sdk = 34
+
+var todos = ["Buy milk", "Write code"]
+var newTodo = ""
+
+fun addTodo() {
+  if (newTodo.isNotEmpty()) {
+    todos = todos + newTodo
+    newTodo = ""
+  }
+}
+
+<Column padding={16} spacing={12}>
+  <Text fontSize={24}>Todo List</Text>
+
+  <Row spacing={8}>
+    <TextField
+      bind:value={newTodo}
+      label="New Todo"
+      modifier={Modifier.weight(1f)}
+    />
+    <Button onClick={addTodo}>
+      <Text>Add</Text>
+    </Button>
+  </Row>
+
+  @for (todo in todos) {
+    <Card padding={8} modifier={Modifier.fillMaxWidth()}>
+      <Text>{todo}</Text>
+    </Card>
+  }
+</Column>

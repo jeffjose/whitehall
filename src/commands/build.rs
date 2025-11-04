@@ -3,6 +3,7 @@ use colored::Colorize;
 use std::env;
 use std::fs;
 use std::path::Path;
+use std::time::Instant;
 
 use crate::build_pipeline;
 use crate::config;
@@ -19,6 +20,8 @@ pub fn execute(target: &str) -> Result<()> {
 
 /// Build a single .wh file
 fn execute_single_file(file_path: &str) -> Result<()> {
+    let start = Instant::now();
+
     // Parse frontmatter
     let file_path = Path::new(file_path);
     let content = fs::read_to_string(file_path)
@@ -51,10 +54,13 @@ fn execute_single_file(file_path: &str) -> Result<()> {
         anyhow::bail!("Build failed");
     }
 
-    println!("   {} `{}` ({})",
+    let elapsed = start.elapsed();
+    println!("   {} `{}` v{} ({}) in {:.2}s",
         "Finished".green().bold(),
         single_config.app.name,
-        single_config.app.package
+        config.project.version,
+        single_config.app.package,
+        elapsed.as_secs_f64()
     );
 
     Ok(())
@@ -62,6 +68,8 @@ fn execute_single_file(file_path: &str) -> Result<()> {
 
 /// Build a project (existing behavior)
 fn execute_project(manifest_path: &str) -> Result<()> {
+    let start = Instant::now();
+
     // 1. Determine project directory from manifest path
     let manifest_path = Path::new(manifest_path);
     let original_dir = env::current_dir()?;
@@ -118,12 +126,13 @@ fn execute_project(manifest_path: &str) -> Result<()> {
         output_path
     };
 
-    println!("   {} `{}` v{} ({}) to {}",
+    let elapsed = start.elapsed();
+    println!("   {} `{}` v{} ({}) in {:.2}s",
         "Finished".green().bold(),
         config.project.name,
         config.project.version,
         config.android.package,
-        display_path.display()
+        elapsed.as_secs_f64()
     );
 
     Ok(())
