@@ -1,5 +1,4 @@
 use anyhow::{Context, Result};
-use colored::Colorize;
 use std::fs;
 use std::path::Path;
 
@@ -46,8 +45,6 @@ pub fn execute(file_path: &str) -> Result<()> {
         .map_err(|e| anyhow::anyhow!("Transpilation error: {}", e))?;
 
     // Output the Kotlin code
-    println!("   {} compiling {}", "Finished".green().bold(), file_path);
-    println!();
     println!("{}", kotlin_code);
 
     Ok(())
