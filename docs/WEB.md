@@ -294,50 +294,450 @@ Whitehall → Kotlin/JS (Compose Multiplatform Web target) → JavaScript bundle
 
 ## Phased Implementation Plan
 
-### **Phase 1: MVP - Compiled Output Only** ⭐ START HERE
-**Goal:** Basic playground with code editor and Kotlin output
+### **Phase 1: Full-Featured Playground** ⭐ START HERE
+**Goal:** Svelte-playground-quality developer experience with excellent error reporting
 
-**Time estimate:** 2-3 hours
+**Time estimate:** 10-13 hours
+
+**Inspiration:** Svelte REPL (https://svelte.dev/repl) - gold standard for web playgrounds
 
 **Features:**
-- Left pane: Monaco editor with Whitehall syntax
-- Right pane: Compiled Kotlin code display
-- POST /api/compile endpoint
-- Debounced compilation (500ms after typing stops)
-- Error display with messages
-- Copy-to-clipboard button
 
-**Implementation steps:**
-1. Setup project structure (10 min)
-   - Create `tools/playground/` directory
-   - Create backend Cargo.toml
-   - Create frontend files (HTML/CSS/JS)
+#### Core Functionality
+- **Left pane:** Monaco editor with Whitehall syntax
+- **Right pane:** Tabbed output display
+  - **Tab 1: Kotlin Output** - Compiled code with syntax highlighting
+  - **Tab 2: Errors** - Detailed error panel (if any errors)
+  - **Tab 3: AST View** - Debug view of parsed AST (optional)
+- **Real-time compilation:** Debounced (500ms after typing stops)
+- **Inline error markers:** Red squiggly lines in editor at exact error location
+- **Example snippets:** Dropdown with prebuilt examples
 
-2. Backend API (30-45 min)
-   - Axum server setup
-   - /api/compile endpoint
-   - Use whitehall transpiler crate
-   - Error handling and JSON responses
-   - CORS middleware
+#### Enhanced Error Reporting (Like Svelte REPL)
+- ✅ **Line/column precision:** Errors show exact location (e.g., "Line 5, Column 12")
+- ✅ **Inline decorations:** Monaco red underlines at error position
+- ✅ **Source context:** Show surrounding code with error highlighted
+- ✅ **Clickable errors:** Click error in panel → jump to line in editor
+- ✅ **Multiple errors:** Display all errors at once, not just first one
+- ✅ **Error categories:** Syntax errors, transpiler errors, etc.
 
-3. Frontend UI (45-60 min)
-   - Split-pane layout (CSS Grid)
-   - Integrate Monaco Editor from CDN
-   - Fetch API to call backend
-   - Display compiled output or errors
-   - Add loading spinner
-   - Copy button functionality
+**Example error display:**
+```
+❌ Syntax Error at Line 5, Column 12
 
-4. Testing (15-30 min)
-   - Test with various Whitehall examples
-   - Handle edge cases (empty input, syntax errors)
-   - Test debouncing behavior
+  3 | var count = 0
+  4 |
+  5 | <Column padding={16>
+              ↑
+              Expected closing brace '}'
+  6 |   <Text>{count}</Text>
+  7 | </Column>
+```
 
-**Success criteria:**
-- ✅ Can type Whitehall code in left pane
-- ✅ See compiled Kotlin in right pane after 500ms
-- ✅ Errors displayed clearly
-- ✅ Can copy output to clipboard
+#### User Experience
+- **Format button:** Auto-format Whitehall code (basic indentation)
+- **Copy button:** Copy compiled Kotlin to clipboard
+- **Clear button:** Reset editor to blank state
+- **Loading state:** Spinner during compilation
+- **Success indicator:** Green checkmark when compilation succeeds
+- **Keyboard shortcuts:**
+  - `Ctrl+Enter` / `Cmd+Enter`: Force recompile
+  - `Ctrl+S` / `Cmd+S`: Format code
+- **URL state:** Share code via URL hash (encode/decode)
+- **Mobile responsive:** Works on tablets/phones
+
+#### Example Snippets
+Dropdown with working examples:
+1. **Hello World** - Minimal component
+2. **Counter** - State management with button
+3. **Todo List** - Array manipulation and @for loops
+4. **Form** - Text input with bind:value
+5. **Navigation** - Multi-screen example (if routing ready)
+6. **Styling** - Modifiers and theming
+7. **Lifecycle** - onMount/onDispose hooks
+
+---
+
+## Implementation Steps (Phase 1)
+
+### 1. Backend - Enhanced Error Reporting (3-4 hours)
+
+**Goal:** Track line/column in parser and return detailed error info
+
+**Tasks:**
+- Enhance parser to track position for every token/node
+- Store `(line, col)` in error types
+- Return structured error objects from API
+- Support multiple errors in single compilation
+
+**API changes:**
+```rust
+#[derive(Serialize)]
+struct CompileError {
+    message: String,
+    line: usize,
+    column: usize,
+    length: usize,  // How many chars to underline
+    severity: String,  // "error" | "warning"
+    context: String,  // Source code snippet around error
+}
+
+#[derive(Serialize)]
+struct CompileResponse {
+    success: bool,
+    output: String,
+    errors: Vec<CompileError>,
+    warnings: Vec<CompileError>,
+    ast: Option<String>,  // JSON serialized AST (for debug tab)
+}
+```
+
+**Parser enhancements:**
+```rust
+// In src/transpiler/parser.rs or new src/transpiler/position.rs
+#[derive(Debug, Clone, Copy)]
+pub struct Position {
+    pub line: usize,
+    pub column: usize,
+    pub offset: usize,  // Byte offset in file
+}
+
+#[derive(Debug)]
+pub struct Span {
+    pub start: Position,
+    pub end: Position,
+}
+
+// Update error types to include position
+#[derive(Debug)]
+pub struct ParseError {
+    pub message: String,
+    pub span: Span,
+    pub kind: ErrorKind,
+}
+
+impl ParseError {
+    pub fn with_context(&self, source: &str) -> String {
+        // Extract 2 lines before/after error
+        // Highlight error line with ↑ marker
+        // Return formatted string
+    }
+}
+```
+
+**Challenges:**
+- Need to track position during parsing (add to Parser state)
+- Handle multi-line tokens (strings, comments)
+- Efficient span calculation
+- Format context snippets nicely
+
+**Time:** 3-4 hours (requires transpiler changes)
+
+---
+
+### 2. Frontend - Monaco Integration with Error Decorations (3-4 hours)
+
+**Goal:** Display inline errors and rich error panel
+
+**Tasks:**
+- Setup Monaco Editor with custom decorations
+- Parse error response and create Monaco markers
+- Implement error panel with clickable line numbers
+- Add tab switching (Kotlin / Errors / AST)
+- Handle editor focus on error click
+
+**Monaco error decorations:**
+```javascript
+function updateEditorErrors(errors) {
+    // Clear previous decorations
+    decorations = editor.deltaDecorations(decorations, []);
+
+    // Add new decorations
+    const newDecorations = errors.map(err => ({
+        range: new monaco.Range(err.line, err.column, err.line, err.column + err.length),
+        options: {
+            isWholeLine: false,
+            className: 'error-decoration',  // Red squiggly underline
+            hoverMessage: { value: err.message },
+            glyphMarginClassName: 'error-glyph',  // Red dot in margin
+        }
+    }));
+
+    decorations = editor.deltaDecorations([], newDecorations);
+
+    // Also set Monaco markers (for problems panel)
+    monaco.editor.setModelMarkers(editor.getModel(), 'whitehall', errors.map(err => ({
+        startLineNumber: err.line,
+        startColumn: err.column,
+        endLineNumber: err.line,
+        endColumn: err.column + err.length,
+        message: err.message,
+        severity: monaco.MarkerSeverity.Error,
+    })));
+}
+```
+
+**Error panel:**
+```javascript
+function renderErrorPanel(errors) {
+    const html = errors.map(err => `
+        <div class="error-item" onclick="jumpToLine(${err.line})">
+            <div class="error-header">
+                <span class="error-icon">❌</span>
+                <span class="error-location">Line ${err.line}, Column ${err.column}</span>
+            </div>
+            <div class="error-message">${err.message}</div>
+            <pre class="error-context">${err.context}</pre>
+        </div>
+    `).join('');
+
+    document.getElementById('errors-panel').innerHTML = html;
+}
+
+function jumpToLine(line) {
+    editor.revealLineInCenter(line);
+    editor.setPosition({ lineNumber: line, column: 1 });
+    editor.focus();
+}
+```
+
+**Time:** 3-4 hours
+
+---
+
+### 3. Example Snippets Dropdown (1 hour)
+
+**Goal:** Load working examples into editor
+
+**Implementation:**
+```javascript
+const examples = {
+    'hello': {
+        name: 'Hello World',
+        code: `<Text>Hello, Whitehall!</Text>`
+    },
+    'counter': {
+        name: 'Counter',
+        code: `var count = 0
+
+<Column padding={16} spacing={8}>
+  <Text fontSize={24}>{count}</Text>
+  <Button onClick={() => count++}>
+    <Text>Increment</Text>
+  </Button>
+</Column>`
+    },
+    'todo': {
+        name: 'Todo List',
+        code: `var todos = ["Buy milk", "Write code"]
+var newTodo = ""
+
+<Column padding={16}>
+  <TextField bind:value={newTodo} label="New Todo" />
+  <Button onClick={() => todos = todos + newTodo}>
+    <Text>Add</Text>
+  </Button>
+
+  @for (todo in todos) {
+    <Text>{todo}</Text>
+  }
+</Column>`
+    },
+    // Add more examples...
+};
+
+function loadExample(key) {
+    editor.setValue(examples[key].code);
+    compile();
+}
+```
+
+**UI:**
+```html
+<select id="examples" onchange="loadExample(this.value)">
+    <option value="">Load Example...</option>
+    <option value="hello">Hello World</option>
+    <option value="counter">Counter</option>
+    <option value="todo">Todo List</option>
+</select>
+```
+
+**Time:** 1 hour
+
+---
+
+### 4. Multiple Output Tabs (1 hour)
+
+**Goal:** Switch between Kotlin output, Errors, and AST view
+
+**Implementation:**
+```javascript
+let currentTab = 'kotlin';
+
+function switchTab(tab) {
+    currentTab = tab;
+
+    // Update tab buttons
+    document.querySelectorAll('.tab-btn').forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.tab === tab);
+    });
+
+    // Show/hide panels
+    document.getElementById('kotlin-output').style.display = tab === 'kotlin' ? 'block' : 'none';
+    document.getElementById('errors-panel').style.display = tab === 'errors' ? 'block' : 'none';
+    document.getElementById('ast-view').style.display = tab === 'ast' ? 'block' : 'none';
+
+    // Badge for error count
+    if (tab === 'errors' && errorCount > 0) {
+        document.querySelector('[data-tab="errors"]').innerHTML = `Errors (${errorCount})`;
+    }
+}
+```
+
+**Time:** 1 hour
+
+---
+
+### 5. URL State & Sharing (1 hour)
+
+**Goal:** Share code via URL hash
+
+**Implementation:**
+```javascript
+// Encode code to URL
+function shareCode() {
+    const code = editor.getValue();
+    const encoded = btoa(encodeURIComponent(code));  // Base64 encode
+    const url = `${window.location.origin}${window.location.pathname}#${encoded}`;
+
+    navigator.clipboard.writeText(url);
+    showToast('Link copied to clipboard!');
+}
+
+// Decode from URL on load
+window.addEventListener('load', () => {
+    const hash = window.location.hash.slice(1);
+    if (hash) {
+        try {
+            const code = decodeURIComponent(atob(hash));
+            editor.setValue(code);
+            compile();
+        } catch (e) {
+            console.error('Invalid URL hash');
+        }
+    }
+});
+
+// Update URL on every change (debounced)
+let urlTimeout;
+editor.onDidChangeModelContent(() => {
+    clearTimeout(urlTimeout);
+    urlTimeout = setTimeout(() => {
+        const code = editor.getValue();
+        const encoded = btoa(encodeURIComponent(code));
+        window.history.replaceState(null, '', `#${encoded}`);
+    }, 1000);
+});
+```
+
+**Time:** 1 hour
+
+---
+
+### 6. Polish & Testing (1-2 hours)
+
+**Tasks:**
+- Format button (basic indentation)
+- Clear button
+- Copy button with success toast
+- Loading spinner during compilation
+- Success/error status indicators
+- Keyboard shortcuts (Ctrl+Enter, Ctrl+S)
+- Mobile responsive layout
+- Cross-browser testing
+- Error edge cases
+
+**Time:** 1-2 hours
+
+---
+
+## Updated Tech Stack
+
+**Backend:**
+```toml
+# tools/playground/backend/Cargo.toml
+[dependencies]
+axum = "0.7"
+tokio = { version = "1", features = ["full"] }
+tower-http = { version = "0.5", features = ["cors"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+whitehall = { path = "../../../" }
+
+# For position tracking in parser (if needed)
+# Add to main whitehall Cargo.toml:
+# logos = "0.13"  # Lexer with position tracking (if switching from hand-rolled parser)
+```
+
+**Frontend:**
+- Monaco Editor 0.45+ (TypeScript/JSON editing built-in)
+- Tailwind CSS 3.x (utility-first styling)
+- Vanilla JavaScript (ES6+, no framework)
+
+---
+
+## Success Criteria (Phase 1 Complete When)
+
+- ✅ Can type Whitehall code with Monaco syntax highlighting
+- ✅ Real-time compilation with 500ms debounce
+- ✅ **Inline error markers:** Red squiggly lines at exact error position
+- ✅ **Error panel:** Detailed errors with line/column and context
+- ✅ **Clickable errors:** Jump to error line in editor
+- ✅ **Multiple errors displayed** (not just first one)
+- ✅ Tabs switch between Kotlin output, Errors, and AST
+- ✅ Example snippets load correctly
+- ✅ Copy button copies Kotlin to clipboard
+- ✅ Share button creates URL with encoded code
+- ✅ URL hash loads code on page load
+- ✅ Format button indents code correctly
+- ✅ Keyboard shortcuts work (Ctrl+Enter, Ctrl+S)
+- ✅ Mobile responsive (works on tablets)
+- ✅ Success indicator shows when compilation succeeds
+- ✅ No console errors or warnings
+
+---
+
+## Phase 1 Time Breakdown
+
+| Task | Time |
+|------|------|
+| Backend: Enhanced error reporting | 3-4 hours |
+| Frontend: Monaco + error decorations | 3-4 hours |
+| Example snippets dropdown | 1 hour |
+| Multiple output tabs | 1 hour |
+| URL state & sharing | 1 hour |
+| Polish & testing | 1-2 hours |
+| **Total** | **10-13 hours** |
+
+---
+
+## What Phase 1 Includes (vs. Later Phases)
+
+**✅ In Phase 1:**
+- Excellent error reporting (inline + panel)
+- Real-time compilation
+- Example snippets
+- URL sharing
+- Professional UI/UX
+- Tabs for output/errors/AST
+
+**❌ NOT in Phase 1 (Future):**
+- Visual preview (Phase 2)
+- Emulator (Phase 3)
+- Compose-for-Web runtime (Phase 4)
+- Syntax highlighting for Whitehall (Phase 5)
+- Save to database / user accounts (Phase 6)
+- Autocomplete / IntelliSense (Phase 7)
 
 ---
 
