@@ -16,10 +16,16 @@ PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 BACKEND_DIR="$PROJECT_ROOT/tools/playground/backend"
 FRONTEND_DIR="$PROJECT_ROOT/tools/playground/frontend"
 
-echo -e "${BLUE}Starting Whitehall Playground...${NC}"
-echo -e "${BLUE}Backend: http://localhost:3000${NC}"
-echo -e "${BLUE}Frontend: http://localhost:8080${NC}"
+echo -e "${BLUE}Starting Whitehall Playground with auto-reload...${NC}"
+echo -e "${BLUE}Backend: http://localhost:3000 (watches Rust files)${NC}"
+echo -e "${BLUE}Frontend: http://localhost:8080 (refresh browser for changes)${NC}"
 echo ""
+
+# Check if cargo-watch is installed
+if ! command -v cargo-watch &> /dev/null; then
+    echo -e "${GREEN}Installing cargo-watch for auto-reload...${NC}"
+    cargo install cargo-watch
+fi
 
 # Track if we're already cleaning up to avoid recursive trap
 CLEANING_UP=0
@@ -41,10 +47,10 @@ cleanup() {
 }
 trap cleanup INT TERM
 
-# Start backend in background, prefix output with [BACKEND]
+# Start backend with cargo-watch for auto-reload on file changes
 (
     cd "$BACKEND_DIR"
-    cargo run 2>&1 | while IFS= read -r line; do
+    cargo watch -x run 2>&1 | while IFS= read -r line; do
         echo -e "${GREEN}[BACKEND]${NC} $line"
     done
 ) &
