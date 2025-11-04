@@ -757,19 +757,46 @@ impl ComposeBackend {
                 }
                 // Special handling for Text and Card with modifier props
                 else if comp.name == "Text" || comp.name == "Card" {
-                    // Collect modifier-related props
+                    // Collect modifier-related props (including shortcuts)
                     let padding = comp.props.iter().find(|p| p.name == "padding");
                     let fill_max_width = comp.props.iter().find(|p| p.name == "fillMaxWidth");
                     let explicit_modifier = comp.props.iter().find(|p| p.name == "modifier");
 
+                    // Collect padding/margin shortcuts
+                    let padding_shortcuts: Vec<_> = comp.props.iter()
+                        .filter(|p| matches!(p.name.as_str(), "p" | "px" | "py" | "pt" | "pb" | "pl" | "pr" |
+                                                               "m" | "mx" | "my" | "mt" | "mb" | "ml" | "mr"))
+                        .collect();
+
                     // Build modifier chain if we have modifier-related props
-                    if padding.is_some() || fill_max_width.is_some() || explicit_modifier.is_some() {
+                    if padding.is_some() || fill_max_width.is_some() || explicit_modifier.is_some() || !padding_shortcuts.is_empty() {
                         let mut modifiers = Vec::new();
 
                         // Add padding first (if present)
                         if let Some(pad_prop) = padding {
                             let pad_value = self.get_prop_expr(&pad_prop.value);
                             modifiers.push(format!(".padding({}.dp)", pad_value));
+                        }
+
+                        // Add padding shortcuts
+                        if !padding_shortcuts.is_empty() {
+                            let mut padding_parts = Vec::new();
+                            for prop in &padding_shortcuts {
+                                let value = self.get_prop_expr(&prop.value);
+                                match prop.name.as_str() {
+                                    "p" | "m" => padding_parts.push(format!("{}.dp", value)),
+                                    "px" | "mx" => padding_parts.push(format!("horizontal = {}.dp", value)),
+                                    "py" | "my" => padding_parts.push(format!("vertical = {}.dp", value)),
+                                    "pt" | "mt" => padding_parts.push(format!("top = {}.dp", value)),
+                                    "pb" | "mb" => padding_parts.push(format!("bottom = {}.dp", value)),
+                                    "pl" | "ml" => padding_parts.push(format!("start = {}.dp", value)),
+                                    "pr" | "mr" => padding_parts.push(format!("end = {}.dp", value)),
+                                    _ => {}
+                                }
+                            }
+                            if !padding_parts.is_empty() {
+                                modifiers.push(format!(".padding({})", padding_parts.join(", ")));
+                            }
                         }
 
                         // Add fillMaxWidth if present (as boolean prop or variable)
@@ -812,8 +839,11 @@ impl ComposeBackend {
 
                     // Add other props (excluding the ones we handled)
                     for prop in &comp.props {
-                        if prop.name == "padding" || prop.name == "fillMaxWidth" || prop.name == "modifier" {
-                            continue; // Skip, already handled
+                        // Skip props already handled
+                        if prop.name == "padding" || prop.name == "fillMaxWidth" || prop.name == "modifier" ||
+                           matches!(prop.name.as_str(), "p" | "px" | "py" | "pt" | "pb" | "pl" | "pr" |
+                                                        "m" | "mx" | "my" | "mt" | "mb" | "ml" | "mr") {
+                            continue;
                         }
                         let prop_expr = self.get_prop_expr(&prop.value);
                         let transformed = self.transform_prop(&comp.name, &prop.name, prop_expr);
@@ -976,8 +1006,57 @@ impl ComposeBackend {
                         params.extend(transformed?);
                     }
                 } else {
-                    // Regular prop handling for other components
+                    // Check for padding/margin shortcuts that need to be combined
+                    let padding_shortcuts: Vec<_> = comp.props.iter()
+                        .filter(|p| matches!(p.name.as_str(), "p" | "px" | "py" | "pt" | "pb" | "pl" | "pr" |
+                                                               "m" | "mx" | "my" | "mt" | "mb" | "ml" | "mr"))
+                        .collect();
+
+                    if !padding_shortcuts.is_empty() {
+                        // Build combined padding modifier
+                        let mut padding_parts = Vec::new();
+
+                        for prop in &padding_shortcuts {
+                            let value = self.get_prop_expr(&prop.value);
+                            match prop.name.as_str() {
+                                "p" | "m" => {
+                                    padding_parts.push(format!("{}.dp", value));
+                                }
+                                "px" | "mx" => {
+                                    padding_parts.push(format!("horizontal = {}.dp", value));
+                                }
+                                "py" | "my" => {
+                                    padding_parts.push(format!("vertical = {}.dp", value));
+                                }
+                                "pt" | "mt" => {
+                                    padding_parts.push(format!("top = {}.dp", value));
+                                }
+                                "pb" | "mb" => {
+                                    padding_parts.push(format!("bottom = {}.dp", value));
+                                }
+                                "pl" | "ml" => {
+                                    padding_parts.push(format!("start = {}.dp", value));
+                                }
+                                "pr" | "mr" => {
+                                    padding_parts.push(format!("end = {}.dp", value));
+                                }
+                                _ => {}
+                            }
+                        }
+
+                        if !padding_parts.is_empty() {
+                            params.push(format!("modifier = Modifier.padding({})", padding_parts.join(", ")));
+                        }
+                    }
+
+                    // Regular prop handling for other components (excluding shortcuts)
                     for prop in &comp.props {
+                        // Skip padding/margin shortcuts - already handled
+                        if matches!(prop.name.as_str(), "p" | "px" | "py" | "pt" | "pb" | "pl" | "pr" |
+                                                        "m" | "mx" | "my" | "mt" | "mb" | "ml" | "mr") {
+                            continue;
+                        }
+
                         let prop_expr = self.get_prop_expr(&prop.value);
                         let transformed = self.transform_prop(&comp.name, &prop.name, prop_expr);
                         params.extend(transformed?);
@@ -1125,6 +1204,20 @@ impl ComposeBackend {
                     if prop_expr.contains("R.string.") {
                         self.add_import_if_missing(prop_imports, "androidx.compose.ui.res.stringResource");
                         self.add_import_if_missing(component_imports, "com.example.app.R");
+                    }
+
+                    // Padding/margin shorthand props (work on any component)
+                    match prop.name.as_str() {
+                        "p" | "px" | "py" | "pt" | "pb" | "pl" | "pr" |
+                        "m" | "mx" | "my" | "mt" | "mb" | "ml" | "mr" => {
+                            // Shorthand padding/margin → modifier with padding/margin
+                            self.add_import_if_missing(prop_imports, "androidx.compose.ui.Modifier");
+                            if prop.name.starts_with('p') {
+                                self.add_import_if_missing(prop_imports, "androidx.compose.foundation.layout.padding");
+                            }
+                            self.add_import_if_missing(prop_imports, "androidx.compose.ui.unit.dp");
+                        }
+                        _ => {}
                     }
 
                     // Component-specific prop transformations that need imports
@@ -1616,6 +1709,9 @@ impl ComposeBackend {
 
         // Transform lambda arrow syntax: () => to {}
         let value = self.transform_lambda_arrow(&value);
+
+        // Note: Padding/margin shortcuts (p, px, py, etc.) are handled at the component level
+        // in generate_markup_with_indent where they can be combined properly
 
         // Component-specific transformations
         match (component, prop_name) {

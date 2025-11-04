@@ -57,8 +57,29 @@ const examples = {
   </Row>
 </Column>`
     },
+    'padding': {
+        name: '04. Padding Shortcuts',
+        code: `// CSS-like padding shortcuts: p, px, py, pt, pb, pl, pr
+<Column spacing={8}>
+  <Text p={16} color="#2196F3">
+    p={16} - all sides
+  </Text>
+
+  <Text px={20} py={8} color="#4CAF50">
+    px={20} py={8} - horizontal & vertical
+  </Text>
+
+  <Card pt={4} pb={12} pl={8} pr={8}>
+    <Text>Individual sides: pt pb pl pr</Text>
+  </Card>
+
+  <Text fontWeight="bold">
+    Multiple shortcuts combine into single padding()
+  </Text>
+</Column>`
+    },
     'button': {
-        name: '04. Buttons & State',
+        name: '05. Buttons & State',
         code: `// Reactive state: just declare 'var' and modify it!
 var count = 0
 
@@ -80,7 +101,7 @@ var count = 0
 </Column>`
     },
     'binding': {
-        name: '05. Two-Way Binding',
+        name: '06. Two-Way Binding',
         code: `var name = ""
 
 // bind:value creates two-way binding - changes flow both ways!
@@ -97,7 +118,7 @@ var count = 0
 </Column>`
     },
     'multistate': {
-        name: '06. Multiple State',
+        name: '07. Multiple State',
         code: `// Manage multiple reactive variables independently
 var likes = 0
 var dislikes = 0
@@ -124,7 +145,7 @@ var dislikes = 0
 </Column>`
     },
     'conditional': {
-        name: '07. Conditionals',
+        name: '08. Conditionals',
         code: `var isLoggedIn = false
 
 // @if for conditional rendering (like Kotlin 'if' expressions)
@@ -143,7 +164,7 @@ var dislikes = 0
 </Column>`
     },
     'list': {
-        name: '08. Lists & Loops',
+        name: '09. Lists & Loops',
         code: `var items = ["Apple", "Banana", "Cherry", "Date"]
 
 // @for loops over collections
@@ -158,7 +179,7 @@ var dislikes = 0
 </Column>`
     },
     'interactive-list': {
-        name: '09. Interactive List',
+        name: '10. Interactive List',
         code: `var items = ["Apple", "Banana", "Cherry"]
 var newItem = ""
 
@@ -195,7 +216,7 @@ var newItem = ""
 </Column>`
     },
     'derived': {
-        name: '10. Derived State',
+        name: '11. Derived State',
         code: `// Use 'var' for mutable state, 'val' for derived/computed values
 var price = 10
 var quantity = 1
@@ -226,7 +247,7 @@ val finalPrice = total * (1 - discount)
 </Column>`
     },
     'todo': {
-        name: '11. Todo App',
+        name: '12. Todo App',
         code: `var todos = ["Buy milk", "Write code"]
 var newTodo = ""
 
@@ -268,7 +289,7 @@ var newTodo = ""
 </Column>`
     },
     'form': {
-        name: '12. Form Validation',
+        name: '13. Form Validation',
         code: `var name = ""
 var email = ""
 var age = ""
@@ -307,7 +328,7 @@ val canSubmit = name.isNotEmpty() && isValidEmail && isValidAge && agreed
 </Column>`
     },
     'counter-list': {
-        name: '13. List Mutations',
+        name: '14. List Mutations',
         code: `var counters = [0, 0, 0]
 
 // Working with list indices for complex updates
@@ -344,7 +365,7 @@ val canSubmit = name.isNotEmpty() && isValidEmail && isValidAge && agreed
 </Column>`
     },
     'shopping': {
-        name: '14. Complex Data',
+        name: '15. Complex Data',
         code: `// Work with maps and complex data structures
 var cart = [
   { "name": "Laptop", "price": 999, "qty": 1 },
@@ -386,7 +407,7 @@ val total = cart.sumOf { it["price"] as Int * it["qty"] as Int }
 </Column>`
     },
     'tabs': {
-        name: '15. Navigation',
+        name: '16. Navigation',
         code: `// Simple tab navigation with conditional rendering
 var activeTab = "home"
 
