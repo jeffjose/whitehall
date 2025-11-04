@@ -4,6 +4,13 @@ This document tracks potential DX (Developer Experience) optimizations that coul
 
 ## Implemented ✅
 
+### Default Units (No .dp/.sp needed)
+```kotlin
+// Whitehall automatically adds units based on context
+<Text fontSize={16}>           // → 16.sp automatically
+<Column padding={16} spacing={8}>  // → 16.dp, 8.dp automatically
+```
+
 ### Button Text Auto-Wrapping
 ```kotlin
 // Both syntaxes work identically:
@@ -20,28 +27,7 @@ This document tracks potential DX (Developer Experience) optimizations that coul
 
 ## Proposed Improvements
 
-### 1. Default Units for Sizes ⭐
-**Impact: High | Complexity: Medium**
-
-No more `.dp`/`.sp` everywhere - auto-detect based on context.
-
-```kotlin
-// Current (verbose)
-<Text fontSize={16} padding={8}>
-
-// Proposed
-<Text fontSize={16}>  // → 16.sp automatically
-<Column padding={16}>  // → 16.dp automatically
-
-// Alternative: shorter prop names
-<Text size={16} p={8}>
-```
-
-**Why:** Reduces visual noise, most common case (dp/sp) becomes default.
-
----
-
-### 2. CSS-like Padding/Margin Shorthand ⭐
+### 1. CSS-like Padding/Margin Shorthand ⭐
 **Impact: High | Complexity: Low**
 
 ```kotlin
@@ -64,7 +50,7 @@ No more `.dp`/`.sp` everywhere - auto-detect based on context.
 
 ---
 
-### 3. Icon Shortcuts
+### 2. Icon Shortcuts
 **Impact: Medium | Complexity: Medium**
 
 String names instead of complex imports.
@@ -86,7 +72,7 @@ String names instead of complex imports.
 
 ---
 
-### 4. Image from URL (simpler than AsyncImage)
+### 3. Image from URL (simpler than AsyncImage)
 **Impact: Medium | Complexity: Low**
 
 ```kotlin
@@ -103,7 +89,7 @@ String names instead of complex imports.
 
 ---
 
-### 5. Spacer Shorthand ⭐
+### 4. Spacer Shorthand ⭐
 **Impact: High | Complexity: Low**
 
 ```kotlin
@@ -121,7 +107,7 @@ String names instead of complex imports.
 
 ---
 
-### 6. Divider Shorthand ⭐
+### 5. Divider Shorthand ⭐
 **Impact: Medium | Complexity: Low**
 
 ```kotlin
@@ -134,7 +120,7 @@ String names instead of complex imports.
 
 ---
 
-### 7. Boolean Props (no ={true}) ⭐
+### 6. Boolean Props (no ={true}) ⭐
 **Impact: Medium | Complexity: Low**
 
 ```kotlin
@@ -152,7 +138,7 @@ String names instead of complex imports.
 
 ---
 
-### 8. Smart TextField Variants
+### 7. Smart TextField Variants
 **Impact: Medium | Complexity: Medium**
 
 ```kotlin
@@ -172,7 +158,7 @@ String names instead of complex imports.
 
 ---
 
-### 9. Alignment Shortcuts ⭐
+### 8. Alignment Shortcuts ⭐
 **Impact: High | Complexity: Low**
 
 ```kotlin
@@ -194,7 +180,7 @@ String names instead of complex imports.
 
 ---
 
-### 10. Click Shorthand ⭐
+### 9. Click Shorthand ⭐
 **Impact: High | Complexity: Medium**
 
 Auto-wrap any component in clickable modifier.
@@ -213,7 +199,7 @@ Auto-wrap any component in clickable modifier.
 
 ---
 
-### 11. Loading/Disabled States on Button
+### 10. Loading/Disabled States on Button
 **Impact: Medium | Complexity: Medium**
 
 ```kotlin
@@ -234,7 +220,7 @@ Auto-wrap any component in clickable modifier.
 
 ---
 
-### 12. Conditional Variants/Styles
+### 11. Conditional Variants/Styles
 **Impact: Medium | Complexity: High**
 
 ```kotlin
@@ -252,7 +238,7 @@ Auto-wrap any component in clickable modifier.
 
 ---
 
-### 13. Quick Animations
+### 12. Quick Animations
 **Impact: Low | Complexity: High**
 
 ```kotlin
@@ -269,7 +255,7 @@ Auto-wrap any component in clickable modifier.
 
 ---
 
-### 14. Grid Layout
+### 13. Grid Layout
 **Impact: Medium | Complexity: Medium**
 
 ```kotlin
@@ -289,7 +275,7 @@ Auto-wrap any component in clickable modifier.
 
 ---
 
-### 15. Color with Opacity ⭐
+### 14. Color with Opacity ⭐
 **Impact: Medium | Complexity: Low**
 
 ```kotlin
@@ -309,7 +295,7 @@ Auto-wrap any component in clickable modifier.
 
 ---
 
-### 16. Event Shortcuts
+### 15. Event Shortcuts
 **Impact: Low | Complexity: Medium**
 
 ```kotlin
@@ -327,7 +313,7 @@ Auto-wrap any component in clickable modifier.
 
 ---
 
-### 17. Smart LazyColumn with ForEach
+### 16. Smart LazyColumn with ForEach
 **Impact: Low | Complexity: Low**
 
 ```kotlin
@@ -348,7 +334,7 @@ Auto-wrap any component in clickable modifier.
 
 ---
 
-### 18. Form Shortcuts
+### 17. Form Shortcuts
 **Impact: Low | Complexity: High**
 
 ```kotlin
@@ -365,7 +351,7 @@ Auto-wrap any component in clickable modifier.
 
 ---
 
-### 19. Safe Area / Insets
+### 18. Safe Area / Insets
 **Impact: Medium | Complexity: Medium**
 
 ```kotlin
@@ -383,7 +369,7 @@ Auto-wrap any component in clickable modifier.
 
 ---
 
-### 20. Aspect Ratio
+### 19. Aspect Ratio
 **Impact: Medium | Complexity: Low**
 
 ```kotlin
@@ -403,32 +389,31 @@ Auto-wrap any component in clickable modifier.
 
 ### 🔥 High Priority (High Impact, Low-Medium Complexity)
 
-1. **Default units** (.dp/.sp auto-added) - Huge readability win
-2. **Padding shortcuts** (p, px, py, pt, pb, etc.) - Very common pattern
-3. **Spacer shortcuts** (<Space h={16} />) - Extremely common, very verbose now
-4. **Alignment shortcuts** ("center" vs "CenterHorizontally") - Much cleaner
-5. **onClick on any component** - Auto-wraps in clickable modifier
-6. **Boolean props** (enabled vs enabled={true}) - Cleaner syntax
-7. **Divider component** - Common UI element
+1. **Padding shortcuts** (p, px, py, pt, pb, etc.) - Very common pattern
+2. **Spacer shortcuts** (<Space h={16} />) - Extremely common, very verbose now
+3. **Alignment shortcuts** ("center" vs "CenterHorizontally") - Much cleaner
+4. **onClick on any component** - Auto-wraps in clickable modifier
+5. **Boolean props** (enabled vs enabled={true}) - Cleaner syntax
+6. **Divider component** - Common UI element
 
 ### 🎯 Medium Priority (Good Impact, Medium Complexity)
 
-8. **Color opacity** (#FF0000/80 or black/50) - Common need
-9. **TextField type prop** - Better than manual keyboard options
-10. **Icon string names** - Much easier than imports
-11. **Image component** (simpler than AsyncImage) - More intuitive
-12. **Safe area/insets** - Common for full-screen apps
-13. **Grid layout** - No built-in equivalent
-14. **Aspect ratio** - Common for media
+7. **Color opacity** (#FF0000/80 or black/50) - Common need
+8. **TextField type prop** - Better than manual keyboard options
+9. **Icon string names** - Much easier than imports
+10. **Image component** (simpler than AsyncImage) - More intuitive
+11. **Safe area/insets** - Common for full-screen apps
+12. **Grid layout** - No built-in equivalent
+13. **Aspect ratio** - Common for media
 
 ### 🔮 Lower Priority (Nice to Have, Higher Complexity)
 
-15. **Loading state on Button** - Reduces boilerplate
-16. **Variants/styles system** - Requires design system
-17. **Form component** - Complex but powerful
-18. **Animations** - Complex implementation
-19. **Event shortcuts** - Alternative syntax
-20. **Smart LazyColumn** - Minor improvement
+14. **Loading state on Button** - Reduces boilerplate
+15. **Variants/styles system** - Requires design system
+16. **Form component** - Complex but powerful
+17. **Animations** - Complex implementation
+18. **Event shortcuts** - Alternative syntax
+19. **Smart LazyColumn** - Minor improvement
 
 ---
 
