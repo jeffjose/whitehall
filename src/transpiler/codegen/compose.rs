@@ -14,9 +14,16 @@ pub struct ComposeBackend {
 }
 
 /// Convert hex color string to Color(0x...) format
-/// Supports: #RGB, #RRGGBB, #AARRGGBB
-fn convert_hex_to_color(hex: &str) -> String {
+/// Supports: #RGB, #RRGGBB, #RRGGBBAA (web RGBA format - alpha at end)
+/// Note: Converts #RRGGBBAA (RGBA) to 0xAARRGGBB (ARGB) for Android
+/// Returns an error if the hex format is invalid
+fn convert_hex_to_color(hex: &str) -> Result<String, String> {
     let hex_clean = hex.trim();
+
+    // Validate that all characters are valid hex digits
+    if !hex_clean.chars().all(|c| c.is_ascii_hexdigit()) {
+        return Err(format!("Invalid hex color '{}': contains non-hexadecimal characters", hex));
+    }
 
     match hex_clean.len() {
         3 => {
@@ -24,19 +31,28 @@ fn convert_hex_to_color(hex: &str) -> String {
             let r = hex_clean.chars().nth(0).unwrap();
             let g = hex_clean.chars().nth(1).unwrap();
             let b = hex_clean.chars().nth(2).unwrap();
-            format!("Color(0xFF{r}{r}{g}{g}{b}{b})")
+            Ok(format!("Color(0xFF{r}{r}{g}{g}{b}{b})"))
         }
         6 => {
             // #RRGGBB → add full alpha
-            format!("Color(0xFF{})", hex_clean.to_uppercase())
+            Ok(format!("Color(0xFF{})", hex_clean.to_uppercase()))
         }
         8 => {
-            // #AARRGGBB → use as-is
-            format!("Color(0x{})", hex_clean.to_uppercase())
+            // #RRGGBBAA (web/CSS RGBA format) → 0xAARRGGBB (Android ARGB format)
+            // Extract components: RR GG BB AA
+            let rr = &hex_clean[0..2];
+            let gg = &hex_clean[2..4];
+            let bb = &hex_clean[4..6];
+            let aa = &hex_clean[6..8];
+            // Reorder to ARGB: AA RR GG BB
+            Ok(format!("Color(0x{}{}{}{})", aa.to_uppercase(), rr.to_uppercase(), gg.to_uppercase(), bb.to_uppercase()))
         }
         _ => {
-            // Invalid format, return as-is (will likely cause a compile error)
-            format!("Color(0xFF{})  // Invalid hex format", hex_clean)
+            // Invalid format length
+            Err(format!(
+                "Invalid hex color '{}': expected 3, 6, or 8 characters (e.g., #RGB, #RRGGBB, #RRGGBBAA), got {}",
+                hex, hex_clean.len()
+            ))
         }
     }
 }
@@ -707,7 +723,7 @@ impl ComposeBackend {
                             // Other Scaffold props - handle normally
                             let prop_expr = self.get_prop_expr(&prop.value);
                             let transformed = self.transform_prop(&comp.name, &prop.name, prop_expr);
-                            params.extend(transformed);
+                            params.extend(transformed?);
                         }
                     }
                 }
@@ -730,7 +746,7 @@ impl ComposeBackend {
                             // Other TopAppBar props - handle normally
                             let prop_expr = self.get_prop_expr(&prop.value);
                             let transformed = self.transform_prop(&comp.name, &prop.name, prop_expr);
-                            params.extend(transformed);
+                            params.extend(transformed?);
                         }
                     }
                 }
@@ -768,6 +784,8 @@ impl ComposeBackend {
                         if let Some(mod_prop) = explicit_modifier {
                             let mod_value = self.get_prop_expr(&mod_prop.value);
                             let transformed = self.transform_ternary(mod_value);
+                            // Convert hex colors in the modifier expression
+                            let transformed = self.convert_hex_in_modifier(&transformed)?;
                             modifiers.push(transformed);
                         }
 
@@ -794,7 +812,7 @@ impl ComposeBackend {
                         }
                         let prop_expr = self.get_prop_expr(&prop.value);
                         let transformed = self.transform_prop(&comp.name, &prop.name, prop_expr);
-                        params.extend(transformed);
+                        params.extend(transformed?);
                     }
                 } else if comp.name == "Box" || comp.name == "AsyncImage" {
                     // Special handling for Box and AsyncImage with width/height/etc
@@ -950,14 +968,14 @@ impl ComposeBackend {
                         }
                         let prop_expr = self.get_prop_expr(&prop.value);
                         let transformed = self.transform_prop(&comp.name, &prop.name, prop_expr);
-                        params.extend(transformed);
+                        params.extend(transformed?);
                     }
                 } else {
                     // Regular prop handling for other components
                     for prop in &comp.props {
                         let prop_expr = self.get_prop_expr(&prop.value);
                         let transformed = self.transform_prop(&comp.name, &prop.name, prop_expr);
-                        params.extend(transformed);
+                        params.extend(transformed?);
                     }
                 }
 
@@ -1116,6 +1134,12 @@ impl ComposeBackend {
                             self.add_import_if_missing(prop_imports, "androidx.compose.ui.Modifier");
                             self.add_import_if_missing(prop_imports, "androidx.compose.foundation.layout.padding");
                             self.add_import_if_missing(prop_imports, "androidx.compose.ui.unit.dp");
+                        }
+                        ("Column", "backgroundColor") | ("Row", "backgroundColor") => {
+                            // backgroundColor → modifier = Modifier.background(Color)
+                            self.add_import_if_missing(prop_imports, "androidx.compose.ui.Modifier");
+                            self.add_import_if_missing(prop_imports, "androidx.compose.foundation.background");
+                            self.add_import_if_missing(prop_imports, "androidx.compose.ui.graphics.Color");
                         }
                         ("Row", "spacing") => {
                             // spacing → horizontalArrangement = Arrangement.spacedBy(N.dp)
@@ -1494,7 +1518,55 @@ impl ComposeBackend {
         }
     }
 
-    fn transform_prop(&self, component: &str, prop_name: &str, prop_value: &str) -> Vec<String> {
+    /// Convert hex color strings in modifier expressions
+    /// Transforms .background("#F6F6F6") to .background(Color(0xFFF6F6F6))
+    fn convert_hex_in_modifier(&self, expr: &str) -> Result<String, String> {
+        let mut result = expr.to_string();
+
+        // Find patterns like .background("#...") or .background('#...")
+        // and replace the entire call with .background(Color(...))
+        let patterns = [
+            (".background(\"#", '"'),
+            (".background('#", '\''),
+        ];
+
+        for (pattern, quote_char) in &patterns {
+            while let Some(start) = result.find(pattern) {
+                let hex_start = start + pattern.len();
+
+                // Find the closing quote
+                if let Some(quote_end) = result[hex_start..].find(*quote_char) {
+                    let hex_color = &result[hex_start..hex_start + quote_end];
+                    let color_code = convert_hex_to_color(hex_color)?;
+
+                    // Find the closing paren after the quote
+                    let after_quote = hex_start + quote_end + 1;
+                    if let Some(paren_end) = result[after_quote..].find(')') {
+                        let after_paren = after_quote + paren_end + 1;
+
+                        // Replace entire .background("...") with .background(Color(...))
+                        let before = &result[..start];
+                        let after = &result[after_paren..];
+                        result = format!("{}.background({}){}", before, color_code, after);
+                    } else {
+                        break;
+                    }
+                } else {
+                    break;
+                }
+            }
+        }
+
+        Ok(result)
+    }
+
+    fn transform_prop(&self, component: &str, prop_name: &str, prop_value: &str) -> Result<Vec<String>, String> {
+        // Handle modifier prop - convert hex colors in background() calls
+        if prop_name == "modifier" {
+            let transformed = self.convert_hex_in_modifier(prop_value)?;
+            return Ok(vec![format!("modifier = {}", transformed)]);
+        }
+
         // Handle bind:value special syntax
         if prop_name == "bind:value" {
             let var_name = prop_value.trim();
@@ -1504,27 +1576,27 @@ impl ComposeBackend {
                 if self.is_numeric_type(type_str) {
                     // Numeric bind:value needs type conversions
                     let (to_method, default) = self.get_numeric_conversion(type_str, default_value);
-                    return vec![
+                    return Ok(vec![
                         format!("value = {}.toString()", var_name),
                         format!("onValueChange = {{ {} = it.{} ?: {} }}", var_name, to_method, default),
-                    ];
+                    ]);
                 }
             }
 
             // Default bind:value (for String types)
-            return vec![
+            return Ok(vec![
                 format!("value = {}", var_name),
                 format!("onValueChange = {{ {} = it }}", var_name),
-            ];
+            ]);
         }
 
         // Handle bind:checked special syntax (for Checkbox, Switch)
         if prop_name == "bind:checked" {
             let var_name = prop_value.trim();
-            return vec![
+            return Ok(vec![
                 format!("checked = {}", var_name),
                 format!("onCheckedChange = {{ {} = it }}", var_name),
-            ];
+            ]);
         }
 
         // Transform route aliases first: $routes → Routes (before adding braces)
@@ -1542,7 +1614,7 @@ impl ComposeBackend {
                 } else {
                     value
                 };
-                vec![format!("label = {{ Text(\"{}\") }}", label_text)]
+                Ok(vec![format!("label = {{ Text(\"{}\") }}", label_text)])
             }
             // TextField placeholder → placeholder = { Text("...") }
             ("TextField", "placeholder") => {
@@ -1551,48 +1623,62 @@ impl ComposeBackend {
                 } else {
                     value
                 };
-                vec![format!("placeholder = {{ Text(\"{}\") }}", placeholder_text)]
+                Ok(vec![format!("placeholder = {{ Text(\"{}\") }}", placeholder_text)])
             }
             // Button text is handled differently - it becomes a child, not a prop
             ("Button", "text") => {
                 // Return empty vec - text will be handled as child in generate_markup
-                vec![]
+                Ok(vec![])
             }
             // Button onClick needs braces
             ("Button", "onClick") => {
                 if !value.starts_with('{') {
-                    vec![format!("onClick = {{ {}() }}", value)]
+                    Ok(vec![format!("onClick = {{ {}() }}", value)])
                 } else {
-                    vec![format!("onClick = {}", value)]
+                    Ok(vec![format!("onClick = {}", value)])
                 }
             }
             // Column spacing → verticalArrangement = Arrangement.spacedBy(N.dp)
             ("Column", "spacing") => {
-                vec![format!("verticalArrangement = Arrangement.spacedBy({}.dp)", value)]
+                Ok(vec![format!("verticalArrangement = Arrangement.spacedBy({}.dp)", value)])
             }
             // Column padding → modifier = Modifier.padding(N.dp)
             ("Column", "padding") => {
-                vec![format!("modifier = Modifier.padding({}.dp)", value)]
+                Ok(vec![format!("modifier = Modifier.padding({}.dp)", value)])
+            }
+            // Column/Row backgroundColor → modifier = Modifier.background(Color)
+            ("Column", "backgroundColor") | ("Row", "backgroundColor") => {
+                let color = if value.starts_with('"') && value.ends_with('"') {
+                    let s = &value[1..value.len()-1];
+                    if s.starts_with('#') {
+                        convert_hex_to_color(&s[1..])?
+                    } else {
+                        format!("Color.{}", s.chars().next().unwrap().to_uppercase().collect::<String>() + &s[1..])
+                    }
+                } else {
+                    value
+                };
+                Ok(vec![format!("modifier = Modifier.background({})", color)])
             }
             // LazyColumn spacing → verticalArrangement = Arrangement.spacedBy(N.dp)
             ("LazyColumn", "spacing") => {
-                vec![format!("verticalArrangement = Arrangement.spacedBy({}.dp)", value)]
+                Ok(vec![format!("verticalArrangement = Arrangement.spacedBy({}.dp)", value)])
             }
             // LazyColumn padding → contentPadding = PaddingValues(N.dp)
             ("LazyColumn", "padding") => {
-                vec![format!("contentPadding = PaddingValues({}.dp)", value)]
+                Ok(vec![format!("contentPadding = PaddingValues({}.dp)", value)])
             }
             // Row spacing → horizontalArrangement = Arrangement.spacedBy(N.dp)
             ("Row", "spacing") => {
-                vec![format!("horizontalArrangement = Arrangement.spacedBy({}.dp)", value)]
+                Ok(vec![format!("horizontalArrangement = Arrangement.spacedBy({}.dp)", value)])
             }
             // Row padding → modifier = Modifier.padding(N.dp)
             ("Row", "padding") => {
-                vec![format!("modifier = Modifier.padding({}.dp)", value)]
+                Ok(vec![format!("modifier = Modifier.padding({}.dp)", value)])
             }
             // Text fontSize → fontSize = N.sp
             ("Text", "fontSize") => {
-                vec![format!("fontSize = {}.sp", value)]
+                Ok(vec![format!("fontSize = {}.sp", value)])
             }
             // Text fontWeight string → FontWeight enum
             ("Text", "fontWeight") => {
@@ -1603,7 +1689,7 @@ impl ComposeBackend {
                 } else {
                     value
                 };
-                vec![format!("fontWeight = {}", weight)]
+                Ok(vec![format!("fontWeight = {}", weight)])
             }
             // Text color string → MaterialTheme.colorScheme or Color(0x...)
             ("Text", "color") => {
@@ -1612,7 +1698,7 @@ impl ComposeBackend {
 
                     // Check if it's a hex color like "#F5F5F5" or "#AARRGGBB"
                     if s.starts_with('#') {
-                        convert_hex_to_color(&s[1..])
+                        convert_hex_to_color(&s[1..])?
                     }
                     // Check if it's a named Material color like "secondary", "primary"
                     else if s.chars().all(|c| c.is_alphanumeric()) {
@@ -1625,11 +1711,11 @@ impl ComposeBackend {
                 } else {
                     value
                 };
-                vec![format!("color = {}", color)]
+                Ok(vec![format!("color = {}", color)])
             }
             // Card onClick → just transform the value
             ("Card", "onClick") => {
-                vec![format!("onClick = {}", value)]
+                Ok(vec![format!("onClick = {}", value)])
             }
             // Card backgroundColor → CardDefaults.cardColors()
             ("Card", "backgroundColor") => {
@@ -1639,14 +1725,14 @@ impl ComposeBackend {
                 } else {
                     value.as_str()
                 };
-                vec![format!(
+                Ok(vec![format!(
                     "colors = CardDefaults.cardColors(\n                    containerColor = MaterialTheme.colorScheme.{}\n                )",
                     color_name
-                )]
+                )])
             }
             // Default: no transformation
             _ => {
-                vec![format!("{} = {}", prop_name, value)]
+                Ok(vec![format!("{} = {}", prop_name, value)])
             }
         }
     }
