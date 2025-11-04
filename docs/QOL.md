@@ -41,6 +41,19 @@ This document tracks potential DX (Developer Experience) optimizations that coul
 // Note: Compose doesn't have true margin, so they map to padding
 ```
 
+### Escape Braces (Svelte-style)
+```kotlin
+// Use double braces to show literal braces in text
+var value = 42
+
+<Text>Interpolation: {value}</Text>        // → "Interpolation: 42"
+<Text>Literal braces: {{value}}</Text>     // → "Literal braces: {value}"
+<Text>Mixed: {{key}} = {value}</Text>      // → "Mixed: {key} = 42"
+
+// Useful for showing code examples or syntax
+<Text>Use {{expr}} for interpolation</Text>
+```
+
 ## Proposed Improvements
 
 ### 1. Spacer Shorthand ⭐

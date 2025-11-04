@@ -943,8 +943,17 @@ impl Parser {
 
         while let Some(ch) = self.peek_char() {
             // Stop at markup or control flow, but allow @ in text
-            if ch == '<' || ch == '}' {
+            if ch == '<' {
                 break;
+            } else if ch == '}' {
+                // Check for double closing brace: }} → literal }
+                if self.peek_ahead(1) == Some('}') {
+                    current_text.push('}');
+                    self.advance_char(); // consume first }
+                    self.advance_char(); // consume second }
+                } else {
+                    break;
+                }
             } else if ch == '@' {
                 // Check if this is a control flow keyword
                 let remaining = &self.input[self.pos..];
@@ -958,16 +967,23 @@ impl Parser {
                 current_text.push(ch);
                 self.advance_char();
             } else if ch == '{' {
-                // Save any accumulated text
-                if !current_text.is_empty() {
-                    children.push(Markup::Text(current_text.clone()));
-                    current_text.clear();
+                // Check for double-brace escape: {{expr}} → literal {expr}
+                if self.peek_ahead(1) == Some('{') {
+                    current_text.push('{');
+                    self.advance_char(); // consume first {
+                    self.advance_char(); // consume second {
+                } else {
+                    // Save any accumulated text
+                    if !current_text.is_empty() {
+                        children.push(Markup::Text(current_text.clone()));
+                        current_text.clear();
+                    }
+                    // Parse interpolation
+                    self.expect_char('{')?;
+                    let expr = self.parse_until_char('}')?;
+                    self.expect_char('}')?;
+                    children.push(Markup::Interpolation(expr));
                 }
-                // Parse interpolation
-                self.expect_char('{')?;
-                let expr = self.parse_until_char('}')?;
-                self.expect_char('}')?;
-                children.push(Markup::Interpolation(expr));
             } else {
                 current_text.push(ch);
                 self.advance_char();
@@ -991,16 +1007,28 @@ impl Parser {
             if ch == delimiter {
                 break;
             } else if ch == '{' {
-                // Save any accumulated text
-                if !current_text.is_empty() {
-                    children.push(Markup::Text(current_text.clone()));
-                    current_text.clear();
+                // Check for double-brace escape: {{expr}} → literal {expr}
+                if self.peek_ahead(1) == Some('{') {
+                    current_text.push('{');
+                    self.advance_char(); // consume first {
+                    self.advance_char(); // consume second {
+                } else {
+                    // Save any accumulated text
+                    if !current_text.is_empty() {
+                        children.push(Markup::Text(current_text.clone()));
+                        current_text.clear();
+                    }
+                    // Parse interpolation
+                    self.expect_char('{')?;
+                    let expr = self.parse_until_char('}')?;
+                    self.expect_char('}')?;
+                    children.push(Markup::Interpolation(expr));
                 }
-                // Parse interpolation
-                self.expect_char('{')?;
-                let expr = self.parse_until_char('}')?;
-                self.expect_char('}')?;
-                children.push(Markup::Interpolation(expr));
+            } else if ch == '}' && self.peek_ahead(1) == Some('}') {
+                // Double closing brace: }} → literal }
+                current_text.push('}');
+                self.advance_char(); // consume first }
+                self.advance_char(); // consume second }
             } else {
                 current_text.push(ch);
                 self.advance_char();
