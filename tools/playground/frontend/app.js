@@ -443,8 +443,8 @@ function loadExample(key) {
     if (example) {
         editor.setValue(example.code);
         compile();
-        // Keep the selected example showing in dropdown
-        // (don't reset it)
+        // Keep the dropdown showing the selected example
+        document.getElementById('examples').value = key;
     }
 }
 
