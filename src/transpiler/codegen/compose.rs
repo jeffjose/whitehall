@@ -520,6 +520,11 @@ impl ComposeBackend {
 
     fn generate_markup_with_context(&self, markup: &Markup, indent: usize, parent: Option<&str>) -> Result<String, String> {
         match markup {
+            // Trim text in Button children to remove surrounding whitespace/newlines
+            Markup::Text(text) if parent == Some("Button") => {
+                let indent_str = "    ".repeat(indent);
+                Ok(format!("{}Text(text = \"{}\")\n", indent_str, text.trim()))
+            }
             Markup::IfElse(if_block) => {
                 let mut output = String::new();
                 let indent_str = "    ".repeat(indent);
@@ -1399,6 +1404,13 @@ impl ComposeBackend {
                 if expr.contains("R.string.") {
                     self.add_import_if_missing(prop_imports, "androidx.compose.ui.res.stringResource");
                     self.add_import_if_missing(component_imports, "com.example.app.R");
+                }
+            }
+            Markup::Text(_) if parent_component == Some("Button") => {
+                // Plain text inside Button is auto-wrapped in Text component
+                let import = "androidx.compose.material3.Text".to_string();
+                if !component_imports.contains(&import) {
+                    component_imports.push(import);
                 }
             }
             _ => {}

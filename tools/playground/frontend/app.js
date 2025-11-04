@@ -227,7 +227,7 @@ require(['vs/editor/editor.main'], function() {
         theme: 'vs-dark',
         automaticLayout: true,
         minimap: { enabled: true },
-        fontSize: 14,
+        fontSize: 12,
         fontFamily: "'Fira Code', 'Consolas', 'Courier New', monospace",
         fontLigatures: false, // Disable ligatures to fix number rendering
         lineNumbers: 'on',
@@ -329,7 +329,7 @@ async function renderKotlinOutput(code) {
 
     // If Shiki hasn't loaded yet, show plain text
     if (!shikiCodeToHtml) {
-        kotlinPanel.innerHTML = `<pre id="kotlin-output" class="p-4 text-sm font-mono text-gray-300">${escapeHtml(code)}</pre>`;
+        kotlinPanel.innerHTML = `<pre id="kotlin-output" class="p-4 text-xs font-mono text-gray-300">${escapeHtml(code)}</pre>`;
         return;
     }
 
@@ -345,13 +345,13 @@ async function renderKotlinOutput(code) {
         // Add padding and full height styling to match the original
         const preEl = kotlinPanel.querySelector('pre');
         if (preEl) {
-            preEl.classList.add('p-4', 'text-sm', 'h-full', 'm-0');
+            preEl.classList.add('p-4', 'text-xs', 'h-full', 'm-0');
             preEl.style.background = 'transparent';
         }
     } catch (error) {
         console.error('Shiki highlighting error:', error);
         // Fallback to plain text
-        kotlinPanel.innerHTML = `<pre id="kotlin-output" class="p-4 text-sm font-mono text-gray-300">${escapeHtml(code)}</pre>`;
+        kotlinPanel.innerHTML = `<pre id="kotlin-output" class="p-4 text-xs font-mono text-gray-300">${escapeHtml(code)}</pre>`;
     }
 }
 
