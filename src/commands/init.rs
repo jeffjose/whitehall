@@ -39,7 +39,9 @@ pub fn execute(project_name: &str) -> Result<()> {
     println!("✓ Created project structure");
     println!("\nNext steps:");
     println!("  cd {}", project_name);
-    println!("  whitehall build    (not yet implemented)");
+    println!("  whitehall build");
+    println!("\nNote: Required toolchains (Java, Gradle, Android SDK) will be");
+    println!("      automatically downloaded on first build (~600MB)");
 
     Ok(())
 }

@@ -3,12 +3,12 @@ use colored::Colorize;
 use std::env;
 use std::fs;
 use std::path::Path;
-use std::process::Command;
 
 use crate::build_pipeline;
 use crate::config;
 use crate::single_file;
 use crate::commands::{detect_target, Target};
+use crate::toolchain::Toolchain;
 
 pub fn execute(target: &str) -> Result<()> {
     // Detect if we're running a project or single file
@@ -59,11 +59,14 @@ fn execute_single_file(file_path: &str) -> Result<()> {
         single_config.app.package
     );
 
+    // Initialize toolchain manager
+    let toolchain = Toolchain::new()?;
+
     // Continue with device check, gradle, install, and launch
-    check_device_connected()?;
-    build_with_gradle(&result.output_dir)?;
-    install_apk(&result.output_dir)?;
-    launch_app(&config.android.package)?;
+    check_device_connected(&toolchain)?;
+    build_with_gradle(&toolchain, &config, &result.output_dir)?;
+    install_apk(&toolchain, &result.output_dir)?;
+    launch_app(&toolchain, &config.android.package)?;
 
     // Restore original directory
     env::set_current_dir(&original_dir)?;
@@ -121,17 +124,20 @@ fn execute_project(manifest_path: &str) -> Result<()> {
         config.android.package
     );
 
+    // Initialize toolchain manager
+    let toolchain = Toolchain::new()?;
+
     // 4. Check if device/emulator is connected
-    check_device_connected()?;
+    check_device_connected(&toolchain)?;
 
     // 5. Build APK with Gradle
-    build_with_gradle(&result.output_dir)?;
+    build_with_gradle(&toolchain, &config, &result.output_dir)?;
 
     // 6. Install on device
-    install_apk(&result.output_dir)?;
+    install_apk(&toolchain, &result.output_dir)?;
 
     // 7. Launch app
-    launch_app(&config.android.package)?;
+    launch_app(&toolchain, &config.android.package)?;
 
     // Restore original directory
     if project_dir != original_dir {
@@ -143,11 +149,12 @@ fn execute_project(manifest_path: &str) -> Result<()> {
     Ok(())
 }
 
-fn check_device_connected() -> Result<()> {
-    let output = Command::new("adb")
+fn check_device_connected(toolchain: &Toolchain) -> Result<()> {
+    let output = toolchain
+        .adb_cmd()?
         .args(&["devices"])
         .output()
-        .context("Failed to run 'adb devices'. Is Android SDK installed and adb in PATH?")?;
+        .context("Failed to run 'adb devices'")?;
 
     let stdout = String::from_utf8_lossy(&output.stdout);
     let device_count = stdout
@@ -168,31 +175,10 @@ fn check_device_connected() -> Result<()> {
     Ok(())
 }
 
-fn build_with_gradle(output_dir: &Path) -> Result<()> {
-    // Check if gradlew exists
-    let gradlew_path = if cfg!(windows) {
-        output_dir.join("gradlew.bat")
-    } else {
-        output_dir.join("gradlew")
-    };
+fn build_with_gradle(toolchain: &Toolchain, config: &crate::config::Config, output_dir: &Path) -> Result<()> {
+    let mut gradle = toolchain.gradle_cmd(&config.toolchain.java, &config.toolchain.gradle)?;
 
-    if !gradlew_path.exists() {
-        anyhow::bail!(
-            "Gradle wrapper not found. Please run:\n  \
-            cd {}\n  \
-            gradle wrapper\n\n  \
-            Then try 'whitehall run' again.",
-            output_dir.display()
-        );
-    }
-
-    let gradle_cmd = if cfg!(windows) {
-        "gradlew.bat"
-    } else {
-        "./gradlew"
-    };
-
-    let status = Command::new(gradle_cmd)
+    let status = gradle
         .current_dir(output_dir)
         .args(&["assembleDebug"])
         .status()
@@ -205,14 +191,15 @@ fn build_with_gradle(output_dir: &Path) -> Result<()> {
     Ok(())
 }
 
-fn install_apk(output_dir: &Path) -> Result<()> {
+fn install_apk(toolchain: &Toolchain, output_dir: &Path) -> Result<()> {
     let apk_path = output_dir.join("app/build/outputs/apk/debug/app-debug.apk");
 
     if !apk_path.exists() {
         anyhow::bail!("APK not found at {}", apk_path.display());
     }
 
-    let status = Command::new("adb")
+    let status = toolchain
+        .adb_cmd()?
         .args(&["install", "-r", apk_path.to_str().unwrap()])
         .status()
         .context("Failed to install APK")?;
@@ -224,10 +211,11 @@ fn install_apk(output_dir: &Path) -> Result<()> {
     Ok(())
 }
 
-fn launch_app(package: &str) -> Result<()> {
+fn launch_app(toolchain: &Toolchain, package: &str) -> Result<()> {
     let activity = format!("{}/.MainActivity", package);
 
-    let status = Command::new("adb")
+    let status = toolchain
+        .adb_cmd()?
         .args(&["shell", "am", "start", "-n", &activity])
         .status()
         .context("Failed to launch app")?;

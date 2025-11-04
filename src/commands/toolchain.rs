@@ -178,7 +178,8 @@ pub fn execute_exec(manifest_path: &str, command: &str, args: &[String]) -> Resu
         .args(args)
         .env("JAVA_HOME", java_home)
         .env("GRADLE_HOME", gradle_bin.parent().unwrap())
-        .env("ANDROID_HOME", android_home)
+        .env("ANDROID_HOME", &android_home)
+        .env_remove("ANDROID_SDK_ROOT")  // Prevent conflicts with ANDROID_HOME
         .env("PATH", new_path)
         .status()
         .with_context(|| format!("Failed to execute command: {}", command))?;
@@ -238,7 +239,8 @@ pub fn execute_shell(manifest_path: &str) -> Result<()> {
     let status = std::process::Command::new(&shell)
         .env("JAVA_HOME", java_home)
         .env("GRADLE_HOME", gradle_bin.parent().unwrap())
-        .env("ANDROID_HOME", android_home)
+        .env("ANDROID_HOME", &android_home)
+        .env_remove("ANDROID_SDK_ROOT")  // Prevent conflicts with ANDROID_HOME
         .env("PATH", new_path)
         .env("PS1", format!("(whitehall:{}) \\w $ ", config.project.name))
         .status()

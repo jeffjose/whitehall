@@ -291,7 +291,11 @@ impl Toolchain {
 
         let mut cmd = Command::new(gradle_bin);
         cmd.env("JAVA_HOME", java_home);
-        cmd.env("ANDROID_HOME", android_home);
+        cmd.env("ANDROID_HOME", &android_home);
+
+        // Unset ANDROID_SDK_ROOT to prevent conflicts with ANDROID_HOME
+        // (Gradle complains if both are set to different paths)
+        cmd.env_remove("ANDROID_SDK_ROOT");
 
         // Isolate Gradle daemon per version to prevent conflicts
         let gradle_user_home = self.root.join(format!("gradle-home/{}", gradle_version));
