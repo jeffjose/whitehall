@@ -51,10 +51,16 @@ fn default_optimize_level() -> String {
 /// Load and parse whitehall.toml configuration file
 pub fn load_config(path: &str) -> Result<Config> {
     let content = fs::read_to_string(path)
-        .context(format!("Failed to read {}", path))?;
+        .map_err(|e| {
+            if e.kind() == std::io::ErrorKind::NotFound {
+                anyhow::anyhow!("could not find `{}` in current directory", path)
+            } else {
+                anyhow::anyhow!("failed to read `{}`: {}", path, e)
+            }
+        })?;
 
     let config: Config = toml::from_str(&content)
-        .context(format!("Failed to parse {}", path))?;
+        .map_err(|e| anyhow::anyhow!("failed to parse `{}`: {}", path, e))?;
 
     // Validate Android package name
     validate_package_name(&config.android.package)?;

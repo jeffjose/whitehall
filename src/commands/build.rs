@@ -22,23 +22,19 @@ fn execute_single_file(file_path: &str) -> Result<()> {
     // Parse frontmatter
     let file_path = Path::new(file_path);
     let content = fs::read_to_string(file_path)
-        .context(format!("Failed to read {}", file_path.display()))?;
+        .map_err(|e| anyhow::anyhow!("failed to read `{}`: {}", file_path.display(), e))?;
 
-    let (single_config, code) = single_file::parse_frontmatter(&content)
-        .context("Failed to parse frontmatter")?;
+    let (single_config, code) = single_file::parse_frontmatter(&content)?;
 
     // Generate temporary project
-    let temp_project_dir = single_file::generate_temp_project(file_path, &single_config, &code)
-        .context("Failed to generate temporary project")?;
+    let temp_project_dir = single_file::generate_temp_project(file_path, &single_config, &code)?;
 
     // Change to temp project directory
     let original_dir = env::current_dir()?;
-    env::set_current_dir(&temp_project_dir)
-        .context("Failed to change to temp project directory")?;
+    env::set_current_dir(&temp_project_dir)?;
 
     // Load config from generated whitehall.toml
-    let config = config::load_config("whitehall.toml")
-        .context("Failed to load generated whitehall.toml")?;
+    let config = config::load_config("whitehall.toml")?;
 
     // Run build pipeline
     let result = build_pipeline::execute_build(&config, true)?;
@@ -86,14 +82,12 @@ fn execute_project(manifest_path: &str) -> Result<()> {
 
     // Change to project directory if needed
     if project_dir != original_dir {
-        env::set_current_dir(&project_dir)
-            .context(format!("Failed to change to directory: {}", project_dir.display()))?;
+        env::set_current_dir(&project_dir)?;
     }
 
     // 2. Load configuration
     let manifest_file = manifest_path.file_name().unwrap().to_str().unwrap();
-    let config = config::load_config(manifest_file)
-        .context(format!("Failed to load {}. Are you in a Whitehall project directory?", manifest_file))?;
+    let config = config::load_config(manifest_file)?;
 
     // 3. Run build pipeline (with clean)
     let result = build_pipeline::execute_build(&config, true)?;

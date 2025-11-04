@@ -1,5 +1,6 @@
 use clap::{Parser, Subcommand};
 use anyhow::Result;
+use colored::Colorize;
 use whitehall::commands;
 
 #[derive(Parser)]
@@ -46,26 +47,29 @@ enum Commands {
     },
 }
 
-fn main() -> Result<()> {
+fn main() {
     let cli = Cli::parse();
 
-    match cli.command {
+    let result = match cli.command {
         Commands::Init { name } => {
-            commands::init::execute(&name)?;
+            commands::init::execute(&name)
         }
         Commands::Compile { file } => {
-            commands::compile::execute(&file)?;
+            commands::compile::execute(&file)
         }
         Commands::Build { target } => {
-            commands::build::execute(&target)?;
+            commands::build::execute(&target)
         }
         Commands::Watch { target } => {
-            commands::watch::execute(&target)?;
+            commands::watch::execute(&target)
         }
         Commands::Run { target } => {
-            commands::run::execute(&target)?;
+            commands::run::execute(&target)
         }
-    }
+    };
 
-    Ok(())
+    if let Err(e) = result {
+        eprintln!("{}", format!("error: {}", e).red().bold());
+        std::process::exit(1);
+    }
 }
