@@ -1,6 +1,4 @@
-use anyhow::{Context, Result};
-use std::collections::HashMap;
-use std::fs;
+use anyhow::Result;
 use std::path::{Path, PathBuf};
 use walkdir::WalkDir;
 

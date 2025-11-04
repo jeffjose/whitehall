@@ -1,6 +1,9 @@
-/// View backend - generates Android View code
-///
-/// Used for RecyclerView optimization where we need native Views instead of Composables
+#![allow(dead_code)]
+//! View backend - generates Android View code
+//!
+//! Used for RecyclerView optimization where we need native Views instead of Composables
+//!
+//! Note: This is future/experimental code not yet fully integrated.
 
 use crate::transpiler::ast::{Component, ForLoopBlock, IfElseBlock, Markup, PropValue, WhitehallFile, WhenBlock};
 use std::collections::HashSet;

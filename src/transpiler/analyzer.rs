@@ -1,15 +1,18 @@
-/// Semantic analysis for Whitehall code
-///
-/// This module analyzes the AST to build semantic information:
-/// - Symbol table (what variables exist?)
-/// - Mutability tracking (is this mutated?)
-/// - Usage tracking (where are variables accessed?)
-/// - Optimization hints (can we optimize this?)
+#![allow(dead_code)]
+//! Semantic analysis for Whitehall code
+//!
+//! This module analyzes the AST to build semantic information:
+//! - Symbol table (what variables exist?)
+//! - Mutability tracking (is this mutated?)
+//! - Usage tracking (where are variables accessed?)
+//! - Optimization hints (can we optimize this?)
+//!
+//! Note: This is future/experimental code not yet fully integrated.
 
 use std::collections::{HashMap, HashSet};
 
 use crate::transpiler::ast::{
-    Component, ForLoopBlock, IfElseBlock, LifecycleHook, Markup, PropValue, StateDeclaration,
+    Component, ForLoopBlock, IfElseBlock, LifecycleHook, Markup, PropValue,
     WhenBlock, WhitehallFile,
 };
 

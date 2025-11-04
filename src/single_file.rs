@@ -92,7 +92,6 @@ pub fn parse_frontmatter(content: &str) -> Result<(SingleFileConfig, String)> {
     }
 
     // Validate package name
-    crate::config::load_config; // Ensure validation function is available
     validate_package_name(&config.app.package)?;
 
     let code = code_lines.join("\n");

@@ -1,7 +1,10 @@
-/// Optimization planner for Whitehall transpiler
-///
-/// Takes semantic information and decides which optimizations to apply.
-/// Phase 3-4: Consumes optimization hints and plans optimizations.
+#![allow(dead_code)]
+//! Optimization planner for Whitehall transpiler
+//!
+//! Takes semantic information and decides which optimizations to apply.
+//! Phase 3-4: Consumes optimization hints and plans optimizations.
+//!
+//! Note: This is future/experimental code not yet fully integrated.
 
 use crate::transpiler::analyzer::{OptimizationHint, SemanticInfo};
 use crate::transpiler::ast::WhitehallFile;

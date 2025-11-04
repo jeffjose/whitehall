@@ -1,4 +1,4 @@
-use anyhow::{Context, Result};
+use anyhow::Result;
 use colored::Colorize;
 use notify::{Event, RecursiveMode, Watcher};
 use std::env;

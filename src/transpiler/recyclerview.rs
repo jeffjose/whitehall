@@ -1,9 +1,11 @@
-/// RecyclerView + Adapter generator for static list optimization
-///
-/// Wraps View backend output in RecyclerView.Adapter boilerplate
+#![allow(dead_code)]
+//! RecyclerView + Adapter generator for static list optimization
+//!
+//! Wraps View backend output in RecyclerView.Adapter boilerplate
+//!
+//! Note: This is future/experimental code not yet fully integrated.
 
 use crate::transpiler::ast::{ForLoopBlock, Markup};
-use crate::transpiler::codegen::view::ViewBackend;
 
 pub struct RecyclerViewGenerator {
     collection_name: String,
