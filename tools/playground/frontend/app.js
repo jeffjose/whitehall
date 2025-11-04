@@ -215,9 +215,11 @@ async function compile() {
 
             // Hide error count badge
             document.getElementById('error-count').classList.add('hidden');
+
+            // Clear error panel when successful
+            renderErrorPanel([]);
         } else {
-            // Errors
-            document.getElementById('kotlin-output').textContent = 'Compilation failed. See Errors tab.';
+            // Errors - keep last valid output visible, show errors in panel
             updateEditorErrors(result.errors);
             renderErrorPanel(result.errors);
             setStatus('error');
@@ -226,6 +228,9 @@ async function compile() {
             const errorCountEl = document.getElementById('error-count');
             errorCountEl.textContent = result.errors.length;
             errorCountEl.classList.remove('hidden');
+
+            // Auto-switch to Errors tab to show what went wrong
+            switchTab('errors');
         }
     } catch (error) {
         console.error('Compilation error:', error);
@@ -321,22 +326,35 @@ function renderErrorPanel(errors) {
     const panel = document.getElementById('errors-panel');
 
     if (!errors || errors.length === 0) {
-        panel.innerHTML = '<div class="p-4 text-gray-400">No errors</div>';
+        panel.innerHTML = '<div class="p-4 text-gray-400 text-center">✓ No errors - code compiled successfully!</div>';
         return;
     }
 
-    const html = errors.map(err => `
-        <div class="error-item" onclick="jumpToLine(${err.line || 1})">
+    // Add a header with error count and helpful message
+    const header = `
+        <div class="p-4 bg-red-900 bg-opacity-20 border-b border-red-800 mb-4">
+            <div class="flex items-center gap-2 text-red-400 font-semibold mb-2">
+                <span class="text-2xl">⚠️</span>
+                <span>${errors.length} Compilation ${errors.length === 1 ? 'Error' : 'Errors'}</span>
+            </div>
+            <div class="text-sm text-gray-400">
+                ${errors.some(e => e.line) ? 'Click on an error to jump to the line in the editor.' : 'Fix the errors below to see your compiled Kotlin code.'}
+            </div>
+        </div>
+    `;
+
+    const errorItems = errors.map(err => `
+        <div class="error-item ${err.line ? 'cursor-pointer' : ''}" ${err.line ? `onclick="jumpToLine(${err.line})"` : ''}>
             <div class="error-header">
                 <span class="error-icon">❌</span>
-                ${err.line ? `<span class="error-location">Line ${err.line}${err.column ? ', Column ' + err.column : ''}</span>` : ''}
+                ${err.line ? `<span class="error-location">Line ${err.line}${err.column ? `:${err.column}` : ''}</span>` : '<span class="error-location">Syntax Error</span>'}
             </div>
             <div class="error-message">${escapeHtml(err.message)}</div>
             ${err.context ? `<pre class="error-context">${escapeHtml(err.context)}</pre>` : ''}
         </div>
     `).join('');
 
-    panel.innerHTML = html;
+    panel.innerHTML = header + errorItems;
 }
 
 // Jump to line in editor
