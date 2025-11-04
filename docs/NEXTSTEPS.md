@@ -601,7 +601,7 @@ whitehall run
 - ⏳ Error messages are helpful and actionable
 - ⏳ Documentation exists for all features
 - ⏳ Example apps demonstrate patterns
-- ⏳ Route generation system works
+- ⏳ Single-file mode implemented
 - ⏳ Testing framework available
 
 ---
@@ -613,7 +613,7 @@ Once the todo app builds and runs successfully, you'll have confidence in the sy
 ### If Everything Works Smoothly
 1. **Create more example apps** (blog reader, settings screen)
 2. **Write documentation** (getting started guide, tutorials)
-3. **Implement route generation** (Option 4) to enable multi-screen apps
+3. **Implement single-file mode** (Option 4) for rapid prototyping
 4. **Add developer experience improvements** (Option 2) for better errors
 
 ### If You Hit Critical Bugs
@@ -636,4 +636,4 @@ Once the todo app builds and runs successfully, you'll have confidence in the sy
 
 ---
 
-**Current Status**: Transpiler core is complete (30/30 tests passing). CLI is implemented. **Next: Verify it works end-to-end!** 🚀
+**Current Status**: Transpiler core is complete (30/30 tests passing). CLI is implemented. Routing is complete (file-based routing with NavHost). **Next: Verify it works end-to-end!** 🚀
