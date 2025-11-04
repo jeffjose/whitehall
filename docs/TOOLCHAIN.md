@@ -1,8 +1,87 @@
 # Toolchain Management Strategy
 
-**Status:** Design Phase
+**Status:** ✅ MVP Complete + Enhancements (Phases 1-4 Done)
 **Date:** 2025-11-04
+**Last Updated:** 2025-11-04
 **Goal:** Enable zero-config Android development by bundling required toolchains
+
+## Implementation Status
+
+### ✅ Completed (Phases 1-4)
+
+**Phase 1: Core Toolchain Manager** ✅ DONE
+- ✅ `src/toolchain/mod.rs` - Core toolchain management
+- ✅ `src/toolchain/defaults.rs` - Default version constants
+- ✅ `src/toolchain/platform.rs` - Platform detection (Linux/macOS, x64/aarch64)
+- ✅ `src/toolchain/validator.rs` - AGP/Java/Gradle compatibility validation
+- ✅ `[toolchain]` section in `whitehall.toml`
+- ✅ Version validation prevents incompatible configurations
+
+**Phase 2: Downloader** ✅ DONE
+- ✅ HTTP downloads with progress bars (`reqwest` + `indicatif`)
+- ✅ Archive extraction (tar.gz for Java/Gradle, zip for Android SDK)
+- ✅ Platform-specific URL construction (Adoptium for Java)
+- ✅ Android SDK installation via sdkmanager with license acceptance
+- ✅ Automatic downloads when toolchains missing
+
+**Phase 3: Integration** 🚧 PARTIAL (CLI done, build commands pending)
+- ✅ `whitehall exec` - Run commands with toolchain environment
+- ✅ `whitehall shell` - Interactive shell with toolchain
+- ⏳ Update `build` command to use managed toolchains (pending)
+- ⏳ Update `run` command to use managed toolchains (pending)
+
+**Phase 4: User Commands** ✅ DONE
+- ✅ `whitehall toolchain install` - Pre-download toolchains
+- ✅ `whitehall toolchain list` - Show installed versions with sizes
+- ✅ `whitehall toolchain clean` - Remove all toolchains
+- ✅ `whitehall exec` - Run commands with toolchain (top-level command)
+- ✅ `whitehall shell` - Interactive shell (top-level command)
+
+**Bonus Features** ✅ DONE
+- ✅ Multiple Java/Gradle versions coexist peacefully
+- ✅ Automatic version switching per project (like `uv run`)
+- ✅ `which java` shows correct binary per project
+- ✅ Environment variables set correctly (JAVA_HOME, ANDROID_HOME, etc.)
+- ✅ Comprehensive test suite with 6 counter variants
+- ✅ Gradle daemon isolation per version
+
+### ⏳ Remaining (Phase 3 Integration + Phase 5 Polish)
+
+**Phase 3 - Build Integration** (Estimated: 1-2 days)
+- [ ] Update `build` command to use `toolchain.gradle_cmd()`
+- [ ] Update `run` command to use `toolchain.adb_cmd()`
+- [ ] Update `init` command to trigger toolchain install
+- [ ] Test on clean machine without system Java/Gradle/SDK
+
+**Phase 5 - Polish** (Optional enhancements)
+- [ ] Offline mode (`--offline` flag)
+- [ ] Better error messages with retry prompts
+- [ ] Download resume on failure
+- [ ] Parallel downloads (Java + SDK simultaneously)
+- [ ] Checksum verification (currently unused)
+- [ ] `whitehall doctor` command with toolchain status
+
+### Testing
+
+**Test Coverage:**
+- ✅ 16 unit tests passing (platform, validation, defaults)
+- ✅ 6 integration test variants in `examples/`:
+  - `counter` - Java 21 + Gradle 8.4
+  - `counter-java-21-gradle-8.6` - Java 21 + Gradle 8.6
+  - `counter-java-17` - Java 17 + Gradle 8.0
+  - `counter-java-17-gradle-7` - Java 17 + Gradle 7.6
+  - `counter-java-11-gradle-7` - Java 11 + Gradle 7.6
+  - `counter-java-11-gradle-8` - Java 11 + Gradle 8.0
+
+**Real-world Testing:**
+- ✅ Downloads work (tested with Java 11, 17, 21)
+- ✅ Multiple Gradle versions coexist (7.6, 8.0, 8.4, 8.6)
+- ✅ Android SDK installation works
+- ✅ License acceptance automated
+- ✅ `exec`/`shell` commands work correctly
+- ✅ Version switching per project verified
+
+---
 
 ## Problem Statement
 
