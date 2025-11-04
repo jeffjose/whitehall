@@ -7,5 +7,11 @@ min_sdk = 24
 target_sdk = 34
 package = "com.example.counter"
 
+[toolchain]
+java = "21"
+gradle = "8.4"
+agp = "8.2.0"
+kotlin = "2.0.0"
+
 [build]
 output_dir = "build"

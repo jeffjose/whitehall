@@ -1,0 +1,17 @@
+[project]
+name = "Counter (Java 17)"
+version = "1.0.0"
+
+[android]
+min_sdk = 24
+target_sdk = 34
+package = "com.example.counter.java17"
+
+[toolchain]
+java = "17"
+gradle = "8.0"
+agp = "8.0.0"
+kotlin = "1.9.0"
+
+[build]
+output_dir = "build"
