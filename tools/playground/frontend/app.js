@@ -136,9 +136,13 @@ require(['vs/editor/editor.main'], function() {
         automaticLayout: true,
         minimap: { enabled: true },
         fontSize: 14,
+        fontFamily: "'Fira Code', 'Consolas', 'Courier New', monospace",
+        fontLigatures: false, // Disable ligatures to fix number rendering
         lineNumbers: 'on',
         scrollBeyondLastLine: false,
         wordWrap: 'on',
+        renderWhitespace: 'none',
+        letterSpacing: 0,
     });
 
     // Compile on change (debounced)
