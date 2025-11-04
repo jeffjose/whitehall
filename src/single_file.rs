@@ -213,11 +213,8 @@ pub fn generate_temp_project(
     // Check if cache already exists
     let whitehall_toml_path = cache_dir.join("whitehall.toml");
     if whitehall_toml_path.exists() {
-        println!("📦 Using cached project: {}", cache_dir.display());
         return Ok(cache_dir);
     }
-
-    println!("📦 Generating project in cache...");
 
     // Create cache directory
     fs::create_dir_all(&cache_dir)
@@ -250,8 +247,6 @@ output_dir = "build"
     let main_wh_path = src_dir.join("main.wh");
     fs::write(&main_wh_path, code)
         .context("Failed to write src/main.wh")?;
-
-    println!("   Cache: {}", cache_dir.display());
 
     Ok(cache_dir)
 }
