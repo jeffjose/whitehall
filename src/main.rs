@@ -69,6 +69,23 @@ enum ToolchainCommands {
     List,
     /// Remove all installed toolchains
     Clean,
+    /// Execute a command with the project's toolchain environment
+    Exec {
+        /// Path to whitehall.toml (defaults to current directory)
+        #[arg(long, default_value = "whitehall.toml")]
+        manifest: String,
+        /// Command to execute
+        command: String,
+        /// Arguments to pass to the command
+        #[arg(trailing_var_arg = true, allow_hyphen_values = true)]
+        args: Vec<String>,
+    },
+    /// Launch an interactive shell with the project's toolchain environment
+    Shell {
+        /// Path to whitehall.toml (defaults to current directory)
+        #[arg(default_value = "whitehall.toml")]
+        manifest: String,
+    },
 }
 
 fn main() {
@@ -100,6 +117,12 @@ fn main() {
                 }
                 ToolchainCommands::Clean => {
                     commands::toolchain::execute_clean()
+                }
+                ToolchainCommands::Exec { manifest, command, args } => {
+                    commands::toolchain::execute_exec(&manifest, &command, &args)
+                }
+                ToolchainCommands::Shell { manifest } => {
+                    commands::toolchain::execute_shell(&manifest)
                 }
             }
         }

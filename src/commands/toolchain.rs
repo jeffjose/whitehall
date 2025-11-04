@@ -1,4 +1,4 @@
-use anyhow::Result;
+use anyhow::{Context, Result};
 use colored::Colorize;
 
 use crate::config;
@@ -144,6 +144,111 @@ fn get_dir_size(path: &std::path::Path) -> Result<u64> {
         }
     }
     Ok(size)
+}
+
+/// Execute a command with the project's toolchain environment
+pub fn execute_exec(manifest_path: &str, command: &str, args: &[String]) -> Result<()> {
+    // Load project config to get toolchain requirements
+    let config = config::load_config(manifest_path)?;
+
+    // Initialize toolchain manager
+    let toolchain = Toolchain::new()?;
+
+    // Ensure toolchains are available
+    let java_home = toolchain.ensure_java(&config.toolchain.java)?;
+    let gradle_bin = toolchain.ensure_gradle(&config.toolchain.gradle)?;
+    let android_home = toolchain.ensure_android_sdk()?;
+
+    // Build PATH with toolchain binaries
+    let mut path_components = vec![
+        java_home.join("bin").display().to_string(),
+        gradle_bin.parent().unwrap().display().to_string(),
+        android_home.join("platform-tools").display().to_string(),
+    ];
+
+    // Add existing PATH
+    if let Ok(existing_path) = std::env::var("PATH") {
+        path_components.push(existing_path);
+    }
+
+    let new_path = path_components.join(":");
+
+    // Execute command with toolchain environment
+    let status = std::process::Command::new(command)
+        .args(args)
+        .env("JAVA_HOME", java_home)
+        .env("GRADLE_HOME", gradle_bin.parent().unwrap())
+        .env("ANDROID_HOME", android_home)
+        .env("PATH", new_path)
+        .status()
+        .with_context(|| format!("Failed to execute command: {}", command))?;
+
+    if !status.success() {
+        std::process::exit(status.code().unwrap_or(1));
+    }
+
+    Ok(())
+}
+
+/// Launch an interactive shell with the project's toolchain environment
+pub fn execute_shell(manifest_path: &str) -> Result<()> {
+    use colored::Colorize;
+
+    // Load project config
+    let config = config::load_config(manifest_path)?;
+
+    // Initialize toolchain manager
+    let toolchain = Toolchain::new()?;
+
+    // Ensure toolchains are available
+    let java_home = toolchain.ensure_java(&config.toolchain.java)?;
+    let gradle_bin = toolchain.ensure_gradle(&config.toolchain.gradle)?;
+    let android_home = toolchain.ensure_android_sdk()?;
+
+    println!("{} toolchain environment", "Activating".green().bold());
+    println!("  Java: {} ({})", config.toolchain.java, java_home.display());
+    println!("  Gradle: {} ({})", config.toolchain.gradle, gradle_bin.display());
+    println!("  Android SDK: {}", android_home.display());
+    println!();
+    println!("Commands available:");
+    println!("  java --version");
+    println!("  gradle --version");
+    println!("  adb devices");
+    println!();
+    println!("Type 'exit' to return to normal shell.\n");
+
+    // Build PATH with toolchain binaries
+    let mut path_components = vec![
+        java_home.join("bin").display().to_string(),
+        gradle_bin.parent().unwrap().display().to_string(),
+        android_home.join("platform-tools").display().to_string(),
+    ];
+
+    // Add existing PATH
+    if let Ok(existing_path) = std::env::var("PATH") {
+        path_components.push(existing_path);
+    }
+
+    let new_path = path_components.join(":");
+
+    // Determine shell
+    let shell = std::env::var("SHELL").unwrap_or_else(|_| "/bin/bash".to_string());
+
+    // Launch shell with toolchain environment
+    let status = std::process::Command::new(&shell)
+        .env("JAVA_HOME", java_home)
+        .env("GRADLE_HOME", gradle_bin.parent().unwrap())
+        .env("ANDROID_HOME", android_home)
+        .env("PATH", new_path)
+        .env("PS1", format!("(whitehall:{}) \\w $ ", config.project.name))
+        .status()
+        .with_context(|| format!("Failed to launch shell: {}", shell))?;
+
+    if !status.success() {
+        std::process::exit(status.code().unwrap_or(1));
+    }
+
+    Ok(())
 }
 
 /// Format bytes as human-readable size
