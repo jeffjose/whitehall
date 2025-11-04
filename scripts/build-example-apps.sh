@@ -14,17 +14,35 @@ echo ""
 # Array to track results
 declare -a results=()
 
-# Build each example app
+# Build project examples (directories with whitehall.toml)
 for example_dir in examples/*/; do
   if [ -f "$example_dir/whitehall.toml" ]; then
     example_name=$(basename "$example_dir")
-    manifest_path="$example_dir/whitehall.toml"
 
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-    echo "📦 Building: $example_name"
+    echo "📦 Building project: $example_name"
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 
-    if cargo run -- build --manifest-path "$manifest_path"; then
+    if cargo run -- build "$example_dir"; then
+      results+=("✅ $example_name")
+      echo ""
+    else
+      results+=("❌ $example_name")
+      echo ""
+    fi
+  fi
+done
+
+# Build single-file examples (.wh files)
+for example_file in examples/*.wh; do
+  if [ -f "$example_file" ]; then
+    example_name=$(basename "$example_file")
+
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo "📄 Building single-file: $example_name"
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+
+    if cargo run -- build "$example_file"; then
       results+=("✅ $example_name")
       echo ""
     else
