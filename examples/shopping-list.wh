@@ -1,0 +1,77 @@
+#!/usr/bin/env whitehall
+/// [app]
+/// name = "Shopping List"
+/// package = "com.example.shoppinglist"
+
+var items = ["Milk", "Bread", "Eggs", "Cheese", "Apples"]
+var newItem = ""
+var searchQuery = ""
+
+fun addItem() {
+  if (newItem.isNotEmpty()) {
+    items = items + newItem
+    newItem = ""
+  }
+}
+
+fun removeItem(item: String) {
+  items = items.filter { it != item }
+}
+
+val filteredItems = if (searchQuery.isEmpty()) {
+  items
+} else {
+  items.filter { it.contains(searchQuery, ignoreCase = true) }
+}
+
+<Column modifier={Modifier.fillMaxSize().padding(16.dp)} spacing={12.dp}>
+  <Text
+    text="Shopping List"
+    fontSize={28.sp}
+    fontWeight={FontWeight.Bold}
+  />
+
+  <Row spacing={8.dp}>
+    <TextField
+      bind:value={newItem}
+      label="Add item"
+      modifier={Modifier.weight(1f)}
+    />
+    <Button onClick={addItem}>
+      <Text text="Add" />
+    </Button>
+  </Row>
+
+  <TextField
+    bind:value={searchQuery}
+    label="Search items"
+    modifier={Modifier.fillMaxWidth()}
+  />
+
+  <Text
+    text="{filteredItems.size} items"
+    fontSize={14.sp}
+    color={Color.Gray}
+  />
+
+  @for (item in filteredItems) {
+    <Card
+      modifier={Modifier.fillMaxWidth()}
+      elevation={2.dp}
+    >
+      <Row
+        modifier={Modifier.padding(16.dp)}
+        verticalAlignment={Alignment.CenterVertically}
+      >
+        <Text
+          text={item}
+          modifier={Modifier.weight(1f)}
+          fontSize={16.sp}
+        />
+        <Button onClick={() => removeItem(item)}>
+          <Text text="Remove" />
+        </Button>
+      </Row>
+    </Card>
+  }
+</Column>

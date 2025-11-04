@@ -1,0 +1,127 @@
+#!/usr/bin/env whitehall
+/// [app]
+/// name = "Calculator"
+/// package = "com.example.calculator"
+
+var display = "0"
+var firstNumber = 0.0
+var operation = ""
+var isNewNumber = true
+
+fun onNumberClick(num: String) {
+  if (isNewNumber) {
+    display = num
+    isNewNumber = false
+  } else {
+    display = if (display == "0") num else display + num
+  }
+}
+
+fun onOperationClick(op: String) {
+  firstNumber = display.toDoubleOrNull() ?: 0.0
+  operation = op
+  isNewNumber = true
+}
+
+fun onEqualsClick() {
+  val secondNumber = display.toDoubleOrNull() ?: 0.0
+
+  val result = when (operation) {
+    "+" -> firstNumber + secondNumber
+    "-" -> firstNumber - secondNumber
+    "×" -> firstNumber * secondNumber
+    "÷" -> if (secondNumber != 0.0) firstNumber / secondNumber else 0.0
+    else -> secondNumber
+  }
+
+  display = result.toString()
+  isNewNumber = true
+  operation = ""
+}
+
+fun onClear() {
+  display = "0"
+  firstNumber = 0.0
+  operation = ""
+  isNewNumber = true
+}
+
+<Column
+  modifier={Modifier.fillMaxSize().padding(16.dp)}
+  verticalArrangement={Arrangement.SpaceBetween}
+>
+  <Card
+    modifier={Modifier.fillMaxWidth().padding(bottom = 16.dp)}
+    elevation={4.dp}
+  >
+    <Text
+      text={display}
+      fontSize={48.sp}
+      fontWeight={FontWeight.Bold}
+      modifier={Modifier.padding(24.dp)}
+      textAlign={TextAlign.End}
+    />
+  </Card>
+
+  <Column spacing={8.dp}>
+    <Row spacing={8.dp}>
+      <Button onClick={() => onNumberClick("7")} modifier={Modifier.weight(1f)}>
+        <Text text="7" fontSize={24.sp} />
+      </Button>
+      <Button onClick={() => onNumberClick("8")} modifier={Modifier.weight(1f)}>
+        <Text text="8" fontSize={24.sp} />
+      </Button>
+      <Button onClick={() => onNumberClick("9")} modifier={Modifier.weight(1f)}>
+        <Text text="9" fontSize={24.sp} />
+      </Button>
+      <Button onClick={() => onOperationClick("÷")} modifier={Modifier.weight(1f)}>
+        <Text text="÷" fontSize={24.sp} />
+      </Button>
+    </Row>
+
+    <Row spacing={8.dp}>
+      <Button onClick={() => onNumberClick("4")} modifier={Modifier.weight(1f)}>
+        <Text text="4" fontSize={24.sp} />
+      </Button>
+      <Button onClick={() => onNumberClick("5")} modifier={Modifier.weight(1f)}>
+        <Text text="5" fontSize={24.sp} />
+      </Button>
+      <Button onClick={() => onNumberClick("6")} modifier={Modifier.weight(1f)}>
+        <Text text="6" fontSize={24.sp} />
+      </Button>
+      <Button onClick={() => onOperationClick("×")} modifier={Modifier.weight(1f)}>
+        <Text text="×" fontSize={24.sp} />
+      </Button>
+    </Row>
+
+    <Row spacing={8.dp}>
+      <Button onClick={() => onNumberClick("1")} modifier={Modifier.weight(1f)}>
+        <Text text="1" fontSize={24.sp} />
+      </Button>
+      <Button onClick={() => onNumberClick("2")} modifier={Modifier.weight(1f)}>
+        <Text text="2" fontSize={24.sp} />
+      </Button>
+      <Button onClick={() => onNumberClick("3")} modifier={Modifier.weight(1f)}>
+        <Text text="3" fontSize={24.sp} />
+      </Button>
+      <Button onClick={() => onOperationClick("-")} modifier={Modifier.weight(1f)}>
+        <Text text="-" fontSize={24.sp} />
+      </Button>
+    </Row>
+
+    <Row spacing={8.dp}>
+      <Button onClick={onClear} modifier={Modifier.weight(1f)}>
+        <Text text="C" fontSize={24.sp} />
+      </Button>
+      <Button onClick={() => onNumberClick("0")} modifier={Modifier.weight(1f)}>
+        <Text text="0" fontSize={24.sp} />
+      </Button>
+      <Button onClick={onEqualsClick} modifier={Modifier.weight(1f)}>
+        <Text text="=" fontSize={24.sp} />
+      </Button>
+      <Button onClick={() => onOperationClick("+")} modifier={Modifier.weight(1f)}>
+        <Text text="+" fontSize={24.sp} />
+      </Button>
+    </Row>
+  </Column>
+</Column>

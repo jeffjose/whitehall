@@ -1,0 +1,71 @@
+#!/usr/bin/env whitehall
+/// [app]
+/// name = "Quick Notes"
+/// package = "com.example.notes"
+
+var notes = [
+  "Welcome: This is your first note!",
+  "Shopping: Buy groceries - Milk, Bread, Eggs",
+  "Ideas: Build more apps with Whitehall"
+]
+var newNote = ""
+
+fun addNote() {
+  if (newNote.isNotEmpty()) {
+    notes = notes + newNote
+    newNote = ""
+  }
+}
+
+fun deleteNote(note: String) {
+  notes = notes.filter { it != note }
+}
+
+<Column modifier={Modifier.fillMaxSize().padding(16.dp)} spacing={16.dp}>
+  <Text
+    text="Quick Notes"
+    fontSize={32.sp}
+    fontWeight={FontWeight.Bold}
+  />
+
+  <Card elevation={4.dp} modifier={Modifier.fillMaxWidth()}>
+    <Column modifier={Modifier.padding(16.dp)} spacing={8.dp}>
+      <TextField
+        bind:value={newNote}
+        label="New note"
+        modifier={Modifier.fillMaxWidth()}
+      />
+
+      <Button onClick={addNote} modifier={Modifier.align(Alignment.End)}>
+        <Text text="Add Note" />
+      </Button>
+    </Column>
+  </Card>
+
+  <Text
+    text="{notes.size} notes"
+    fontSize={14.sp}
+    color={Color.Gray}
+  />
+
+  @for (note in notes) {
+    <Card
+      modifier={Modifier.fillMaxWidth()}
+      elevation={2.dp}
+    >
+      <Row
+        modifier={Modifier.padding(16.dp)}
+        verticalAlignment={Alignment.CenterVertically}
+      >
+        <Text
+          text={note}
+          fontSize={16.sp}
+          modifier={Modifier.weight(1f)}
+        />
+        <Button onClick={() => deleteNote(note)}>
+          <Text text="Delete" />
+        </Button>
+      </Row>
+    </Card>
+  }
+</Column>

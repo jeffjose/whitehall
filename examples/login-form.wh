@@ -1,0 +1,69 @@
+#!/usr/bin/env whitehall
+/// [app]
+/// name = "Login Form"
+/// package = "com.example.loginform"
+/// min_sdk = 24
+
+var email = ""
+var password = ""
+var rememberMe = false
+var errorMessage = ""
+
+fun validateAndLogin() {
+  if (email.isEmpty()) {
+    errorMessage = "Email is required"
+  } else if (password.length < 6) {
+    errorMessage = "Password must be at least 6 characters"
+  } else {
+    errorMessage = ""
+    // Login logic would go here
+  }
+}
+
+<Column
+  modifier={Modifier.fillMaxSize().padding(24.dp)}
+  horizontalAlignment={Alignment.CenterHorizontally}
+  verticalArrangement={Arrangement.Center}
+>
+  <Text
+    text="Welcome Back"
+    fontSize={32.sp}
+    fontWeight={FontWeight.Bold}
+    modifier={Modifier.padding(bottom = 32.dp)}
+  />
+
+  <TextField
+    bind:value={email}
+    label="Email"
+    modifier={Modifier.fillMaxWidth().padding(bottom = 16.dp)}
+  />
+
+  <TextField
+    bind:value={password}
+    label="Password"
+    modifier={Modifier.fillMaxWidth().padding(bottom = 8.dp)}
+  />
+
+  <Row
+    modifier={Modifier.fillMaxWidth().padding(bottom = 16.dp)}
+    verticalAlignment={Alignment.CenterVertically}
+  >
+    <Checkbox bind:checked={rememberMe} />
+    <Text text="Remember me" modifier={Modifier.padding(start = 8.dp)} />
+  </Row>
+
+  @if (!errorMessage.isEmpty()) {
+    <Text
+      text={errorMessage}
+      color={Color.Red}
+      modifier={Modifier.padding(bottom = 16.dp)}
+    />
+  }
+
+  <Button
+    onClick={validateAndLogin}
+    modifier={Modifier.fillMaxWidth()}
+  >
+    <Text text="Login" />
+  </Button>
+</Column>
