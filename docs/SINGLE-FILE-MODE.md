@@ -205,8 +205,8 @@ fn is_single_file(path: &str) -> bool {
 ### File Size Limits
 ```
 < 100 lines   ✅ Perfect for single file
-100-500 lines ⚠️  Consider splitting
-> 500 lines   🚫 Suggest: whitehall split
+100-500 lines ⚠️  Consider creating a project
+> 500 lines   🚫 Suggest: Create a full project with whitehall init
 > 1000 lines  ❌ Error: File too large for single-file mode
 ```
 
@@ -414,7 +414,7 @@ whitehall run test.wh
 
 1. **Inline components?**
    - Allow `fun Counter() { ... }` in single file?
-   - Or require `whitehall split` for multi-component?
+   - Or require full project mode for multi-component?
 
 2. **Dependencies from Maven?**
    - Allow custom dependencies in frontmatter?
