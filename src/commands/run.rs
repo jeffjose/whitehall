@@ -71,8 +71,6 @@ fn execute_single_file(file_path: &str) -> Result<()> {
 
 /// Run a project (existing behavior)
 fn execute_project(manifest_path: &str) -> Result<()> {
-    println!("🚀 Building and running Whitehall app...\n");
-
     // 1. Determine project directory from manifest path (same as build command)
     let manifest_path = Path::new(manifest_path);
     let original_dir = env::current_dir()?;
@@ -104,29 +102,25 @@ fn execute_project(manifest_path: &str) -> Result<()> {
         .context(format!("Failed to load {}. Are you in a Whitehall project directory?", manifest_file))?;
 
     // 3. Build project
-    println!("🔨 Step 1/4: Building...");
     let result = build_pipeline::execute_build(&config, true)?;
 
     if !result.errors.is_empty() {
-        eprintln!("❌ Build failed with {} error(s):", result.errors.len());
+        eprintln!("{}", format!("error: build failed with {} error(s)", result.errors.len()).red().bold());
         for error in &result.errors {
             eprintln!("  {} - {}", error.file.display(), error.message);
         }
         anyhow::bail!("Build failed");
     }
 
-    println!("✅ Build complete\n");
+    println!("{}", format!("   Finished transpiling {} file(s)", result.files_transpiled).green().bold());
 
     // 4. Check if device/emulator is connected
-    println!("📱 Step 2/4: Checking for connected devices...");
     check_device_connected()?;
 
     // 5. Build APK with Gradle
-    println!("🔧 Step 3/4: Building APK...");
     build_with_gradle(&result.output_dir)?;
 
     // 6. Install on device
-    println!("📲 Step 4/4: Installing and launching app...");
     install_apk(&result.output_dir)?;
 
     // 7. Launch app
@@ -137,7 +131,7 @@ fn execute_project(manifest_path: &str) -> Result<()> {
         env::set_current_dir(&original_dir)?;
     }
 
-    println!("\n✅ App running on device!");
+    println!("{}", format!("    Running on device").green().bold());
 
     Ok(())
 }

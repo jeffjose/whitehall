@@ -1,4 +1,5 @@
 use anyhow::{Context, Result};
+use colored::Colorize;
 use notify::{Event, RecursiveMode, Watcher};
 use std::env;
 use std::fs;
@@ -21,19 +22,17 @@ pub fn execute(target: &str) -> Result<()> {
 
 /// Watch a single .wh file
 fn execute_single_file(file_path: &str) -> Result<()> {
-    println!("👀 Watching single-file app: {}", file_path);
-    println!("   Press Ctrl+C to stop\n");
+    println!("   Watching {} (press Ctrl+C to stop)", file_path);
 
     let file_path_buf = PathBuf::from(file_path);
     let original_dir = env::current_dir()?;
 
     // Initial build
-    println!("🔨 Initial build...");
     match run_single_file_build(&file_path_buf, &original_dir) {
-        Ok(_) => println!("✅ Ready! Watching for changes...\n"),
+        Ok(_) => println!("{}", "   Watching for changes...".green().bold()),
         Err(e) => {
-            eprintln!("❌ Initial build failed: {}\n", e);
-            eprintln!("Watching anyway (will retry on file changes)...\n");
+            eprintln!("{}", format!("error: initial build failed: {}", e).red().bold());
+            eprintln!("Watching anyway (will retry on file changes)...");
         }
     }
 
@@ -53,11 +52,11 @@ fn execute_single_file(file_path: &str) -> Result<()> {
         match rx.recv_timeout(Duration::from_millis(100)) {
             Ok(event) => {
                 if should_rebuild(&event) {
-                    println!("\n📝 Change detected: {}", file_path);
+                    println!("\nChange detected in {}", file_path);
 
                     match run_single_file_build(&file_path_buf, &original_dir) {
-                        Ok(_) => println!("✅ Build successful\n"),
-                        Err(e) => eprintln!("❌ Build failed: {}\n", e),
+                        Ok(_) => println!("{}", "   Finished transpiling".green().bold()),
+                        Err(e) => eprintln!("{}", format!("error: build failed: {}", e).red().bold()),
                     }
                 }
             }
@@ -91,7 +90,7 @@ fn run_single_file_build(file_path: &Path, original_dir: &Path) -> Result<()> {
 
     if !result.errors.is_empty() {
         for error in &result.errors {
-            eprintln!("  ❌ {} - {}", error.file.display(), error.message);
+            eprintln!("  {} - {}", error.file.display(), error.message);
         }
         anyhow::bail!("Build failed with {} error(s)", result.errors.len());
     }
@@ -101,8 +100,7 @@ fn run_single_file_build(file_path: &Path, original_dir: &Path) -> Result<()> {
 
 /// Watch a project (existing behavior)
 fn execute_project(manifest_path: &str) -> Result<()> {
-    println!("👀 Watching Whitehall project for changes...");
-    println!("   Press Ctrl+C to stop\n");
+    println!("   Watching project (press Ctrl+C to stop)");
 
     // 1. Determine project directory from manifest path (same as build command)
     let manifest_path = Path::new(manifest_path);
@@ -135,12 +133,11 @@ fn execute_project(manifest_path: &str) -> Result<()> {
         .context(format!("Failed to load {}. Are you in a Whitehall project directory?", manifest_file))?;
 
     // 3. Initial build
-    println!("🔨 Initial build...");
     match run_build(&config) {
-        Ok(_) => println!("✅ Ready! Watching for changes...\n"),
+        Ok(_) => println!("{}", "   Watching for changes...".green().bold()),
         Err(e) => {
-            eprintln!("❌ Initial build failed: {}\n", e);
-            eprintln!("Watching anyway (will retry on file changes)...\n");
+            eprintln!("{}", format!("error: initial build failed: {}", e).red().bold());
+            eprintln!("Watching anyway (will retry on file changes)...");
         }
     }
 
@@ -169,11 +166,11 @@ fn execute_project(manifest_path: &str) -> Result<()> {
                         .and_then(|n| n.to_str())
                         .unwrap_or("file");
 
-                    println!("\n📝 Change detected: {}", changed_file);
+                    println!("\nChange detected in {}", changed_file);
 
                     match run_build(&config) {
-                        Ok(_) => println!("✅ Build successful\n"),
-                        Err(e) => eprintln!("❌ Build failed: {}\n", e),
+                        Ok(_) => println!("{}", "   Finished transpiling".green().bold()),
+                        Err(e) => eprintln!("{}", format!("error: build failed: {}", e).red().bold()),
                     }
                 }
             }
@@ -190,7 +187,7 @@ fn run_build(config: &crate::config::Config) -> Result<()> {
 
     if !result.errors.is_empty() {
         for error in &result.errors {
-            eprintln!("  ❌ {} - {}", error.file.display(), error.message);
+            eprintln!("  {} - {}", error.file.display(), error.message);
         }
         anyhow::bail!("Build failed with {} error(s)", result.errors.len());
     }
