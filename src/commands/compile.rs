@@ -47,10 +47,8 @@ pub fn execute(file_path: &str) -> Result<()> {
 
     // Output the Kotlin code
     println!("   {} compiling {}", "Finished".green().bold(), file_path);
-    println!("\nGenerated Kotlin code:");
-    println!("{}", "=".repeat(80));
+    println!();
     println!("{}", kotlin_code);
-    println!("{}", "=".repeat(80));
 
     Ok(())
 }
