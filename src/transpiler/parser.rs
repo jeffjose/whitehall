@@ -432,7 +432,32 @@ impl Parser {
         self.skip_whitespace();
 
         if self.peek_char() == Some('<') {
-            self.parse_component()
+            // Try to parse first component
+            let first_component = self.parse_component()?;
+
+            // Check if there are more components at the root level
+            self.skip_whitespace();
+
+            if self.peek_char() == Some('<') {
+                // Multiple root components - collect them all and wrap in Column
+                let mut components = vec![first_component];
+
+                while self.peek_char() == Some('<') {
+                    components.push(self.parse_component()?);
+                    self.skip_whitespace();
+                }
+
+                // Auto-wrap in Column
+                Ok(Markup::Component(Component {
+                    name: "Column".to_string(),
+                    props: vec![],
+                    children: components,
+                    self_closing: false,
+                }))
+            } else {
+                // Single root component - return as-is
+                Ok(first_component)
+            }
         } else {
             let remaining = if self.pos < self.input.len() {
                 let end = (self.pos + 50).min(self.input.len());

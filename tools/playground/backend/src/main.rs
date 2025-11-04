@@ -38,27 +38,31 @@ async fn compile(Json(req): Json<CompileRequest>) -> JsonResponse<CompileRespons
     let package = "com.example.playground";
 
     match whitehall::transpiler::transpile(&req.code, package, component_name, None) {
-        Ok(kotlin_code) => JsonResponse(CompileResponse {
-            success: true,
-            output: kotlin_code,
-            errors: vec![],
-            warnings: vec![],
-            ast: None,
-        }),
-        Err(e) => JsonResponse(CompileResponse {
-            success: false,
-            output: String::new(),
-            errors: vec![CompileError {
-                message: e,
-                line: None, // TODO: Extract from error message or enhance parser
-                column: None,
-                length: None,
-                severity: "error".to_string(),
-                context: None,
-            }],
-            warnings: vec![],
-            ast: None,
-        }),
+        Ok(kotlin_code) => {
+            JsonResponse(CompileResponse {
+                success: true,
+                output: kotlin_code,
+                errors: vec![],
+                warnings: vec![],
+                ast: None,
+            })
+        },
+        Err(e) => {
+            JsonResponse(CompileResponse {
+                success: false,
+                output: String::new(),
+                errors: vec![CompileError {
+                    message: e,
+                    line: None, // TODO: Extract from error message or enhance parser
+                    column: None,
+                    length: None,
+                    severity: "error".to_string(),
+                    context: None,
+                }],
+                warnings: vec![],
+                ast: None,
+            })
+        },
     }
 }
 

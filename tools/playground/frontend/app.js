@@ -8,6 +8,17 @@ let compileTimeout;
 let decorations = [];
 let currentTab = 'kotlin';
 let lastCompileResult = null;
+let shikiCodeToHtml = null;
+
+// Dynamically import Shiki
+(async () => {
+    try {
+        const shiki = await import('https://esm.sh/shiki@1.0.0');
+        shikiCodeToHtml = shiki.codeToHtml;
+    } catch (error) {
+        console.error('Failed to load Shiki:', error);
+    }
+})();
 
 // Example snippets
 const examples = {
@@ -148,7 +159,9 @@ require(['vs/editor/editor.main'], function() {
     // Compile on change (debounced)
     editor.onDidChangeModelContent(() => {
         clearTimeout(compileTimeout);
-        compileTimeout = setTimeout(compile, COMPILE_DEBOUNCE_MS);
+        compileTimeout = setTimeout(() => {
+            compile();
+        }, COMPILE_DEBOUNCE_MS);
         updateURL(); // Update URL hash with code
     });
 
@@ -191,8 +204,9 @@ async function compile() {
         lastCompileResult = result;
 
         if (result.success) {
-            // Success
-            document.getElementById('kotlin-output').textContent = result.output;
+            // Success - render with syntax highlighting
+            await renderKotlinOutput(result.output);
+
             document.getElementById('ast-output').textContent =
                 result.ast ? JSON.stringify(JSON.parse(result.ast), null, 2) : 'AST view not available';
 
@@ -220,6 +234,38 @@ async function compile() {
             message: `Connection error: ${error.message}`,
             severity: 'error',
         }]);
+    }
+}
+
+// Render Kotlin output with Shiki syntax highlighting
+async function renderKotlinOutput(code) {
+    const kotlinPanel = document.getElementById('kotlin-panel');
+
+    // If Shiki hasn't loaded yet, show plain text
+    if (!shikiCodeToHtml) {
+        kotlinPanel.innerHTML = `<pre id="kotlin-output" class="p-4 text-sm font-mono text-gray-300">${escapeHtml(code)}</pre>`;
+        return;
+    }
+
+    try {
+        const html = await shikiCodeToHtml(code, {
+            lang: 'kotlin',
+            theme: 'github-dark'
+        });
+
+        // Replace the panel content with highlighted HTML
+        kotlinPanel.innerHTML = html;
+
+        // Add padding and full height styling to match the original
+        const preEl = kotlinPanel.querySelector('pre');
+        if (preEl) {
+            preEl.classList.add('p-4', 'text-sm', 'h-full', 'm-0');
+            preEl.style.background = 'transparent';
+        }
+    } catch (error) {
+        console.error('Shiki highlighting error:', error);
+        // Fallback to plain text
+        kotlinPanel.innerHTML = `<pre id="kotlin-output" class="p-4 text-sm font-mono text-gray-300">${escapeHtml(code)}</pre>`;
     }
 }
 
@@ -343,7 +389,10 @@ function clearEditor() {
 
 // Copy Kotlin output
 function copyOutput() {
-    const output = document.getElementById('kotlin-output').textContent;
+    // Get the text content from the Kotlin panel (works with both plain text and Shiki HTML)
+    const kotlinPanel = document.getElementById('kotlin-panel');
+    const output = kotlinPanel.textContent || kotlinPanel.innerText;
+
     if (!output || output.includes('Compilation failed')) {
         showToast('Nothing to copy');
         return;

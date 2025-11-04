@@ -40,10 +40,22 @@ body {
 }
 
 /* Output panels */
+#kotlin-panel,
+#errors-panel,
+#ast-panel {
+    background: #111827;
+}
+
 #kotlin-output,
 #ast-output {
     white-space: pre-wrap;
     word-break: break-word;
+}
+
+/* Shiki pre element styling */
+#kotlin-panel pre {
+    background: transparent !important;
+    margin: 0 !important;
 }
 
 /* Error items */
