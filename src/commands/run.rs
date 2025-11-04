@@ -53,7 +53,11 @@ fn execute_single_file(file_path: &str) -> Result<()> {
         anyhow::bail!("Build failed");
     }
 
-    println!("{}", format!("   Finished transpiling {} file(s)", result.files_transpiled).green().bold());
+    println!("   {} `{}` ({})",
+        "Finished".green().bold(),
+        single_config.app.name,
+        single_config.app.package
+    );
 
     // Continue with device check, gradle, install, and launch
     check_device_connected()?;
@@ -110,7 +114,12 @@ fn execute_project(manifest_path: &str) -> Result<()> {
         anyhow::bail!("Build failed");
     }
 
-    println!("{}", format!("   Finished transpiling {} file(s)", result.files_transpiled).green().bold());
+    println!("   {} `{}` v{} ({})",
+        "Finished".green().bold(),
+        config.project.name,
+        config.project.version,
+        config.android.package
+    );
 
     // 4. Check if device/emulator is connected
     check_device_connected()?;

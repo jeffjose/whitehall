@@ -55,7 +55,7 @@ fn execute_single_file(file_path: &str) -> Result<()> {
                     println!("\nChange detected in {}", file_path);
 
                     match run_single_file_build(&file_path_buf, &original_dir) {
-                        Ok(_) => println!("{}", "   Finished transpiling".green().bold()),
+                        Ok(_) => println!("   {}", "Finished".green().bold()),
                         Err(e) => eprintln!("{} build failed: {}", "error:".red().bold(), e),
                     }
                 }
@@ -167,7 +167,7 @@ fn execute_project(manifest_path: &str) -> Result<()> {
                     println!("\nChange detected in {}", changed_file);
 
                     match run_build(&config) {
-                        Ok(_) => println!("{}", "   Finished transpiling".green().bold()),
+                        Ok(_) => println!("   {}", "Finished".green().bold()),
                         Err(e) => eprintln!("{} build failed: {}", "error:".red().bold(), e),
                     }
                 }

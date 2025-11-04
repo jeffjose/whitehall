@@ -73,19 +73,6 @@ whitehall build counter.wh --output counter.apk
 # Generates APK directly
 ```
 
-### `whitehall split <file.wh>`
-**Convert to full project:**
-```bash
-whitehall split counter.wh --output counter-app/
-cd counter-app
-tree .
-# counter-app/
-# ├── whitehall.toml  (from frontmatter)
-# ├── src/
-# │   └── main.wh     (from file content)
-# └── .gitignore
-```
-
 ---
 
 ## Frontmatter Format
@@ -236,7 +223,7 @@ fn is_single_file(path: &str) -> bool {
 ```bash
 # User tries routing in single file:
 Error: Routing requires project mode
-Suggestion: Run `whitehall split app.wh` to upgrade
+Suggestion: Create a project with `whitehall init` for routing support
 ```
 
 ### Shebang Support
@@ -264,8 +251,6 @@ chmod +x counter.wh
 | **Inline deps** | ✅ `# dependencies = [...]` | ✅ Cargo block | ✅ TOML frontmatter |
 | **Shebang** | ✅ `#!/usr/bin/env uv` | ✅ `#!/usr/bin/env rust-script` | ✅ `#!/usr/bin/env whitehall` |
 | **Caching** | ✅ `.uv/cache/` | ✅ `~/.rust-script/` | ✅ `.whitehall/cache/{hash}/` |
-| **Auto-upgrade** | ❌ Manual | ❌ Manual | ✅ `whitehall split` |
-| **Size limits** | ❌ None | ❌ None | ✅ Warn at 500 lines |
 | **Type safety** | ❌ Runtime | ✅ Compile-time | ✅ Compile-time |
 
 ---
@@ -323,19 +308,19 @@ cd todo-app
 
 **Success:** Can run counter.wh end-to-end
 
-### Phase 2: Build & Split (1-2 hours)
+### Phase 2: Build & Watch (1-2 hours)
 **Tasks:**
 1. `whitehall build <file.wh>`
-2. `whitehall split <file.wh>` command
+2. `whitehall watch <file.wh>` command
 3. Better error messages
 
-**Success:** Can build APK from single file, can upgrade to project
+**Success:** Can build APK from single file, can watch for changes
 
 ### Phase 3: Polish (1 hour)
 **Tasks:**
 1. Shebang support
 2. Size warnings
-3. Feature detection (routing → suggest split)
+3. Feature detection (routing → suggest project mode)
 
 **Success:** Production-ready single-file mode
 
@@ -388,9 +373,10 @@ fun increment() { count++; history += count }
 fun Counter() { ... }
 fun History() { ... }
 
-// Week 4: Too complex → upgrade
-$ whitehall split app.wh
-✅ Created project in ./app/
+// Week 4: Too complex → upgrade to full project
+$ whitehall init app
+# Migrate code to app/ directory
+✅ Now a full project with proper structure
 ```
 
 ---

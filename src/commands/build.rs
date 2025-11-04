@@ -51,7 +51,11 @@ fn execute_single_file(file_path: &str) -> Result<()> {
         anyhow::bail!("Build failed");
     }
 
-    println!("{}", format!("   Finished transpiling {} file(s) to {}/build", result.files_transpiled, temp_project_dir.display()).green().bold());
+    println!("   {} `{}` ({})",
+        "Finished".green().bold(),
+        single_config.app.name,
+        single_config.app.package
+    );
 
     Ok(())
 }
@@ -114,7 +118,13 @@ fn execute_project(manifest_path: &str) -> Result<()> {
         output_path
     };
 
-    println!("{}", format!("   Finished transpiling {} file(s) to {}", result.files_transpiled, display_path.display()).green().bold());
+    println!("   {} `{}` v{} ({}) to {}",
+        "Finished".green().bold(),
+        config.project.name,
+        config.project.version,
+        config.android.package,
+        display_path.display()
+    );
 
     Ok(())
 }

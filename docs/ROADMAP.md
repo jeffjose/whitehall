@@ -170,9 +170,7 @@ whitehall init my-app --template ./path/to/template
 - [ ] `whitehall build <file.wh>` - Build APK from single file
 - [ ] Temporary project generation in `.whitehall/cache/{hash}/`
 - [ ] Build caching for single-file apps (content-based hashing)
-- [ ] `whitehall split <file.wh>` - Convert single-file to project
 - [ ] Shebang support (`#!/usr/bin/env whitehall`)
-- [ ] Size limits and warnings (>500 lines → suggest split)
 
 **Success metric:** Can write a complete app in one `.wh` file and run it instantly
 

@@ -46,7 +46,7 @@ pub fn execute(file_path: &str) -> Result<()> {
         .map_err(|e| anyhow::anyhow!("Transpilation error: {}", e))?;
 
     // Output the Kotlin code
-    println!("{}", format!("   Finished compiling {}", file_path).green().bold());
+    println!("   {} compiling {}", "Finished".green().bold(), file_path);
     println!("\nGenerated Kotlin code:");
     println!("{}", "=".repeat(80));
     println!("{}", kotlin_code);
