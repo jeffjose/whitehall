@@ -48,14 +48,17 @@ async fn compile(Json(req): Json<CompileRequest>) -> JsonResponse<CompileRespons
             })
         },
         Err(e) => {
+            // Try to parse error message format: [Line X:Y] message
+            let (line, column, message) = parse_error_position(&e);
+
             JsonResponse(CompileResponse {
                 success: false,
                 output: String::new(),
                 errors: vec![CompileError {
-                    message: e,
-                    line: None, // TODO: Extract from error message or enhance parser
-                    column: None,
-                    length: None,
+                    message,
+                    line,
+                    column,
+                    length: Some(1),
                     severity: "error".to_string(),
                     context: None,
                 }],
@@ -64,6 +67,30 @@ async fn compile(Json(req): Json<CompileRequest>) -> JsonResponse<CompileRespons
             })
         },
     }
+}
+
+/// Parse error messages with format "[Line X:Y] message" and extract position
+fn parse_error_position(error_str: &str) -> (Option<usize>, Option<usize>, String) {
+    // Try to match pattern: [Line X:Y] message
+    if let Some(start) = error_str.find("[Line ") {
+        if let Some(end) = error_str[start..].find(']') {
+            let pos_str = &error_str[start + 6..start + end]; // Skip "[Line "
+            let message = error_str[start + end + 2..].to_string(); // Skip "] "
+
+            // Parse "X:Y"
+            if let Some(colon_pos) = pos_str.find(':') {
+                let line_str = &pos_str[..colon_pos];
+                let col_str = &pos_str[colon_pos + 1..];
+
+                if let (Ok(line), Ok(col)) = (line_str.parse::<usize>(), col_str.parse::<usize>()) {
+                    return (Some(line), Some(col), message);
+                }
+            }
+        }
+    }
+
+    // Fallback: return original message without position
+    (None, None, error_str.to_string())
 }
 
 #[tokio::main]

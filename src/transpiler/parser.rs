@@ -19,6 +19,32 @@ impl Parser {
         }
     }
 
+    /// Convert byte position to (line, column) for error messages
+    fn pos_to_line_col(&self, pos: usize) -> (usize, usize) {
+        let mut line = 1;
+        let mut col = 1;
+
+        for (i, ch) in self.input.chars().enumerate() {
+            if i >= pos {
+                break;
+            }
+            if ch == '\n' {
+                line += 1;
+                col = 1;
+            } else {
+                col += 1;
+            }
+        }
+
+        (line, col)
+    }
+
+    /// Create an error message with position information
+    fn error_at_pos(&self, message: &str) -> String {
+        let (line, col) = self.pos_to_line_col(self.pos);
+        format!("[Line {}:{}] {}", line, col, message)
+    }
+
     pub fn parse(&mut self) -> Result<WhitehallFile, String> {
         let mut imports = Vec::new();
         let mut props = Vec::new();
@@ -465,7 +491,7 @@ impl Parser {
             } else {
                 "EOF"
             };
-            Err(format!("Expected component, found: {:?}", remaining))
+            Err(self.error_at_pos(&format!("Expected component, found: {:?}", remaining)))
         }
     }
 
@@ -1040,7 +1066,7 @@ impl Parser {
         }
 
         if start == self.pos {
-            return Err("Expected identifier".to_string());
+            return Err(self.error_at_pos("Expected identifier"));
         }
 
         Ok(self.input[start..self.pos].to_string())
@@ -1066,8 +1092,8 @@ impl Parser {
                 self.pos += ch.len_utf8();
                 Ok(())
             }
-            Some(ch) => Err(format!("Expected '{}', found '{}'", expected, ch)),
-            None => Err(format!("Expected '{}', found EOF", expected)),
+            Some(ch) => Err(self.error_at_pos(&format!("Expected '{}', found '{}'", expected, ch))),
+            None => Err(self.error_at_pos(&format!("Expected '{}', found EOF", expected))),
         }
     }
 
