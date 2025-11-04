@@ -55,6 +55,21 @@ enum Commands {
         #[command(subcommand)]
         command: ToolchainCommands,
     },
+    /// Execute a command with the project's toolchain environment
+    Exec {
+        /// Path to whitehall.toml (defaults to current directory)
+        #[arg(long, default_value = "whitehall.toml")]
+        manifest: String,
+        /// Command and arguments to execute
+        #[arg(trailing_var_arg = true, allow_hyphen_values = true)]
+        command: Vec<String>,
+    },
+    /// Launch an interactive shell with the project's toolchain environment
+    Shell {
+        /// Path to whitehall.toml (defaults to current directory)
+        #[arg(long, default_value = "whitehall.toml")]
+        manifest: String,
+    },
 }
 
 #[derive(Subcommand)]
@@ -125,6 +140,16 @@ fn main() {
                     commands::toolchain::execute_shell(&manifest)
                 }
             }
+        }
+        Commands::Exec { manifest, command } => {
+            if command.is_empty() {
+                eprintln!("{} No command specified", "error:".red().bold());
+                std::process::exit(1);
+            }
+            commands::toolchain::execute_exec(&manifest, &command[0], &command[1..])
+        }
+        Commands::Shell { manifest } => {
+            commands::toolchain::execute_shell(&manifest)
         }
     };
 
