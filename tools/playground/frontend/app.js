@@ -62,11 +62,11 @@ const examples = {
         code: `// CSS-like padding shortcuts: p, px, py, pt, pb, pl, pr
 <Column spacing={8}>
   <Text p={16} color="#2196F3">
-    p={16} - all sides
+    All sides: p=16
   </Text>
 
   <Text px={20} py={8} color="#4CAF50">
-    px={20} py={8} - horizontal & vertical
+    Horizontal & Vertical: px=20 py=8
   </Text>
 
   <Card pt={4} pb={12} pl={8} pr={8}>
