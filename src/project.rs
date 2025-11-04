@@ -160,7 +160,7 @@ fn is_under_directory(path: &Path, dir: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::config::{AndroidConfig, BuildConfig, ProjectConfig};
+    use crate::config::{AndroidConfig, BuildConfig, ProjectConfig, ToolchainConfig};
 
     fn make_test_config() -> Config {
         Config {
@@ -174,6 +174,7 @@ mod tests {
                 package: "com.example.testapp".to_string(),
             },
             build: BuildConfig::default(),
+            toolchain: ToolchainConfig::default(),
         }
     }
 

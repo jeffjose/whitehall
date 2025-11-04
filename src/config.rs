@@ -8,6 +8,8 @@ pub struct Config {
     pub android: AndroidConfig,
     #[serde(default)]
     pub build: BuildConfig,
+    #[serde(default)]
+    pub toolchain: ToolchainConfig,
 }
 
 #[derive(Debug, Deserialize)]
@@ -48,6 +50,45 @@ fn default_optimize_level() -> String {
     "default".to_string()
 }
 
+#[derive(Debug, Deserialize, Clone)]
+pub struct ToolchainConfig {
+    #[serde(default = "default_java")]
+    pub java: String,
+    #[serde(default = "default_gradle")]
+    pub gradle: String,
+    #[serde(default = "default_agp")]
+    pub agp: String,
+    #[serde(default = "default_kotlin")]
+    pub kotlin: String,
+}
+
+impl Default for ToolchainConfig {
+    fn default() -> Self {
+        Self {
+            java: default_java(),
+            gradle: default_gradle(),
+            agp: default_agp(),
+            kotlin: default_kotlin(),
+        }
+    }
+}
+
+fn default_java() -> String {
+    crate::toolchain::DEFAULT_JAVA.to_string()
+}
+
+fn default_gradle() -> String {
+    crate::toolchain::DEFAULT_GRADLE.to_string()
+}
+
+fn default_agp() -> String {
+    crate::toolchain::DEFAULT_AGP.to_string()
+}
+
+fn default_kotlin() -> String {
+    crate::toolchain::DEFAULT_KOTLIN.to_string()
+}
+
 /// Load and parse whitehall.toml configuration file
 pub fn load_config(path: &str) -> Result<Config> {
     let content = fs::read_to_string(path)
@@ -64,6 +105,14 @@ pub fn load_config(path: &str) -> Result<Config> {
 
     // Validate Android package name
     validate_package_name(&config.android.package)?;
+
+    // Validate toolchain compatibility
+    let validator_config = crate::toolchain::validator::ToolchainConfig {
+        java: config.toolchain.java.clone(),
+        gradle: config.toolchain.gradle.clone(),
+        agp: config.toolchain.agp.clone(),
+    };
+    crate::toolchain::validate_compatibility(&validator_config)?;
 
     Ok(config)
 }

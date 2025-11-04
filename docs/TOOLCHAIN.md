@@ -21,7 +21,7 @@ This creates friction for new users and leads to inconsistent development enviro
 2. **Deterministic** - Everyone gets the same toolchain versions
 3. **Transparent** - Users shouldn't need to know about Java/Gradle/SDK internals
 4. **Fast** - Download once, cached forever
-5. **Cross-platform** - Support Linux, macOS, Windows (x64 + aarch64)
+5. **Cross-platform** - Support Linux and macOS (x64 + aarch64)
 6. **Offline-friendly** - Once downloaded, works without network
 
 ## Evaluated Options
@@ -209,11 +209,12 @@ output_dir = "build"
 **Recommended: Adoptium/Temurin**
 - URL: https://api.adoptium.net/v3/binary/latest/21/ga/{os}/{arch}/jdk/hotspot/normal/eclipse
 - Benefits: Official, free, good API, actively maintained
-- Platforms: linux/mac/windows, x64/aarch64
+- Platforms: linux/mac, x64/aarch64
 
 **Alternative: Azul Zulu**
 - URL: https://www.azul.com/downloads/?package=jdk
 - Benefits: Good commercial support
+- Platforms: linux/mac, x64/aarch64
 
 #### Gradle
 
@@ -225,7 +226,6 @@ output_dir = "build"
 1. **Command-line tools:**
    - Linux: https://dl.google.com/android/repository/commandlinetools-linux-9477386_latest.zip
    - macOS: https://dl.google.com/android/repository/commandlinetools-mac-9477386_latest.zip
-   - Windows: https://dl.google.com/android/repository/commandlinetools-win-9477386_latest.zip
 
 2. **Then use sdkmanager to install:**
    ```bash
@@ -347,8 +347,6 @@ pub enum Platform {
     LinuxAarch64,
     MacX64,
     MacAarch64,
-    WindowsX64,
-    WindowsAarch64,
 }
 ```
 
@@ -481,9 +479,9 @@ whitehall build --java 21
 ### Platform Detection
 
 Need to detect and handle:
-- **OS:** Linux, macOS, Windows
+- **OS:** Linux, macOS
 - **Architecture:** x86_64, aarch64 (Apple Silicon)
-- **Libc:** glibc vs musl (Linux)
+- **Libc:** glibc vs musl (Linux only)
 
 Use existing crates:
 - `target-lexicon` for platform detection

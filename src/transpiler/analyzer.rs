@@ -703,7 +703,7 @@ impl Analyzer {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::transpiler::ast::PropDeclaration;
+    use crate::transpiler::ast::{PropDeclaration, StateDeclaration};
 
     #[test]
     fn test_analyzer_creates_symbol_table() {

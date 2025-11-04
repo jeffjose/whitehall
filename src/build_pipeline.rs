@@ -363,7 +363,7 @@ mod tests {
 
     #[test]
     fn test_default_main_activity_generation() {
-        use crate::config::{AndroidConfig, BuildConfig, Config, ProjectConfig};
+        use crate::config::{AndroidConfig, BuildConfig, Config, ProjectConfig, ToolchainConfig};
 
         let config = Config {
             project: ProjectConfig {
@@ -376,6 +376,7 @@ mod tests {
                 package: "com.example.test".to_string(),
             },
             build: BuildConfig::default(),
+            toolchain: ToolchainConfig::default(),
         };
 
         let content = generate_default_main_activity(&config);
