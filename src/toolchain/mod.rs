@@ -1,4 +1,5 @@
 mod defaults;
+mod downloader;
 mod platform;
 pub mod validator;
 
@@ -37,8 +38,7 @@ impl Toolchain {
 
     /// Ensure Java is installed for the given version
     ///
-    /// Returns the JAVA_HOME path if toolchain exists
-    /// Returns error if toolchain is not installed (Phase 2 will download)
+    /// Downloads and installs Java if not present
     ///
     /// # Arguments
     /// * `version` - Java version (e.g., "11", "17", "21")
@@ -46,12 +46,8 @@ impl Toolchain {
         let java_home = self.root.join(format!("java/{}", version));
 
         if !java_home.exists() {
-            anyhow::bail!(
-                "Java {} not installed. Download will be implemented in Phase 2.\n\
-                Expected location: {}",
-                version,
-                java_home.display()
-            );
+            // Download Java
+            self.download_java(version)?;
         }
 
         // Verify java binary exists
@@ -77,10 +73,44 @@ impl Toolchain {
         }
     }
 
+    /// Download and install Java
+    fn download_java(&self, version: &str) -> Result<()> {
+        let platform = Platform::detect()?;
+        let url = downloader::get_java_download_url(version, platform)?;
+
+        let java_dir = self.root.join("java");
+        std::fs::create_dir_all(&java_dir)?;
+
+        // Download to temporary file
+        let archive_path = java_dir.join(format!("java-{}.tar.gz", version));
+        downloader::download_with_progress(&url, &archive_path)?;
+
+        // Extract
+        downloader::extract_tar_gz(&archive_path, &java_dir)?;
+
+        // The extracted directory structure varies, need to rename properly
+        // Adoptium extracts to jdk-VERSION/ directory
+        let extracted_dirs: Vec<_> = std::fs::read_dir(&java_dir)?
+            .filter_map(|e| e.ok())
+            .filter(|e| e.path().is_dir())
+            .filter(|e| e.file_name().to_str().unwrap().starts_with("jdk-"))
+            .collect();
+
+        if let Some(extracted_dir) = extracted_dirs.first() {
+            let target = java_dir.join(version);
+            std::fs::rename(extracted_dir.path(), &target)?;
+        }
+
+        // Clean up archive
+        std::fs::remove_file(&archive_path)?;
+
+        println!("✓ Java {} installed", version);
+        Ok(())
+    }
+
     /// Ensure Gradle is installed for the given version
     ///
-    /// Returns the path to the gradle executable
-    /// Returns error if toolchain is not installed (Phase 2 will download)
+    /// Downloads and installs Gradle if not present
     ///
     /// # Arguments
     /// * `version` - Gradle version (e.g., "7.6", "8.0", "8.4")
@@ -88,12 +118,7 @@ impl Toolchain {
         let gradle_home = self.root.join(format!("gradle/{}", version));
 
         if !gradle_home.exists() {
-            anyhow::bail!(
-                "Gradle {} not installed. Download will be implemented in Phase 2.\n\
-                Expected location: {}",
-                version,
-                gradle_home.display()
-            );
+            self.download_gradle(version)?;
         }
 
         let gradle_bin = gradle_home.join("bin/gradle");
@@ -109,19 +134,42 @@ impl Toolchain {
         Ok(gradle_bin)
     }
 
+    /// Download and install Gradle
+    fn download_gradle(&self, version: &str) -> Result<()> {
+        let url = downloader::get_gradle_download_url(version);
+
+        let gradle_dir = self.root.join("gradle");
+        std::fs::create_dir_all(&gradle_dir)?;
+
+        // Download to temporary file
+        let archive_path = gradle_dir.join(format!("gradle-{}.zip", version));
+        downloader::download_with_progress(&url, &archive_path)?;
+
+        // Extract
+        downloader::extract_zip(&archive_path, &gradle_dir)?;
+
+        // Gradle extracts to gradle-VERSION/ directory, rename to VERSION/
+        let extracted = gradle_dir.join(format!("gradle-{}", version));
+        let target = gradle_dir.join(version);
+        if extracted.exists() {
+            std::fs::rename(&extracted, &target)?;
+        }
+
+        // Clean up archive
+        std::fs::remove_file(&archive_path)?;
+
+        println!("✓ Gradle {} installed", version);
+        Ok(())
+    }
+
     /// Ensure Android SDK is installed
     ///
-    /// Returns the ANDROID_HOME path
-    /// Returns error if SDK is not installed (Phase 2 will download)
+    /// Downloads and installs Android SDK if not present
     pub fn ensure_android_sdk(&self) -> Result<PathBuf> {
         let sdk_root = self.root.join("android");
 
         if !sdk_root.exists() {
-            anyhow::bail!(
-                "Android SDK not installed. Download will be implemented in Phase 2.\n\
-                Expected location: {}",
-                sdk_root.display()
-            );
+            self.download_android_sdk()?;
         }
 
         // Verify critical components exist
@@ -134,6 +182,85 @@ impl Toolchain {
         }
 
         Ok(sdk_root)
+    }
+
+    /// Download and install Android SDK
+    fn download_android_sdk(&self) -> Result<()> {
+        let platform = Platform::detect()?;
+        let url = downloader::get_android_cmdline_tools_url(platform)?;
+
+        let sdk_root = self.root.join("android");
+        std::fs::create_dir_all(&sdk_root)?;
+
+        // Download cmdline-tools
+        let archive_path = sdk_root.join("cmdline-tools.zip");
+        downloader::download_with_progress(&url, &archive_path)?;
+
+        // Extract to cmdline-tools/latest/
+        // IMPORTANT: Must be in "latest" subdirectory for sdkmanager to work
+        let cmdline_tools_dir = sdk_root.join("cmdline-tools");
+        std::fs::create_dir_all(&cmdline_tools_dir)?;
+
+        downloader::extract_zip(&archive_path, &cmdline_tools_dir)?;
+
+        // Rename extracted "cmdline-tools" to "latest"
+        let extracted = cmdline_tools_dir.join("cmdline-tools");
+        let latest = cmdline_tools_dir.join("latest");
+        if extracted.exists() {
+            std::fs::rename(&extracted, &latest)?;
+        }
+
+        // Clean up archive
+        std::fs::remove_file(&archive_path)?;
+
+        println!("✓ Android cmdline-tools installed");
+
+        // Now use sdkmanager to install essential components
+        self.install_sdk_components()?;
+
+        println!("✓ Android SDK installed");
+        Ok(())
+    }
+
+    /// Use sdkmanager to install essential SDK components
+    fn install_sdk_components(&self) -> Result<()> {
+        let sdk_root = self.root.join("android");
+        let sdkmanager = sdk_root.join("cmdline-tools/latest/bin/sdkmanager");
+
+        if !sdkmanager.exists() {
+            anyhow::bail!("sdkmanager not found at {}", sdkmanager.display());
+        }
+
+        println!("Installing Android SDK components...");
+
+        // Install essential components
+        let components = vec![
+            "platform-tools",        // adb, fastboot
+            "build-tools;34.0.0",    // aapt, dx, etc.
+            "platforms;android-34",  // Android 14 platform
+        ];
+
+        for component in components {
+            println!("  Installing {}...", component);
+            let output = Command::new(&sdkmanager)
+                .arg("--sdk_root")
+                .arg(&sdk_root)
+                .arg(component)
+                .env("ANDROID_HOME", &sdk_root)
+                .output()
+                .with_context(|| format!("Failed to run sdkmanager for {}", component))?;
+
+            if !output.status.success() {
+                anyhow::bail!(
+                    "Failed to install {}: {}",
+                    component,
+                    String::from_utf8_lossy(&output.stderr)
+                );
+            }
+        }
+
+        println!("✓ SDK components installed");
+        Ok(())
     }
 
     /// Get configured gradle Command for this toolchain
@@ -204,39 +331,6 @@ mod tests {
         assert!(root.exists());
     }
 
-    #[test]
-    fn test_java_path_structure() {
-        let toolchain = Toolchain::new().unwrap();
-
-        // Should error when Java not installed
-        let result = toolchain.ensure_java("21");
-        assert!(result.is_err());
-
-        let err = result.unwrap_err().to_string();
-        assert!(err.contains("Java 21 not installed"));
-    }
-
-    #[test]
-    fn test_gradle_path_structure() {
-        let toolchain = Toolchain::new().unwrap();
-
-        // Should error when Gradle not installed
-        let result = toolchain.ensure_gradle("8.4");
-        assert!(result.is_err());
-
-        let err = result.unwrap_err().to_string();
-        assert!(err.contains("Gradle 8.4 not installed"));
-    }
-
-    #[test]
-    fn test_android_sdk_path_structure() {
-        let toolchain = Toolchain::new().unwrap();
-
-        // Should error when SDK not installed
-        let result = toolchain.ensure_android_sdk();
-        assert!(result.is_err());
-
-        let err = result.unwrap_err().to_string();
-        assert!(err.contains("Android SDK not installed"));
-    }
+    // Phase 1 tests removed - Phase 2 now downloads automatically
+    // To test downloads, run: cargo run --example test-toolchain
 }
