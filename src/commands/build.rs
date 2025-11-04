@@ -1,4 +1,4 @@
-use anyhow::{Context, Result};
+use anyhow::Result;
 use colored::Colorize;
 use std::env;
 use std::fs;
@@ -117,14 +117,6 @@ fn execute_project(manifest_path: &str) -> Result<()> {
         }
         anyhow::bail!("Build failed");
     }
-
-    // Make the output path relative to where the user ran the command
-    let output_path = project_dir.join(&result.output_dir);
-    let display_path = if output_path.starts_with(&original_dir) {
-        output_path.strip_prefix(&original_dir).unwrap().to_path_buf()
-    } else {
-        output_path
-    };
 
     let elapsed = start.elapsed();
     println!("   {} `{}` v{} ({}) in {:.2}s",
