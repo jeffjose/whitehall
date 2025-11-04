@@ -20,14 +20,20 @@ let shikiCodeToHtml = null;
     }
 })();
 
-// Example snippets
+// Example snippets (ordered by increasing complexity)
 const examples = {
     'hello': {
         name: 'Hello World',
         code: `<Text>Hello, Whitehall!</Text>`
     },
-    'counter': {
-        name: 'Counter',
+    'multiple': {
+        name: 'Multiple Elements',
+        code: `<Text fontSize={20} fontWeight="bold">Welcome!</Text>
+<Text>Multiple root elements are auto-wrapped in Column</Text>
+<Text color={Color.Gray}>This makes prototyping easy</Text>`
+    },
+    'state': {
+        name: 'State & Events',
         code: `var count = 0
 
 <Column padding={16} spacing={8}>
@@ -37,8 +43,54 @@ const examples = {
   </Button>
 </Column>`
     },
+    'binding': {
+        name: 'Two-Way Binding',
+        code: `var name = ""
+
+<Column padding={16} spacing={12}>
+  <TextField
+    bind:value={name}
+    label="Enter your name"
+  />
+  <Text fontSize={18}>
+    Hello, {name.isEmpty() ? "stranger" : name}!
+  </Text>
+</Column>`
+    },
+    'conditional': {
+        name: 'Conditional Rendering',
+        code: `var isLoggedIn = false
+
+<Column padding={16} spacing={12}>
+  @if (isLoggedIn) {
+    <Text fontSize={20}>Welcome back!</Text>
+    <Button onClick={() => isLoggedIn = false}>
+      <Text>Logout</Text>
+    </Button>
+  } else {
+    <Text>Please log in</Text>
+    <Button onClick={() => isLoggedIn = true}>
+      <Text>Login</Text>
+    </Button>
+  }
+</Column>`
+    },
+    'list': {
+        name: 'Lists & For Loops',
+        code: `var items = ["Apple", "Banana", "Cherry", "Date"]
+
+<Column padding={16} spacing={8}>
+  <Text fontSize={20} fontWeight="bold">Fruit List</Text>
+
+  @for (fruit in items) {
+    <Card padding={12} modifier={Modifier.fillMaxWidth()}>
+      <Text>{fruit}</Text>
+    </Card>
+  }
+</Column>`
+    },
     'todo': {
-        name: 'Todo List',
+        name: 'Todo App',
         code: `var todos = ["Buy milk", "Write code", "Test Whitehall"]
 var newTodo = ""
 
@@ -71,10 +123,12 @@ fun addTodo() {
 </Column>`
     },
     'form': {
-        name: 'Form with Binding',
+        name: 'Form Validation',
         code: `var name = ""
 var email = ""
 var agreeToTerms = false
+
+val isValid = name.isNotEmpty() && email.contains("@") && agreeToTerms
 
 <Column padding={16} spacing={12}>
   <Text fontSize={20} fontWeight="bold">Sign Up Form</Text>
@@ -91,14 +145,14 @@ var agreeToTerms = false
 
   <Row spacing={8}>
     <Checkbox bind:checked={agreeToTerms} />
-    <Text>I agree to the terms and conditions</Text>
+    <Text>I agree to the terms</Text>
   </Row>
 
   <Button
     onClick={() => {}}
-    enabled={agreeToTerms}
+    enabled={isValid}
   >
-    <Text>Submit</Text>
+    <Text>{isValid ? "Submit" : "Fill all fields"}</Text>
   </Button>
 </Column>`
     },
@@ -126,8 +180,8 @@ var agreeToTerms = false
     elevation={4.dp}
   >
     <Column padding={16}>
-      <Text text="This is a card" fontSize={18} />
-      <Text text="With some content" color={Color.Gray} />
+      <Text text="Styled Card" fontSize={18} />
+      <Text text="With elevation and padding" color={Color.Gray} />
     </Column>
   </Card>
 </Column>`
@@ -183,7 +237,7 @@ function getInitialCode() {
             console.error('Invalid URL hash');
         }
     }
-    return examples.counter.code;
+    return examples.state.code;
 }
 
 // Compile Whitehall code
