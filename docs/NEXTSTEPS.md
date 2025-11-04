@@ -180,46 +180,213 @@ cd build && gradle wrapper
 - Build simple apps in .wh format
 - Test transpilation and compilation
 
-### Option 4: Single-File App Mode (NEW)
+### Option 4: Single-File App Mode (EASIER THAN APK GENERATION!) ⭐
 **Goal**: Enable zero-config single-file apps (like `uv` for Python)
 
-**Estimated Effort**: 3-5 hours
+**Estimated Effort**: 3-4 hours (vs 5-6 hours for APK generation)
 
-**Tasks**:
-1. Frontmatter parsing
-   - Parse `///` TOML comments
-   - Extract app config (name, package, minSdk)
-   - Extract dependencies
-   - Validate required fields
+**Why Single-File Mode Is The Better Choice:**
 
-2. Temporary project generation
-   - Hash file content (SHA256)
-   - Generate project in `.whitehall/cache/{hash}/`
-   - Create whitehall.toml from frontmatter
-   - Copy code (without frontmatter) to src/main.wh
+| Aspect | Single-File Mode ⭐ | APK in Build |
+|--------|---------------------|--------------|
+| **Implementation Time** | 3-4 hours | 5-6 hours |
+| **Complexity** | Low (mostly plumbing) | Medium-High |
+| **Code Reuse** | 100% reuse existing pipeline | Duplicates `whitehall run` logic |
+| **User Dependencies** | None new | Gradle wrapper handling |
+| **Innovation** | High - unique feature | Low - `run` already does this |
+| **Vision Alignment** | ✅ "Start small, scale up" | ⚠️ Just convenience |
+| **Binary Size** | No change | +2-3 MB if bundling wrapper |
 
-3. Command integration
-   - Detect single-file mode (*.wh without project)
-   - Route to single-file handler
-   - `whitehall run app.wh`
-   - `whitehall build app.wh`
+**Key Insight:** `whitehall run` already builds APKs! Users can get APKs at:
+```bash
+whitehall run
+# APK: build/app/build/outputs/apk/debug/app-debug.apk
+```
 
-4. Upgrade path
-   - `whitehall split app.wh` command
-   - Converts to full project structure
-   - Preserves all code and config
+Single-file mode is:
+- Faster to implement
+- More innovative (unique to Whitehall)
+- Better UX for beginners
+- Aligns with core vision
+
+**Implementation Steps:**
+
+**Step 1: Frontmatter Parser (1-2 hours)**
+```rust
+// src/single_file.rs
+use sha2::{Sha256, Digest};
+use toml;
+
+pub struct SingleFileConfig {
+    pub app_name: String,
+    pub package: String,
+    pub min_sdk: u32,
+    pub target_sdk: u32,
+}
+
+pub fn parse_frontmatter(content: &str) -> Result<(SingleFileConfig, String)> {
+    let mut frontmatter = String::new();
+    let mut code = String::new();
+    let mut in_frontmatter = true;
+
+    for line in content.lines() {
+        if line.starts_with("///") {
+            if in_frontmatter {
+                frontmatter.push_str(&line[3..]);
+                frontmatter.push('\n');
+            }
+        } else {
+            in_frontmatter = false;
+            code.push_str(line);
+            code.push('\n');
+        }
+    }
+
+    let config: SingleFileConfig = toml::from_str(&frontmatter)?;
+    Ok((config, code))
+}
+
+fn hash_content(content: &str) -> String {
+    let mut hasher = Sha256::new();
+    hasher.update(content.as_bytes());
+    format!("{:x}", hasher.finalize())
+}
+```
+
+**Step 2: Temp Project Generation (1 hour)**
+```rust
+pub fn generate_temp_project(
+    config: &SingleFileConfig,
+    code: &str,
+) -> Result<PathBuf> {
+    let hash = hash_content(code);
+    let temp_dir = PathBuf::from(format!(".whitehall/cache/{}", hash));
+
+    // Skip if already exists (cache hit!)
+    if temp_dir.exists() {
+        return Ok(temp_dir);
+    }
+
+    fs::create_dir_all(&temp_dir)?;
+
+    // Generate whitehall.toml
+    let toml = format!(r#"
+[project]
+name = "{}"
+version = "0.1.0"
+
+[android]
+package = "{}"
+minSdk = {}
+targetSdk = {}
+
+[build]
+output_dir = "build"
+"#, config.app_name, config.package, config.min_sdk, config.target_sdk);
+
+    fs::write(temp_dir.join("whitehall.toml"), toml)?;
+
+    // Write code to src/main.wh (without frontmatter)
+    fs::create_dir_all(temp_dir.join("src"))?;
+    fs::write(temp_dir.join("src/main.wh"), code)?;
+
+    Ok(temp_dir)
+}
+```
+
+**Step 3: Command Integration (30 minutes)**
+```rust
+// In src/main.rs
+match args.command {
+    Command::Run { path } => {
+        if path.ends_with(".wh") && !is_project_file(&path) {
+            // Single-file mode
+            let content = fs::read_to_string(&path)?;
+            let (config, code) = single_file::parse_frontmatter(&content)?;
+            let temp_dir = single_file::generate_temp_project(&config, &code)?;
+
+            println!("📦 Running single-file app: {}", config.app_name);
+            println!("   Cache: {}\n", temp_dir.display());
+
+            // Reuse existing build + run pipeline!
+            commands::run::execute(temp_dir.join("whitehall.toml").to_str().unwrap())?;
+        } else {
+            // Project mode
+            commands::run::execute(&path)?;
+        }
+    }
+}
+
+fn is_project_file(path: &str) -> bool {
+    // Check if we're in a project directory
+    Path::new(path).parent()
+        .and_then(|p| p.parent())
+        .map(|p| p.join("whitehall.toml").exists())
+        .unwrap_or(false)
+}
+```
+
+**Step 4: Testing (30 minutes)**
+```bash
+# Create test file
+cat > counter.wh << 'EOF'
+#!/usr/bin/env whitehall
+/// [app]
+/// name = "Counter"
+/// package = "com.example.counter"
+/// minSdk = 24
+/// targetSdk = 34
+
+var count = 0
+
+<Column padding={16} spacing={8}>
+  <Text fontSize={32}>{count}</Text>
+  <Button onClick={() => count++}>
+    <Text>Increment</Text>
+  </Button>
+</Column>
+EOF
+
+# Test it
+whitehall run counter.wh
+
+# Test caching (should be instant)
+whitehall run counter.wh
+```
+
+**Dependencies to Add:**
+```toml
+# Cargo.toml
+[dependencies]
+sha2 = "0.10"  # For content hashing
+toml = "0.8"   # Already have this!
+```
+
+**Total Effort Breakdown:**
+- Frontmatter parser: 1-2 hours
+- Temp project generation: 1 hour
+- Command routing: 30 minutes
+- Testing + bug fixes: 30 minutes
+- **Total: 3-4 hours**
 
 **Why This?**
-- Matches vision: "Start small, scale up"
-- Enables rapid prototyping
-- Great for learning/tutorials
-- Zero boilerplate for simple apps
-- Inspired by `uv` and `rust-script`
+- ✅ Matches vision: "Start small, scale up"
+- ✅ Enables rapid prototyping (5-minute workflow)
+- ✅ Great for learning/tutorials
+- ✅ Zero boilerplate for simple apps
+- ✅ Inspired by `uv` and `rust-script`
+- ✅ **100% code reuse** - leverages existing build pipeline
+- ✅ **Unique feature** - no other Android framework has this
 
 **Starting Point**:
-- See `docs/SINGLE-FILE-MODE.md` for complete design
-- Create `src/single_file.rs`
-- Implement frontmatter parser
+1. Create `src/single_file.rs`
+2. Add `sha2` dependency
+3. Implement frontmatter parser (1-2 hours)
+4. Implement temp project generator (1 hour)
+5. Route commands (30 min)
+6. Test with counter.wh (30 min)
+
+See `docs/SINGLE-FILE-MODE.md` for complete design.
 
 ### Option 5: Additional Test Coverage (If Needed)
 **Goal**: Add more test cases for edge cases and patterns
@@ -247,20 +414,38 @@ cd build && gradle wrapper
 
 ## Recommendation
 
-**Start with Option 1 (End-to-End Testing) - RECOMMENDED**
+**Priority Order:**
 
-**Rationale**:
-1. **CLI is already implemented**: All 4 commands (init, build, watch, run) are working
-2. **Need to verify it works**: Haven't tested the full workflow end-to-end yet
-3. **Will discover real bugs**: Testing with actual apps will find issues the unit tests missed
-4. **Creates example apps**: Useful for documentation and demonstrations
-5. **Quick validation**: 2-4 hours to build a simple app and test the workflow
+### **1. End-to-End Testing (FIRST) - CRITICAL** ⭐
+**Why:** Validate that everything actually works before building new features
+- CLI is implemented but not tested with real Android device
+- Will discover real bugs in import generation, Gradle config, etc.
+- 2-4 hours + bug fixes
 
-**After End-to-End Testing**:
-1. Fix any critical bugs discovered during testing
-2. Add Option 5 (Additional Tests) for any discovered gaps
-3. Enhance with Option 2 (Developer Experience) - better error messages
-4. Complete with Option 4 (Route Generation)
+### **2. Single-File Mode (SECOND) - HIGH VALUE** 🎯
+**Why:** Fastest feature to implement, highest innovation value
+- Only 3-4 hours of work
+- 100% code reuse (leverages existing pipeline)
+- Unique selling point vs other frameworks
+- Aligns perfectly with vision: "Start small, scale up"
+- Great for tutorials, learning, prototyping
+- **No other Android framework has this!**
+
+### **3. Developer Experience (THIRD)**
+After core features are stable:
+- Better error messages with line numbers
+- Source maps for debugging
+- Color-coded terminal output
+
+**Recommended Flow:**
+1. **Week 1**: End-to-End Testing → Fix critical bugs → Validate pipeline works
+2. **Week 2**: Single-File Mode → Get unique feature working → Update docs
+3. **Week 3**: Polish (DX improvements, additional tests as needed)
+
+**Why Not APK Generation in Build?**
+- `whitehall run` already generates APKs (at `build/app/build/outputs/apk/debug/`)
+- Would duplicate existing logic (5-6 hours for marginal value)
+- Single-file mode is faster to build and more innovative
 
 ## What's NOT Needed Yet
 
