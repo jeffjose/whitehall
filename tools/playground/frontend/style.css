@@ -1,0 +1,183 @@
+/* Custom styles for Whitehall Playground */
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+    overflow: hidden;
+}
+
+/* Tab buttons */
+.tab-btn {
+    padding: 0.75rem 1rem;
+    background: transparent;
+    border: none;
+    color: #9CA3AF;
+    cursor: pointer;
+    border-bottom: 2px solid transparent;
+    transition: all 0.2s;
+    font-size: 0.875rem;
+}
+
+.tab-btn:hover {
+    color: #E5E7EB;
+    background: #374151;
+}
+
+.tab-btn.active {
+    color: #3B82F6;
+    border-bottom-color: #3B82F6;
+}
+
+/* Monaco editor container */
+#editor {
+    width: 100%;
+    height: 100%;
+}
+
+/* Output panels */
+#kotlin-output,
+#ast-output {
+    white-space: pre-wrap;
+    word-break: break-word;
+}
+
+/* Error items */
+.error-item {
+    background: #1F2937;
+    border: 1px solid #374151;
+    border-left: 3px solid #EF4444;
+    padding: 1rem;
+    margin-bottom: 1rem;
+    border-radius: 0.375rem;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.error-item:hover {
+    background: #374151;
+    border-left-color: #F87171;
+}
+
+.error-header {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-bottom: 0.5rem;
+}
+
+.error-icon {
+    font-size: 1rem;
+}
+
+.error-location {
+    font-size: 0.75rem;
+    color: #9CA3AF;
+    font-weight: 600;
+}
+
+.error-message {
+    color: #F87171;
+    font-weight: 500;
+    margin-bottom: 0.75rem;
+}
+
+.error-context {
+    background: #111827;
+    padding: 0.75rem;
+    border-radius: 0.25rem;
+    font-size: 0.8125rem;
+    overflow-x: auto;
+    color: #D1D5DB;
+}
+
+/* Status indicator */
+#status-indicator {
+    transition: background-color 0.3s;
+}
+
+#status-indicator.compiling {
+    background: #F59E0B;
+    animation: pulse 1s infinite;
+}
+
+#status-indicator.success {
+    background: #10B981;
+}
+
+#status-indicator.error {
+    background: #EF4444;
+}
+
+@keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.5; }
+}
+
+/* Toast notification */
+#toast {
+    animation: slideIn 0.3s ease-out;
+}
+
+@keyframes slideIn {
+    from {
+        transform: translateX(100%);
+        opacity: 0;
+    }
+    to {
+        transform: translateX(0);
+        opacity: 1;
+    }
+}
+
+/* Loading spinner */
+.spinner {
+    display: inline-block;
+    width: 1rem;
+    height: 1rem;
+    border: 2px solid #374151;
+    border-top-color: #3B82F6;
+    border-radius: 50%;
+    animation: spin 0.6s linear infinite;
+}
+
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}
+
+/* Mobile responsive */
+@media (max-width: 768px) {
+    .flex.h-\[calc\(100vh-64px\)\] {
+        flex-direction: column;
+    }
+
+    .w-1\/2 {
+        width: 100%;
+        height: 50%;
+    }
+
+    header .flex.items-center.space-x-4 {
+        flex-wrap: wrap;
+    }
+
+    #examples {
+        width: 100%;
+        margin-top: 0.5rem;
+    }
+}
+
+/* Monaco error decorations */
+.error-decoration {
+    text-decoration: wavy underline;
+    text-decoration-color: #EF4444;
+}
+
+.error-glyph {
+    background: #EF4444;
+    width: 4px !important;
+    border-radius: 2px;
+}
