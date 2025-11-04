@@ -30,7 +30,7 @@ const examples = {
         name: 'Multiple Elements',
         code: `<Text fontSize={20} fontWeight="bold">Welcome!</Text>
 <Text>Multiple root elements are auto-wrapped in Column</Text>
-<Text color={Color.Gray}>This makes prototyping easy</Text>`
+<Text color="#888">This makes prototyping easy</Text>`
     },
     'state': {
         name: 'State & Events',
@@ -156,6 +156,33 @@ val isValid = name.isNotEmpty() && email.contains("@") && agreeToTerms
   </Button>
 </Column>`
     },
+    'colors': {
+        name: 'Colors',
+        code: `<Column padding={16} spacing={12}>
+  <Text fontSize={24} fontWeight="bold">Color Examples</Text>
+
+  <Text fontSize={18} fontWeight="bold" color="#1976D2">
+    Hex Colors (#RRGGBB)
+  </Text>
+  <Text color="#F44336">Red: #F44336</Text>
+  <Text color="#4CAF50">Green: #4CAF50</Text>
+  <Text color="#2196F3">Blue: #2196F3</Text>
+
+  <Text fontSize={18} fontWeight="bold" color="#1976D2">
+    Shorthand Hex (#RGB)
+  </Text>
+  <Text color="#F00">Red: #F00</Text>
+  <Text color="#0F0">Green: #0F0</Text>
+  <Text color="#00F">Blue: #00F</Text>
+
+  <Text fontSize={18} fontWeight="bold" color="#1976D2">
+    Material Theme Colors
+  </Text>
+  <Text color="primary">Primary color</Text>
+  <Text color="secondary">Secondary color</Text>
+  <Text color="error">Error color</Text>
+</Column>`
+    },
     'styling': {
         name: 'Styling & Modifiers',
         code: `<Column
@@ -170,7 +197,7 @@ val isValid = name.isNotEmpty() && email.contains("@") && agreeToTerms
     text="Welcome to Whitehall"
     fontSize={28}
     fontWeight="bold"
-    color={Color(0xFF1976D2)}
+    color="#1976D2"
   />
 
   <Spacer modifier={Modifier.height(16.dp)} />
@@ -181,7 +208,7 @@ val isValid = name.isNotEmpty() && email.contains("@") && agreeToTerms
   >
     <Column padding={16}>
       <Text text="Styled Card" fontSize={18} />
-      <Text text="With elevation and padding" color={Color.Gray} />
+      <Text text="With elevation and padding" color="#666" />
     </Column>
   </Card>
 </Column>`

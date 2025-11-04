@@ -13,6 +13,34 @@ pub struct ComposeBackend {
     optimizations: Vec<Optimization>, // Phase 6: Optimization plans for this component
 }
 
+/// Convert hex color string to Color(0x...) format
+/// Supports: #RGB, #RRGGBB, #AARRGGBB
+fn convert_hex_to_color(hex: &str) -> String {
+    let hex_clean = hex.trim();
+
+    match hex_clean.len() {
+        3 => {
+            // #RGB → #RRGGBB with full alpha
+            let r = hex_clean.chars().nth(0).unwrap();
+            let g = hex_clean.chars().nth(1).unwrap();
+            let b = hex_clean.chars().nth(2).unwrap();
+            format!("Color(0xFF{r}{r}{g}{g}{b}{b})")
+        }
+        6 => {
+            // #RRGGBB → add full alpha
+            format!("Color(0xFF{})", hex_clean.to_uppercase())
+        }
+        8 => {
+            // #AARRGGBB → use as-is
+            format!("Color(0x{})", hex_clean.to_uppercase())
+        }
+        _ => {
+            // Invalid format, return as-is (will likely cause a compile error)
+            format!("Color(0xFF{})  // Invalid hex format", hex_clean)
+        }
+    }
+}
+
 impl ComposeBackend {
     pub fn new(package: &str, component_name: &str, component_type: Option<&str>) -> Self {
         ComposeBackend {
@@ -1109,8 +1137,13 @@ impl ComposeBackend {
                             self.add_import_if_missing(prop_imports, "androidx.compose.ui.text.font.FontWeight");
                         }
                         ("Text", "color") if prop_expr.starts_with('"') => {
-                            // color string → MaterialTheme.colorScheme
-                            self.add_import_if_missing(prop_imports, "androidx.compose.material3.MaterialTheme");
+                            let s = &prop_expr[1..prop_expr.len()-1];
+                            // Check if hex color (needs Color import) or theme color (needs MaterialTheme)
+                            if s.starts_with('#') {
+                                self.add_import_if_missing(prop_imports, "androidx.compose.ui.graphics.Color");
+                            } else {
+                                self.add_import_if_missing(prop_imports, "androidx.compose.material3.MaterialTheme");
+                            }
                         }
                         ("Card", "backgroundColor") => {
                             // backgroundColor → CardDefaults.cardColors()
@@ -1572,12 +1605,23 @@ impl ComposeBackend {
                 };
                 vec![format!("fontWeight = {}", weight)]
             }
-            // Text color string → MaterialTheme.colorScheme
+            // Text color string → MaterialTheme.colorScheme or Color(0x...)
             ("Text", "color") => {
                 let color = if value.starts_with('"') && value.ends_with('"') {
-                    // String literal "secondary" → MaterialTheme.colorScheme.secondary
                     let s = &value[1..value.len()-1];
-                    format!("MaterialTheme.colorScheme.{}", s)
+
+                    // Check if it's a hex color like "#F5F5F5" or "#AARRGGBB"
+                    if s.starts_with('#') {
+                        convert_hex_to_color(&s[1..])
+                    }
+                    // Check if it's a named Material color like "secondary", "primary"
+                    else if s.chars().all(|c| c.is_alphanumeric()) {
+                        format!("MaterialTheme.colorScheme.{}", s)
+                    }
+                    // Otherwise pass through
+                    else {
+                        value
+                    }
                 } else {
                     value
                 };
