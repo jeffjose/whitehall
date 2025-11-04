@@ -340,9 +340,254 @@ jobs:
 ---
 
 ## Future Phases
-- Plugin system
-- Hot reload
-- Component marketplace
-- Visual tooling
-- Multi-platform support (iOS?)
+
+### Phase 8: Developer Experience & Tooling (v0.8)
+**Goal: Modern developer experience with visual tools and learning resources**
+
+#### Component Playground
+Interactive component testing and development environment:
+
+```bash
+whitehall playground Button.wh
+# Opens interactive viewer with live props editor
+# Adjust props in real-time, see component update instantly
+```
+
+**Features:**
+- [ ] Component isolation viewer (test components without full app)
+- [ ] Interactive props panel with type-aware inputs
+  - String inputs for text props
+  - Number sliders for numeric props
+  - Toggle switches for boolean props
+  - Color pickers for color props
+- [ ] Live hot-reload preview
+- [ ] Multiple viewport sizes (phone, tablet, foldable)
+- [ ] Light/dark theme toggle
+- [ ] Export component states as test fixtures
+- [ ] Screenshot generation for documentation
+- [ ] Component gallery mode (view all project components)
+- [ ] Share playground sessions via URL
+
+**Implementation:**
+- Embedded web server with WebView
+- Component introspection from AST
+- Props UI auto-generated from type signatures
+- Like Storybook for web or Flutter's DevTools
+
+**Success metric:** Can test and document components in isolation without running full app
+
+**Priority:** High - Essential for component-driven development
+
+---
+
+#### Interactive Tutorial Mode
+Learn-by-doing tutorial system built into CLI:
+
+```bash
+whitehall tutorial start
+# → Welcome to Whitehall! Let's build your first app.
+# → Step 1/10: Create your first component
+# → Creates Counter.wh with guided comments
+
+whitehall tutorial check
+# → ✓ Correct! You've created a stateful component.
+# → Next: Add a button to increment the counter.
+
+whitehall tutorial list
+# → Available tutorials:
+# →   1. Getting Started (10 steps)
+# →   2. Routing & Navigation (8 steps)
+# →   3. Forms & Validation (12 steps)
+# →   4. API Integration (15 steps)
+```
+
+**Features:**
+- [ ] Progressive tutorial system (beginner → advanced)
+- [ ] Step-by-step guided exercises
+- [ ] Code validation and hints
+- [ ] Interactive feedback on mistakes
+- [ ] Automatic file creation with scaffolding
+- [ ] Expected vs actual output comparison
+- [ ] Visual progress tracking
+- [ ] Achievements/badges for completed tutorials
+- [ ] Multiple learning paths:
+  - **Basics**: Components, props, state
+  - **Intermediate**: Routing, forms, lists
+  - **Advanced**: State management, APIs, optimization
+  - **Full-stack**: Backend integration, auth, deployment
+
+**Tutorial content examples:**
+1. **Hello World** - First component (5 min)
+2. **Counter App** - State management basics (10 min)
+3. **Todo List** - Lists and data binding (15 min)
+4. **Multi-screen App** - Routing and navigation (20 min)
+5. **Form Validation** - Input handling and validation (25 min)
+6. **API Client** - Fetching and displaying data (30 min)
+
+**Implementation:**
+- Tutorial definitions in TOML/YAML
+- Code AST analysis for validation
+- Diff-based hints (compare student code vs solution)
+- Like rustlings (Rust) or exercism
+
+**Success metric:** New users build working app in <30 minutes
+
+**Priority:** High - Critical for onboarding and adoption
+
+---
+
+#### Global State Management
+Built-in reactive state management without external libraries:
+
+**Store definition syntax:**
+```whitehall
+// src/stores/auth.wh
+export store AuthStore {
+  var user: User? = null
+  var isLoading = false
+  var error: String? = null
+
+  fun login(email: String, password: String) async {
+    isLoading = true
+    error = null
+    try {
+      user = await authApi.login(email, password)
+    } catch (e: Exception) {
+      error = e.message
+    } finally {
+      isLoading = false
+    }
+  }
+
+  fun logout() {
+    user = null
+  }
+}
+
+// Auto-exports singleton: authStore
+```
+
+**Usage in components:**
+```whitehall
+import { authStore } from '@/stores/auth'
+
+<script>
+  // Reactive subscription - auto-updates when store changes
+  var currentUser = authStore.user
+  var loading = authStore.isLoading
+</script>
+
+<Column>
+  @if (loading) {
+    <LoadingSpinner />
+  } @else if (currentUser != null) {
+    <Text>Welcome, {currentUser.name}!</Text>
+    <Button onClick={() => authStore.logout()}>Logout</Button>
+  } @else {
+    <LoginForm onSubmit={authStore.login} />
+  }
+</Column>
+```
+
+**Features:**
+- [ ] `store` keyword for global state declarations
+- [ ] Reactive subscriptions (components auto-update on store changes)
+- [ ] Automatic singleton management
+- [ ] Support for async actions
+- [ ] Computed properties in stores
+- [ ] Store composition (one store can use another)
+- [ ] DevTools integration (inspect state, time-travel debugging)
+- [ ] Persistence middleware (save/restore from preferences)
+- [ ] TypeScript-style paths: `@/stores/auth` → `src/stores/auth.wh`
+
+**Store types:**
+```whitehall
+// Simple value store
+export store Counter {
+  var count = 0
+  fun increment() { count++ }
+}
+
+// Async data store with loading states
+export store Posts {
+  var items: List<Post> = []
+  var loading = false
+  var error: String? = null
+
+  fun fetch() async {
+    loading = true
+    items = await api.posts.getAll()
+    loading = false
+  }
+}
+
+// Computed properties
+export store Cart {
+  var items: List<CartItem> = []
+
+  val total: Double = items.sumOf { it.price * it.quantity }
+  val itemCount: Int = items.sumOf { it.quantity }
+
+  fun addItem(item: CartItem) { items = items + item }
+  fun removeItem(id: String) { items = items.filter { it.id != id } }
+}
+```
+
+**Transpiles to:**
+```kotlin
+// Kotlin StateFlow-based implementation
+object AuthStore {
+    private val _user = MutableStateFlow<User?>(null)
+    val user: StateFlow<User?> = _user.asStateFlow()
+
+    private val _isLoading = MutableStateFlow(false)
+    val isLoading: StateFlow<Boolean> = _isLoading.asStateFlow()
+
+    suspend fun login(email: String, password: String) {
+        _isLoading.value = true
+        // ...
+    }
+}
+
+// Component usage
+@Composable
+fun MyScreen() {
+    val currentUser by AuthStore.user.collectAsState()
+    val loading by AuthStore.isLoading.collectAsState()
+    // ...
+}
+```
+
+**Implementation:**
+- [ ] New AST node type: `StoreDeclaration`
+- [ ] Parser support for `export store` syntax
+- [ ] Codegen to Kotlin objects with StateFlow
+- [ ] Import resolution for store paths
+- [ ] Reactive subscription injection in components
+- [ ] Store middleware system (logging, persistence)
+
+**Success metric:** Can build multi-screen app with shared state without external libraries
+
+**Priority:** Medium-High - Common need for real apps, but can use existing Kotlin patterns initially
+
+---
+
+### Phase 9: Advanced DevEx Features (v0.9)
+- Plugin system (WASM or dynamic libraries)
+- Hot reload / HMR (live code updates)
+- LSP server (Language Server Protocol for editor support)
+  - Syntax highlighting
+  - Autocomplete
+  - Go to definition
+  - Error checking
+  - Hover documentation
+- Component marketplace (community components)
+- Visual tooling (drag-and-drop UI builder)
+- Design system tokens (theme management)
+- Component snippets/templates generator
+
+### Phase 10: Multi-Platform (v1.0+)
+- Multi-platform support (iOS via Compose Multiplatform?)
 - Desktop app generation (Compose Desktop)
+- Web target (Compose for Web)
+- Unified codebase across all platforms
