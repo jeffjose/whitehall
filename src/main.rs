@@ -69,7 +69,7 @@ fn main() {
     };
 
     if let Err(e) = result {
-        eprintln!("{}", format!("error: {}", e).red().bold());
+        eprintln!("{} {}", "error:".red().bold(), e);
         std::process::exit(1);
     }
 }

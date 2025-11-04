@@ -44,7 +44,7 @@ fn execute_single_file(file_path: &str) -> Result<()> {
 
     // Report results
     if !result.errors.is_empty() {
-        eprintln!("{}", format!("error: build failed with {} error(s)", result.errors.len()).red().bold());
+        eprintln!("{} build failed with {} error(s)", "error:".red().bold(), result.errors.len());
         for error in &result.errors {
             eprintln!("  {} - {}", error.file.display(), error.message);
         }
@@ -99,7 +99,7 @@ fn execute_project(manifest_path: &str) -> Result<()> {
 
     // 5. Report results
     if !result.errors.is_empty() {
-        eprintln!("{}", format!("error: build failed with {} error(s)", result.errors.len()).red().bold());
+        eprintln!("{} build failed with {} error(s)", "error:".red().bold(), result.errors.len());
         for error in &result.errors {
             eprintln!("  {} - {}", error.file.display(), error.message);
         }

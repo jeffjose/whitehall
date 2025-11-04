@@ -31,7 +31,7 @@ fn execute_single_file(file_path: &str) -> Result<()> {
     match run_single_file_build(&file_path_buf, &original_dir) {
         Ok(_) => println!("{}", "   Watching for changes...".green().bold()),
         Err(e) => {
-            eprintln!("{}", format!("error: initial build failed: {}", e).red().bold());
+            eprintln!("{} initial build failed: {}", "error:".red().bold(), e);
             eprintln!("Watching anyway (will retry on file changes)...");
         }
     }
@@ -56,7 +56,7 @@ fn execute_single_file(file_path: &str) -> Result<()> {
 
                     match run_single_file_build(&file_path_buf, &original_dir) {
                         Ok(_) => println!("{}", "   Finished transpiling".green().bold()),
-                        Err(e) => eprintln!("{}", format!("error: build failed: {}", e).red().bold()),
+                        Err(e) => eprintln!("{} build failed: {}", "error:".red().bold(), e),
                     }
                 }
             }
@@ -123,20 +123,18 @@ fn execute_project(manifest_path: &str) -> Result<()> {
 
     // Change to project directory if needed
     if project_dir != original_dir {
-        env::set_current_dir(&project_dir)
-            .context(format!("Failed to change to directory: {}", project_dir.display()))?;
+        env::set_current_dir(&project_dir)?;
     }
 
     // 2. Load configuration
     let manifest_file = manifest_path.file_name().unwrap().to_str().unwrap();
-    let config = config::load_config(manifest_file)
-        .context(format!("Failed to load {}. Are you in a Whitehall project directory?", manifest_file))?;
+    let config = config::load_config(manifest_file)?;
 
     // 3. Initial build
     match run_build(&config) {
         Ok(_) => println!("{}", "   Watching for changes...".green().bold()),
         Err(e) => {
-            eprintln!("{}", format!("error: initial build failed: {}", e).red().bold());
+            eprintln!("{} initial build failed: {}", "error:".red().bold(), e);
             eprintln!("Watching anyway (will retry on file changes)...");
         }
     }
@@ -170,7 +168,7 @@ fn execute_project(manifest_path: &str) -> Result<()> {
 
                     match run_build(&config) {
                         Ok(_) => println!("{}", "   Finished transpiling".green().bold()),
-                        Err(e) => eprintln!("{}", format!("error: build failed: {}", e).red().bold()),
+                        Err(e) => eprintln!("{} build failed: {}", "error:".red().bold(), e),
                     }
                 }
             }

@@ -46,7 +46,7 @@ fn execute_single_file(file_path: &str) -> Result<()> {
 
     if !result.errors.is_empty() {
         env::set_current_dir(&original_dir)?;
-        eprintln!("{}", format!("error: build failed with {} error(s)", result.errors.len()).red().bold());
+        eprintln!("{} build failed with {} error(s)", "error:".red().bold(), result.errors.len());
         for error in &result.errors {
             eprintln!("  {} - {}", error.file.display(), error.message);
         }
@@ -92,20 +92,18 @@ fn execute_project(manifest_path: &str) -> Result<()> {
 
     // Change to project directory if needed
     if project_dir != original_dir {
-        env::set_current_dir(&project_dir)
-            .context(format!("Failed to change to directory: {}", project_dir.display()))?;
+        env::set_current_dir(&project_dir)?;
     }
 
     // 2. Load configuration
     let manifest_file = manifest_path.file_name().unwrap().to_str().unwrap();
-    let config = config::load_config(manifest_file)
-        .context(format!("Failed to load {}. Are you in a Whitehall project directory?", manifest_file))?;
+    let config = config::load_config(manifest_file)?;
 
     // 3. Build project
     let result = build_pipeline::execute_build(&config, true)?;
 
     if !result.errors.is_empty() {
-        eprintln!("{}", format!("error: build failed with {} error(s)", result.errors.len()).red().bold());
+        eprintln!("{} build failed with {} error(s)", "error:".red().bold(), result.errors.len());
         for error in &result.errors {
             eprintln!("  {} - {}", error.file.display(), error.message);
         }
