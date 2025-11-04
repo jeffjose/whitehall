@@ -18,23 +18,31 @@ enum Commands {
         /// Name of the project
         name: String,
     },
+    /// Transpile a single .wh file to Kotlin (no Android project generation)
+    Compile {
+        /// Path to .wh file
+        file: String,
+    },
     /// Build the project (transpile .wh files to Kotlin + generate Android project)
+    /// Works with both project directories (whitehall.toml) and single .wh files
     Build {
-        /// Path to whitehall.toml (defaults to ./whitehall.toml)
-        #[arg(long, default_value = "whitehall.toml")]
-        manifest_path: String,
+        /// Path to project directory or .wh file (defaults to current directory)
+        #[arg(default_value = ".")]
+        target: String,
     },
     /// Watch for changes and rebuild automatically
+    /// Works with both project directories (whitehall.toml) and single .wh files
     Watch {
-        /// Path to whitehall.toml (defaults to ./whitehall.toml)
-        #[arg(long, default_value = "whitehall.toml")]
-        manifest_path: String,
+        /// Path to project directory or .wh file (defaults to current directory)
+        #[arg(default_value = ".")]
+        target: String,
     },
     /// Build, install, and run the app on a connected device
+    /// Works with both project directories (whitehall.toml) and single .wh files
     Run {
-        /// Path to whitehall.toml (defaults to ./whitehall.toml)
-        #[arg(long, default_value = "whitehall.toml")]
-        manifest_path: String,
+        /// Path to project directory or .wh file (defaults to current directory)
+        #[arg(default_value = ".")]
+        target: String,
     },
 }
 
@@ -45,14 +53,17 @@ fn main() -> Result<()> {
         Commands::Init { name } => {
             commands::init::execute(&name)?;
         }
-        Commands::Build { manifest_path } => {
-            commands::build::execute(&manifest_path)?;
+        Commands::Compile { file } => {
+            commands::compile::execute(&file)?;
         }
-        Commands::Watch { manifest_path } => {
-            commands::watch::execute(&manifest_path)?;
+        Commands::Build { target } => {
+            commands::build::execute(&target)?;
         }
-        Commands::Run { manifest_path } => {
-            commands::run::execute(&manifest_path)?;
+        Commands::Watch { target } => {
+            commands::watch::execute(&target)?;
+        }
+        Commands::Run { target } => {
+            commands::run::execute(&target)?;
         }
     }
 

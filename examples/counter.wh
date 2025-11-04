@@ -1,0 +1,15 @@
+#!/usr/bin/env whitehall
+/// [app]
+/// name = "Counter"
+/// package = "com.example.counter"
+/// min_sdk = 24
+/// target_sdk = 34
+
+var count = 0
+
+<Column padding={16} spacing={8}>
+  <Text fontSize={32}>{count}</Text>
+  <Button onClick={() => count++}>
+    <Text>Increment</Text>
+  </Button>
+</Column>

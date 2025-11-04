@@ -1,14 +1,106 @@
 use anyhow::{Context, Result};
 use notify::{Event, RecursiveMode, Watcher};
 use std::env;
-use std::path::Path;
+use std::fs;
+use std::path::{Path, PathBuf};
 use std::sync::mpsc::channel;
 use std::time::Duration;
 
 use crate::build_pipeline;
 use crate::config;
+use crate::single_file;
+use crate::commands::{detect_target, Target};
 
-pub fn execute(manifest_path: &str) -> Result<()> {
+pub fn execute(target: &str) -> Result<()> {
+    // Detect if we're watching a project or single file
+    match detect_target(target) {
+        Target::Project(manifest_path) => execute_project(&manifest_path),
+        Target::SingleFile(file_path) => execute_single_file(&file_path),
+    }
+}
+
+/// Watch a single .wh file
+fn execute_single_file(file_path: &str) -> Result<()> {
+    println!("👀 Watching single-file app: {}", file_path);
+    println!("   Press Ctrl+C to stop\n");
+
+    let file_path_buf = PathBuf::from(file_path);
+    let original_dir = env::current_dir()?;
+
+    // Initial build
+    println!("🔨 Initial build...");
+    match run_single_file_build(&file_path_buf, &original_dir) {
+        Ok(_) => println!("✅ Ready! Watching for changes...\n"),
+        Err(e) => {
+            eprintln!("❌ Initial build failed: {}\n", e);
+            eprintln!("Watching anyway (will retry on file changes)...\n");
+        }
+    }
+
+    // Set up file watcher
+    let (tx, rx) = channel();
+    let mut watcher = notify::recommended_watcher(move |res: Result<Event, _>| {
+        if let Ok(event) = res {
+            let _ = tx.send(event);
+        }
+    })?;
+
+    // Watch the single .wh file
+    watcher.watch(&file_path_buf, RecursiveMode::NonRecursive)?;
+
+    // Watch loop
+    loop {
+        match rx.recv_timeout(Duration::from_millis(100)) {
+            Ok(event) => {
+                if should_rebuild(&event) {
+                    println!("\n📝 Change detected: {}", file_path);
+
+                    match run_single_file_build(&file_path_buf, &original_dir) {
+                        Ok(_) => println!("✅ Build successful\n"),
+                        Err(e) => eprintln!("❌ Build failed: {}\n", e),
+                    }
+                }
+            }
+            Err(_) => {
+                // Timeout, continue loop (allows Ctrl+C to work)
+            }
+        }
+    }
+}
+
+/// Build a single file (helper for watch mode)
+fn run_single_file_build(file_path: &Path, original_dir: &Path) -> Result<()> {
+    // Parse frontmatter
+    let content = fs::read_to_string(file_path)?;
+    let (single_config, code) = single_file::parse_frontmatter(&content)?;
+
+    // Generate temporary project
+    let temp_project_dir = single_file::generate_temp_project(file_path, &single_config, &code)?;
+
+    // Change to temp project directory
+    env::set_current_dir(&temp_project_dir)?;
+
+    // Load config
+    let config = config::load_config("whitehall.toml")?;
+
+    // Run build (incremental)
+    let result = build_pipeline::execute_build(&config, false)?;
+
+    // Restore directory
+    env::set_current_dir(original_dir)?;
+
+    if !result.errors.is_empty() {
+        for error in &result.errors {
+            eprintln!("  ❌ {} - {}", error.file.display(), error.message);
+        }
+        anyhow::bail!("Build failed with {} error(s)", result.errors.len());
+    }
+
+    Ok(())
+}
+
+/// Watch a project (existing behavior)
+fn execute_project(manifest_path: &str) -> Result<()> {
     println!("👀 Watching Whitehall project for changes...");
     println!("   Press Ctrl+C to stop\n");
 

@@ -1,12 +1,76 @@
 use anyhow::{Context, Result};
+use colored::Colorize;
 use std::env;
+use std::fs;
 use std::path::Path;
 use std::process::Command;
 
 use crate::build_pipeline;
 use crate::config;
+use crate::single_file;
+use crate::commands::{detect_target, Target};
 
-pub fn execute(manifest_path: &str) -> Result<()> {
+pub fn execute(target: &str) -> Result<()> {
+    // Detect if we're running a project or single file
+    match detect_target(target) {
+        Target::Project(manifest_path) => execute_project(&manifest_path),
+        Target::SingleFile(file_path) => execute_single_file(&file_path),
+    }
+}
+
+/// Run a single .wh file
+fn execute_single_file(file_path: &str) -> Result<()> {
+    // Parse frontmatter
+    let file_path_obj = Path::new(file_path);
+    let content = fs::read_to_string(file_path_obj)
+        .context(format!("Failed to read {}", file_path_obj.display()))?;
+
+    let (single_config, code) = single_file::parse_frontmatter(&content)
+        .context("Failed to parse frontmatter")?;
+
+    // Generate temporary project
+    let temp_project_dir = single_file::generate_temp_project(file_path_obj, &single_config, &code)
+        .context("Failed to generate temporary project")?;
+
+    // Change to temp project directory
+    let original_dir = env::current_dir()?;
+    env::set_current_dir(&temp_project_dir)
+        .context("Failed to change to temp project directory")?;
+
+    // Load config from generated whitehall.toml
+    let config = config::load_config("whitehall.toml")
+        .context("Failed to load generated whitehall.toml")?;
+
+    // Build project
+    let result = build_pipeline::execute_build(&config, true)?;
+
+    if !result.errors.is_empty() {
+        env::set_current_dir(&original_dir)?;
+        eprintln!("{}", format!("error: build failed with {} error(s)", result.errors.len()).red().bold());
+        for error in &result.errors {
+            eprintln!("  {} - {}", error.file.display(), error.message);
+        }
+        anyhow::bail!("Build failed");
+    }
+
+    println!("{}", format!("   Finished transpiling {} file(s)", result.files_transpiled).green().bold());
+
+    // Continue with device check, gradle, install, and launch
+    check_device_connected()?;
+    build_with_gradle(&result.output_dir)?;
+    install_apk(&result.output_dir)?;
+    launch_app(&config.android.package)?;
+
+    // Restore original directory
+    env::set_current_dir(&original_dir)?;
+
+    println!("{}", format!("    Running on device").green().bold());
+
+    Ok(())
+}
+
+/// Run a project (existing behavior)
+fn execute_project(manifest_path: &str) -> Result<()> {
     println!("🚀 Building and running Whitehall app...\n");
 
     // 1. Determine project directory from manifest path (same as build command)
