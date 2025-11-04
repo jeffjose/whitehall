@@ -4,8 +4,11 @@ This directory contains counter app variants with different toolchain configurat
 
 ## Available Variants
 
-### counter (Java 21 - Latest)
-**Modern toolchain** - Recommended for new projects
+All variants use the same Counter app codebase with different toolchain configurations.
+
+### Java 21 Variants
+
+**counter** - Java 21 + Gradle 8.4 (Modern - Recommended)
 ```toml
 [toolchain]
 java = "21"
@@ -14,8 +17,18 @@ agp = "8.2.0"
 kotlin = "2.0.0"
 ```
 
-### counter-java-17 (Java 17 - Previous LTS)
-**Stable toolchain** - Good for production apps
+**counter-java-21-gradle-8.6** - Java 21 + Gradle 8.6 (Newest Gradle)
+```toml
+[toolchain]
+java = "21"
+gradle = "8.6"
+agp = "8.4.0"
+kotlin = "2.0.0"
+```
+
+### Java 17 Variants
+
+**counter-java-17** - Java 17 + Gradle 8.0 (Stable LTS)
 ```toml
 [toolchain]
 java = "17"
@@ -24,12 +37,31 @@ agp = "8.0.0"
 kotlin = "1.9.0"
 ```
 
-### counter-java-11-gradle-7 (Java 11 - Oldest Supported)
-**Legacy toolchain** - For older Android projects
+**counter-java-17-gradle-7** - Java 17 + Gradle 7.6 (Java 17 with older Gradle)
+```toml
+[toolchain]
+java = "17"
+gradle = "7.6"
+agp = "7.4.0"
+kotlin = "1.8.0"
+```
+
+### Java 11 Variants
+
+**counter-java-11-gradle-7** - Java 11 + Gradle 7.6 (Legacy)
 ```toml
 [toolchain]
 java = "11"
 gradle = "7.6"
+agp = "7.4.0"
+kotlin = "1.8.0"
+```
+
+**counter-java-11-gradle-8** - Java 11 + Gradle 8.0 (Old Java + New Gradle)
+```toml
+[toolchain]
+java = "11"
+gradle = "8.0"
 agp = "7.4.0"
 kotlin = "1.8.0"
 ```
@@ -58,15 +90,21 @@ whitehall toolchain list
 Expected output:
 ```
 Java:
-  - 11 (~300 MB)
-  - 17 (~300 MB)
-  - 21 (~300 MB)
+  - 11 (~315 MB)
+  - 17 (~315 MB)
+  - 21 (~344 MB)
 
 Gradle:
   - 7.6 (~130 MB)
-  - 8.0 (~135 MB)
+  - 8.0 (~131 MB)
   - 8.4 (~138 MB)
+  - 8.6 (~140 MB)
+
+Android SDK:
+  - Installed (~390 MB)
 ```
+
+Total: ~1.7 GB for all variants combined!
 
 ### Test 2: Automatic Version Selection
 
@@ -149,15 +187,30 @@ whitehall exec java --version
 # → Automatically downloads and installs Java 21!
 ```
 
+## Toolchain Combination Matrix
+
+6 variants testing all major combinations:
+
+| Variant | Java | Gradle | AGP | Use Case |
+|---------|------|--------|-----|----------|
+| `counter` | 21 | 8.4 | 8.2.0 | Modern (recommended) |
+| `counter-java-21-gradle-8.6` | 21 | 8.6 | 8.4.0 | Newest Gradle |
+| `counter-java-17` | 17 | 8.0 | 8.0.0 | Stable LTS |
+| `counter-java-17-gradle-7` | 17 | 7.6 | 7.4.0 | Java 17 + Old Gradle |
+| `counter-java-11-gradle-7` | 11 | 7.6 | 7.4.0 | Legacy baseline |
+| `counter-java-11-gradle-8` | 11 | 8.0 | 7.4.0 | Old Java + New Gradle |
+
 ## What This Tests
 
-- ✅ **Multiple Java versions** coexist peacefully
-- ✅ **Multiple Gradle versions** coexist peacefully
+- ✅ **Multiple Java versions** coexist peacefully (11, 17, 21)
+- ✅ **Multiple Gradle versions** coexist peacefully (7.6, 8.0, 8.4, 8.6)
 - ✅ **Automatic version selection** based on project config
 - ✅ **Version compatibility validation** prevents invalid configs
 - ✅ **Environment isolation** - each project gets correct versions
 - ✅ **Shared cache** - download once, use everywhere
 - ✅ **Zero config** - just run `whitehall exec`, it downloads automatically
+- ✅ **Cross-version mixing** - Old Java + New Gradle works
+- ✅ **Same codebase** - Proves toolchain is truly isolated
 
 ## Expected Behavior
 

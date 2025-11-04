@@ -1,0 +1,17 @@
+[project]
+name = "Counter (Java 11 / Gradle 8)"
+version = "1.0.0"
+
+[android]
+min_sdk = 21
+target_sdk = 33
+package = "com.example.counter.java11gradle8"
+
+[toolchain]
+java = "11"
+gradle = "8.0"
+agp = "7.4.0"
+kotlin = "1.8.0"
+
+[build]
+output_dir = "build"

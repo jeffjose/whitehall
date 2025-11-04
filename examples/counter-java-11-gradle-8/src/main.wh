@@ -1,0 +1,46 @@
+// Counter state
+var count = 0
+
+/* Functions to modify the counter */
+fun increment() {
+  count = count + 1 // Add one
+}
+
+fun decrement() {
+  count = count - 1 // Subtract one
+}
+
+fun reset() {
+  count = 0
+}
+
+<Column padding={32} spacing={24}>
+  /* Header */
+  <Text fontSize={32} fontWeight="bold">
+    Counter App
+  </Text>
+
+  // Display the current count
+  <Column spacing={8}>
+    <Text fontSize={48} fontWeight="bold">
+      {count}
+    </Text>
+  </Column>
+
+  <Column spacing={12}>
+    <Button
+      text="Increment"
+      onClick={increment}
+    />
+
+    <Button
+      text="Decrement"
+      onClick={decrement}
+    />
+
+    <Button
+      text="Reset"
+      onClick={reset}
+    />
+  </Column>
+</Column>
