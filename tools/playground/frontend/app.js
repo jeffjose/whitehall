@@ -23,62 +23,130 @@ let shikiCodeToHtml = null;
 // Example snippets (ordered by increasing complexity)
 const examples = {
     'hello': {
-        name: 'Hello World',
-        code: `<Text>Hello, Whitehall!</Text>`
+        name: '01. Hello World',
+        code: `// The simplest Whitehall app - just render text!
+<Text>Hello, Whitehall!</Text>`
     },
-    'multiple': {
-        name: 'Multiple Elements',
-        code: `<Text fontSize={20} fontWeight="bold">Welcome!</Text>
-<Text>Multiple root elements are auto-wrapped in Column</Text>
-<Text color="#888">This makes prototyping easy</Text>`
-    },
-    'state': {
-        name: 'State & Events',
-        code: `var count = 0
-
+    'styling': {
+        name: '02. Text Styling',
+        code: `// Style text with fontSize, fontWeight, and color props
 <Column padding={16} spacing={8}>
-  <Text fontSize={24}>{count}</Text>
+  <Text fontSize={24} fontWeight="bold">
+    Large Bold Text
+  </Text>
+  <Text fontSize={16} color="#666">
+    Hex colors work (#RGB or #RRGGBB)
+  </Text>
+  <Text fontWeight="bold" color="#2196F3">
+    Combine multiple style props
+  </Text>
+</Column>`
+    },
+    'layout': {
+        name: '03. Layouts',
+        code: `// Column stacks items vertically, Row arranges horizontally
+// Use spacing for gaps, padding for inner spacing
+<Column padding={16} spacing={12}>
+  <Text fontSize={20} fontWeight="bold">Column Layout</Text>
+  <Text>Items stack vertically</Text>
+
+  <Row spacing={8}>
+    <Text>Row items →</Text>
+    <Text color="#F44336">go</Text>
+    <Text color="#4CAF50">horizontal</Text>
+  </Row>
+</Column>`
+    },
+    'button': {
+        name: '04. Buttons & State',
+        code: `// Reactive state: just declare 'var' and modify it!
+var count = 0
+
+<Column padding={16} spacing={12}>
+  <Text fontSize={28} fontWeight="bold">{count}</Text>
+
+  // Button text auto-wraps in Text (no need for <Text> tags)
   <Button onClick={() => count++}>
-    <Text>Increment</Text>
+    Increment
+  </Button>
+
+  <Button onClick={() => count--}>
+    Decrement
+  </Button>
+
+  <Button onClick={() => count = 0}>
+    Reset
   </Button>
 </Column>`
     },
     'binding': {
-        name: 'Two-Way Binding',
+        name: '05. Two-Way Binding',
         code: `var name = ""
 
+// bind:value creates two-way binding - changes flow both ways!
 <Column padding={16} spacing={12}>
   <TextField
     bind:value={name}
     label="Enter your name"
   />
+
+  // Interpolate with {expression}
   <Text fontSize={18}>
     Hello, {name.isEmpty() ? "stranger" : name}!
   </Text>
 </Column>`
     },
-    'conditional': {
-        name: 'Conditional Rendering',
-        code: `var isLoggedIn = false
+    'multistate': {
+        name: '06. Multiple State',
+        code: `// Manage multiple reactive variables independently
+var likes = 0
+var dislikes = 0
 
 <Column padding={16} spacing={12}>
+  <Text fontSize={20} fontWeight="bold">Feedback</Text>
+
+  // Nest layouts for complex UIs
+  <Row spacing={16}>
+    <Column spacing={4}>
+      <Button onClick={() => likes++}>
+        👍 Like
+      </Button>
+      <Text>{likes} likes</Text>
+    </Column>
+
+    <Column spacing={4}>
+      <Button onClick={() => dislikes++}>
+        👎 Dislike
+      </Button>
+      <Text>{dislikes} dislikes</Text>
+    </Column>
+  </Row>
+</Column>`
+    },
+    'conditional': {
+        name: '07. Conditionals',
+        code: `var isLoggedIn = false
+
+// @if for conditional rendering (like Kotlin 'if' expressions)
+<Column padding={16} spacing={12}>
   @if (isLoggedIn) {
-    <Text fontSize={20}>Welcome back!</Text>
+    <Text fontSize={20}>Welcome back! 👋</Text>
     <Button onClick={() => isLoggedIn = false}>
-      <Text>Logout</Text>
+      Logout
     </Button>
   } else {
-    <Text>Please log in</Text>
+    <Text fontSize={20}>Please log in</Text>
     <Button onClick={() => isLoggedIn = true}>
-      <Text>Login</Text>
+      Login
     </Button>
   }
 </Column>`
     },
     'list': {
-        name: 'Lists & For Loops',
+        name: '08. Lists & Loops',
         code: `var items = ["Apple", "Banana", "Cherry", "Date"]
 
+// @for loops over collections
 <Column padding={16} spacing={8}>
   <Text fontSize={20} fontWeight="bold">Fruit List</Text>
 
@@ -89,19 +157,81 @@ const examples = {
   }
 </Column>`
     },
-    'todo': {
-        name: 'Todo App',
-        code: `var todos = ["Buy milk", "Write code", "Test Whitehall"]
-var newTodo = ""
-
-fun addTodo() {
-  if (newTodo.isNotEmpty()) {
-    todos = todos + newTodo
-    newTodo = ""
-  }
-}
+    'interactive-list': {
+        name: '09. Interactive List',
+        code: `var items = ["Apple", "Banana", "Cherry"]
+var newItem = ""
 
 <Column padding={16} spacing={8}>
+  <Text fontSize={20} fontWeight="bold">Editable List</Text>
+
+  <Row spacing={8}>
+    <TextField
+      bind:value={newItem}
+      placeholder="Add item..."
+      modifier={Modifier.weight(1f)}  // Fill available space
+    />
+    <Button onClick={() => {
+      if (newItem.isNotEmpty()) {
+        items = items + newItem  // Immutable list operations
+        newItem = ""             // Clear input
+      }
+    }}>
+      Add
+    </Button>
+  </Row>
+
+  @for (item in items) {
+    <Card padding={12} modifier={Modifier.fillMaxWidth()}>
+      <Row spacing={8}>
+        <Text modifier={Modifier.weight(1f)}>{item}</Text>
+        // List subtraction removes items
+        <Button onClick={() => items = items - item}>
+          Delete
+        </Button>
+      </Row>
+    </Card>
+  }
+</Column>`
+    },
+    'derived': {
+        name: '10. Derived State',
+        code: `// Use 'var' for mutable state, 'val' for derived/computed values
+var price = 10
+var quantity = 1
+
+// Derived values auto-update when dependencies change
+val total = price * quantity
+val discount = if (quantity >= 5) 0.2 else 0.0
+val finalPrice = total * (1 - discount)
+
+<Column padding={16} spacing={12}>
+  <Text fontSize={20} fontWeight="bold">Price Calculator</Text>
+
+  <Text>Price: $\{price}</Text>
+  <Text>Quantity: {quantity}</Text>
+
+  <Row spacing={8}>
+    <Button onClick={() => quantity++}>+</Button>
+    <Button onClick={() => if (quantity > 1) quantity--}>-</Button>
+  </Row>
+
+  <Text>Subtotal: $\{total}</Text>
+  <Text color="#4CAF50">
+    Discount: {discount * 100}%
+  </Text>
+  <Text fontSize={18} fontWeight="bold">
+    Total: $\{finalPrice}
+  </Text>
+</Column>`
+    },
+    'todo': {
+        name: '11. Todo App',
+        code: `var todos = ["Buy milk", "Write code"]
+var newTodo = ""
+
+// Complete todo app in ~30 lines!
+<Column padding={16} spacing={12}>
   <Text fontSize={24} fontWeight="bold">My Todos</Text>
 
   <Row spacing={8}>
@@ -110,106 +240,191 @@ fun addTodo() {
       placeholder="Add a new todo..."
       modifier={Modifier.weight(1f)}
     />
-    <Button onClick={addTodo}>
-      <Text>Add</Text>
+    <Button onClick={() => {
+      if (newTodo.isNotEmpty()) {
+        todos = todos + newTodo
+        newTodo = ""
+      }
+    }}>
+      Add
     </Button>
   </Row>
 
   @for (todo in todos) {
     <Card padding={12} modifier={Modifier.fillMaxWidth()}>
-      <Text>{todo}</Text>
+      <Row spacing={8}>
+        <Text modifier={Modifier.weight(1f)}>{todo}</Text>
+        <Button onClick={() => todos = todos - todo}>
+          ✓
+        </Button>
+      </Row>
     </Card>
   }
+
+  // Dynamic text based on list size
+  <Text color="#888">
+    {todos.size} items remaining
+  </Text>
 </Column>`
     },
     'form': {
-        name: 'Form Validation',
+        name: '12. Form Validation',
         code: `var name = ""
 var email = ""
-var agreeToTerms = false
+var age = ""
+var agreed = false
 
-val isValid = name.isNotEmpty() && email.contains("@") && agreeToTerms
+// Derive validation state from inputs
+val isValidEmail = email.contains("@") && email.contains(".")
+val isValidAge = age.toIntOrNull() != null && age.toInt() >= 18
+val canSubmit = name.isNotEmpty() && isValidEmail && isValidAge && agreed
 
 <Column padding={16} spacing={12}>
   <Text fontSize={20} fontWeight="bold">Sign Up Form</Text>
 
-  <TextField
-    bind:value={name}
-    label="Name"
-  />
+  <TextField bind:value={name} label="Name" />
 
-  <TextField
-    bind:value={email}
-    label="Email"
-  />
+  <TextField bind:value={email} label="Email" />
+  // Show validation errors conditionally
+  @if (email.isNotEmpty() && !isValidEmail) {
+    <Text color="error">Invalid email</Text>
+  }
+
+  <TextField bind:value={age} label="Age" />
+  @if (age.isNotEmpty() && !isValidAge) {
+    <Text color="error">Must be 18+</Text>
+  }
 
   <Row spacing={8}>
-    <Checkbox bind:checked={agreeToTerms} />
-    <Text>I agree to the terms</Text>
+    <Checkbox bind:checked={agreed} />
+    <Text>I agree to terms</Text>
   </Row>
 
-  <Button
-    onClick={() => {}}
-    enabled={isValid}
-  >
-    <Text>{isValid ? "Submit" : "Fill all fields"}</Text>
+  // Button enabled state based on validation
+  <Button enabled={canSubmit} onClick={() => {}}>
+    {canSubmit ? "Submit" : "Complete all fields"}
   </Button>
 </Column>`
     },
-    'colors': {
-        name: 'Colors',
-        code: `<Column padding={16} spacing={12}>
-  <Text fontSize={24} fontWeight="bold">Color Examples</Text>
+    'counter-list': {
+        name: '13. List Mutations',
+        code: `var counters = [0, 0, 0]
 
-  <Text fontSize={18} fontWeight="bold" color="#1976D2">
-    Hex Colors (#RRGGBB)
-  </Text>
-  <Text color="#F44336">Red: #F44336</Text>
-  <Text color="#4CAF50">Green: #4CAF50</Text>
-  <Text color="#2196F3">Blue: #2196F3</Text>
+// Working with list indices for complex updates
+<Column padding={16} spacing={12}>
+  <Text fontSize={20} fontWeight="bold">Multiple Counters</Text>
 
-  <Text fontSize={18} fontWeight="bold" color="#1976D2">
-    Shorthand Hex (#RGB)
-  </Text>
-  <Text color="#F00">Red: #F00</Text>
-  <Text color="#0F0">Green: #0F0</Text>
-  <Text color="#00F">Blue: #00F</Text>
+  <Button onClick={() => counters = counters + 0}>
+    Add Counter
+  </Button>
 
-  <Text fontSize={18} fontWeight="bold" color="#1976D2">
-    Material Theme Colors
-  </Text>
-  <Text color="primary">Primary color</Text>
-  <Text color="secondary">Secondary color</Text>
-  <Text color="error">Error color</Text>
+  @for (i in counters.indices) {
+    <Card padding={12} modifier={Modifier.fillMaxWidth()}>
+      <Row spacing={12}>
+        <Text fontSize={18} modifier={Modifier.weight(1f)}>
+          Counter {i + 1}: {counters[i]}
+        </Text>
+        // Update specific index immutably
+        <Button onClick={() => {
+          val updated = counters.toMutableList()
+          updated[i] = updated[i] + 1
+          counters = updated
+        }}>
+          +
+        </Button>
+        // Filter by index to remove
+        <Button onClick={() => {
+          counters = counters.filterIndexed { idx, _ -> idx != i }
+        }}>
+          Remove
+        </Button>
+      </Row>
+    </Card>
+  }
 </Column>`
     },
-    'styling': {
-        name: 'Styling & Modifiers',
-        code: `<Column
-  modifier={Modifier
-    .fillMaxSize()
-    .padding(16.dp)
-    .background(Color(0xFFF5F5F5))
+    'shopping': {
+        name: '14. Complex Data',
+        code: `// Work with maps and complex data structures
+var cart = [
+  { "name": "Laptop", "price": 999, "qty": 1 },
+  { "name": "Mouse", "price": 25, "qty": 2 }
+]
+
+// Kotlin stdlib functions work in Whitehall
+val total = cart.sumOf { it["price"] as Int * it["qty"] as Int }
+
+<Column padding={16} spacing={12}>
+  <Text fontSize={24} fontWeight="bold">Shopping Cart</Text>
+
+  @for (item in cart) {
+    <Card padding={12} modifier={Modifier.fillMaxWidth()}>
+      <Column spacing={4}>
+        <Text fontSize={16} fontWeight="bold">
+          {item["name"]}
+        </Text>
+        <Row spacing={8}>
+          <Text>$\{item["price"]} x {item["qty"]}</Text>
+          <Text fontWeight="bold">
+            = $\{item["price"] as Int * item["qty"] as Int}
+          </Text>
+        </Row>
+      </Column>
+    </Card>
   }
-  horizontalAlignment="CenterHorizontally"
->
-  <Text
-    text="Welcome to Whitehall"
-    fontSize={28}
-    fontWeight="bold"
-    color="#1976D2"
-  />
 
-  <Spacer modifier={Modifier.height(16.dp)} />
+  <Card padding={16} modifier={Modifier.fillMaxWidth()}>
+    <Row spacing={8}>
+      <Text fontSize={20} fontWeight="bold" modifier={Modifier.weight(1f)}>
+        Total:
+      </Text>
+      <Text fontSize={20} fontWeight="bold" color="#4CAF50">
+        $\{total}
+      </Text>
+    </Row>
+  </Card>
+</Column>`
+    },
+    'tabs': {
+        name: '15. Navigation',
+        code: `// Simple tab navigation with conditional rendering
+var activeTab = "home"
 
-  <Card
-    modifier={Modifier.fillMaxWidth()}
-    elevation={4.dp}
-  >
-    <Column padding={16}>
-      <Text text="Styled Card" fontSize={18} />
-      <Text text="With elevation and padding" color="#666" />
-    </Column>
+<Column padding={16} spacing={12}>
+  <Text fontSize={24} fontWeight="bold">Multi-Tab App</Text>
+
+  // Tab buttons update state
+  <Row spacing={8}>
+    <Button onClick={() => activeTab = "home"}>
+      Home
+    </Button>
+    <Button onClick={() => activeTab = "profile"}>
+      Profile
+    </Button>
+    <Button onClick={() => activeTab = "settings"}>
+      Settings
+    </Button>
+  </Row>
+
+  // Render different content based on active tab
+  <Card padding={16} modifier={Modifier.fillMaxWidth()}>
+    @if (activeTab == "home") {
+      <Column spacing={8}>
+        <Text fontSize={20} fontWeight="bold">Home</Text>
+        <Text>Welcome to the home page!</Text>
+      </Column>
+    } else if (activeTab == "profile") {
+      <Column spacing={8}>
+        <Text fontSize={20} fontWeight="bold">Profile</Text>
+        <Text>Name: John Doe</Text>
+        <Text>Email: john@example.com</Text>
+      </Column>
+    } else {
+      <Column spacing={8}>
+        <Text fontSize={20} fontWeight="bold">Settings</Text>
+        <Text>App version: 1.0.0</Text>
+      </Column>
+    }
   </Card>
 </Column>`
     }
@@ -264,7 +479,7 @@ function getInitialCode() {
             console.error('Invalid URL hash');
         }
     }
-    return examples.state.code;
+    return examples.button.code;  // Start with button/state example
 }
 
 // Compile Whitehall code
