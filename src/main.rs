@@ -50,6 +50,25 @@ enum Commands {
         #[arg(default_value = ".")]
         target: String,
     },
+    /// Manage toolchains (Java, Gradle, Android SDK)
+    Toolchain {
+        #[command(subcommand)]
+        command: ToolchainCommands,
+    },
+}
+
+#[derive(Subcommand)]
+enum ToolchainCommands {
+    /// Install toolchains required by the current project
+    Install {
+        /// Path to whitehall.toml (defaults to current directory)
+        #[arg(default_value = "whitehall.toml")]
+        manifest: String,
+    },
+    /// List installed toolchains
+    List,
+    /// Remove all installed toolchains
+    Clean,
 }
 
 fn main() {
@@ -70,6 +89,19 @@ fn main() {
         }
         Commands::Run { target } => {
             commands::run::execute(&target)
+        }
+        Commands::Toolchain { command } => {
+            match command {
+                ToolchainCommands::Install { manifest } => {
+                    commands::toolchain::execute_install(&manifest)
+                }
+                ToolchainCommands::List => {
+                    commands::toolchain::execute_list()
+                }
+                ToolchainCommands::Clean => {
+                    commands::toolchain::execute_clean()
+                }
+            }
         }
     };
 

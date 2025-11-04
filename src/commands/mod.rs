@@ -3,6 +3,7 @@ pub mod build;
 pub mod watch;
 pub mod run;
 pub mod compile;
+pub mod toolchain;
 
 use std::path::Path;
 

@@ -231,6 +231,23 @@ impl Toolchain {
             anyhow::bail!("sdkmanager not found at {}", sdkmanager.display());
         }
 
+        // Accept licenses first using yes command to auto-accept
+        println!("Accepting Android SDK licenses...");
+        let status = Command::new("sh")
+            .arg("-c")
+            .arg(format!(
+                "yes | {} --sdk_root={} --licenses",
+                sdkmanager.display(),
+                sdk_root.display()
+            ))
+            .env("ANDROID_HOME", &sdk_root)
+            .status()
+            .context("Failed to accept SDK licenses")?;
+
+        if !status.success() {
+            anyhow::bail!("Failed to accept SDK licenses");
+        }
+
         println!("Installing Android SDK components...");
 
         // Install essential components
@@ -243,19 +260,16 @@ impl Toolchain {
         for component in components {
             println!("  Installing {}...", component);
             let output = Command::new(&sdkmanager)
-                .arg("--sdk_root")
-                .arg(&sdk_root)
+                .arg(format!("--sdk_root={}", sdk_root.display()))
                 .arg(component)
                 .env("ANDROID_HOME", &sdk_root)
+                .stdout(std::process::Stdio::inherit())
+                .stderr(std::process::Stdio::inherit())
                 .output()
                 .with_context(|| format!("Failed to run sdkmanager for {}", component))?;
 
             if !output.status.success() {
-                anyhow::bail!(
-                    "Failed to install {}: {}",
-                    component,
-                    String::from_utf8_lossy(&output.stderr)
-                );
+                anyhow::bail!("Failed to install {}", component);
             }
         }
 
