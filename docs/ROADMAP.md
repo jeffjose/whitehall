@@ -161,22 +161,26 @@ whitehall init my-app --template ./path/to/template
 
 ---
 
-## Phase 2.5: Single-File Mode (Planned - v0.25)
+## Phase 2.5: Single-File Mode ✅ COMPLETE (v0.25)
 **Goal: Enable zero-config single-file apps** (Like `uv` for Python, `rust-script` for Rust)
 
-- [ ] Parse frontmatter configuration (`///` TOML comments)
-- [ ] Extract inline dependencies from frontmatter
-- [ ] `whitehall run <file.wh>` - Single-file execution
-- [ ] `whitehall build <file.wh>` - Build APK from single file
-- [ ] Temporary project generation in `.whitehall/cache/{hash}/`
-- [ ] Build caching for single-file apps (content-based hashing)
-- [ ] Shebang support (`#!/usr/bin/env whitehall`)
+- [x] Parse frontmatter configuration (`///` TOML comments)
+- [x] Auto-generate package names from app name
+- [x] `whitehall compile <file.wh>` - Transpile to Kotlin with `--package` and `--no-package` flags
+- [x] `whitehall build <file.wh>` - Build APK from single file
+- [x] `whitehall run <file.wh>` - Single-file execution
+- [x] `whitehall watch <file.wh>` - Watch single file for changes
+- [x] Temporary project generation in `~/.cache/whitehall/{hash}/`
+- [x] Build caching for single-file apps (content-based SHA256 hashing)
+- [x] 8 test cases for single-file mode
+- [ ] Shebang support (`#!/usr/bin/env whitehall`) - Future
+- [ ] Extract inline dependencies from frontmatter - Future
 
-**Success metric:** Can write a complete app in one `.wh` file and run it instantly
+**Success metric:** ✅ Can write a complete app in one `.wh` file and run it instantly
 
-**Status**: Design complete (see `docs/SINGLE-FILE-MODE.md`). Implementation pending after end-to-end testing.
+**Status**: **COMPLETE** - Implemented Nov 4, 2025. See `docs/SINGLE-FILE-MODE.md` for details.
 
-**Priority**: Medium (enables rapid prototyping and learning)
+**Priority**: ✅ Done! Enables rapid prototyping and learning.
 
 ---
 

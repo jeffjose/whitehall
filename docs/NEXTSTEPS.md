@@ -1,6 +1,6 @@
 # Next Steps for Whitehall
 
-**Last Updated**: 2025-11-03
+**Last Updated**: 2025-11-04
 
 ## Current Status
 
@@ -32,12 +32,24 @@
 - ✅ **Multiline list support**: Parser handles newlines in `listOf()` and `[...]`
 - ✅ **RecyclerView optimization**: Static `val` collections auto-optimize to RecyclerView
 
-### What's Implemented (CLI) - ALL 4 COMMANDS WORKING!
+### What's Implemented (CLI) - ALL 5 COMMANDS WORKING!
 - ✅ **`whitehall init`** - Creates project structure, whitehall.toml, sample files
-- ✅ **`whitehall build`** - Transpiles .wh → .kt + generates full Android scaffold (Gradle files, MainActivity)
-- ✅ **`whitehall watch`** - File watching with auto-rebuild on .wh file changes (notify crate)
-- ⚠️ **`whitehall run`** - Builds + runs `./gradlew assembleDebug` + installs APK + launches app
-  - Note: Requires one-time `gradle wrapper` setup first
+- ✅ **`whitehall compile`** - Transpile single .wh file to Kotlin (no project needed)
+  - `--package <name>` for custom package names
+  - `--no-package` to omit package declaration (for pasting into existing files)
+- ✅ **`whitehall build`** - Transpiles .wh → .kt + generates full Android scaffold
+  - Works with both projects (whitehall.toml) and single .wh files
+- ✅ **`whitehall watch`** - File watching with auto-rebuild on changes
+  - Works with both projects and single .wh files
+- ✅ **`whitehall run`** - Builds + installs APK + launches app on device
+  - Works with both projects and single .wh files
+
+### What's Implemented (Single-File Mode) - NEW! 🎯
+- ✅ **Frontmatter parsing** - `///` prefixed TOML config in .wh files
+- ✅ **Auto-package generation** - `name = "Counter"` → `package = "com.example.counter"`
+- ✅ **Content-based caching** - Stores temp projects in `~/.cache/whitehall/{hash}/`
+- ✅ **All commands support single files** - build, run, watch work with .wh files
+- ✅ **8 test cases passing** - Unit and integration tests for single-file mode
 
 ### What's NOT Tested in Real Usage
 - ❓ Does `watch` work reliably with multiple file changes?
@@ -48,9 +60,9 @@
 
 ### What's Missing
 - ❌ End-to-end testing with real Android device/emulator
-- ❌ Single-file app mode (`whitehall run app.wh`)
 - ❌ Error messages with line numbers
 - ❌ Source maps for debugging
+- ❌ Shebang support for single files (`#!/usr/bin/env whitehall`)
 
 ## Next Step Options
 
@@ -416,31 +428,40 @@ See `docs/SINGLE-FILE-MODE.md` for complete design.
 
 **Priority Order:**
 
-### **1. End-to-End Testing (FIRST) - CRITICAL** ⭐
-**Why:** Validate that everything actually works before building new features
-- CLI is implemented but not tested with real Android device
-- Will discover real bugs in import generation, Gradle config, etc.
-- 2-4 hours + bug fixes
+### **1. End-to-End Testing (NOW) - CRITICAL** ⭐
+**Why:** Single-file mode is complete! Now validate the entire pipeline works
+- ✅ Single-file mode implemented (compile, build, run, watch all work)
+- ✅ 5 commands working (init, compile, build, watch, run)
+- ❌ Not tested with real Android device/emulator yet
+- Will discover real bugs in Gradle config, APK generation, etc.
+- **Estimated time:** 2-4 hours + bug fixes
 
-### **2. Single-File Mode (SECOND) - HIGH VALUE** 🎯
-**Why:** Fastest feature to implement, highest innovation value
-- Only 3-4 hours of work
-- 100% code reuse (leverages existing pipeline)
-- Unique selling point vs other frameworks
-- Aligns perfectly with vision: "Start small, scale up"
-- Great for tutorials, learning, prototyping
-- **No other Android framework has this!**
+**What to test:**
+1. Single-file mode end-to-end (`whitehall run counter.wh` on real device)
+2. Project mode end-to-end (`whitehall init` → `whitehall run`)
+3. Watch mode with live editing
+4. Gradle compilation and APK generation
 
-### **3. Developer Experience (THIRD)**
-After core features are stable:
+### **2. Developer Experience (AFTER E2E TESTING)**
+Once core functionality is validated:
 - Better error messages with line numbers
 - Source maps for debugging
-- Color-coded terminal output
+- Shebang support (`#!/usr/bin/env whitehall`)
+- File size warnings for large single files
 
-**Recommended Flow:**
-1. **Week 1**: End-to-End Testing → Fix critical bugs → Validate pipeline works
-2. **Week 2**: Single-File Mode → Get unique feature working → Update docs
-3. **Week 3**: Polish (DX improvements, additional tests as needed)
+### **3. Additional Features (FUTURE)**
+After core is stable and tested:
+- Custom dependencies in frontmatter
+- Hot reload / HMR
+- LSP for editor support
+
+**Current Status (Nov 4, 2025):**
+- ✅ Transpiler: 100% complete (30 tests passing)
+- ✅ Routing: 100% complete
+- ✅ CLI: All 5 commands implemented
+- ✅ Single-file mode: Complete with caching, package customization
+- ❌ E2E testing: Not done yet
+- **Next:** End-to-End Testing!
 
 **Why Not APK Generation in Build?**
 - `whitehall run` already generates APKs (at `build/app/build/outputs/apk/debug/`)
