@@ -6,7 +6,7 @@ use crate::transpiler;
 
 /// Compile a single .wh file to Kotlin
 /// This is a lightweight operation that only transpiles - no Android project generation
-pub fn execute(file_path: &str) -> Result<()> {
+pub fn execute(file_path: &str, package: Option<&str>, no_package: bool) -> Result<()> {
     // Validate file exists and has .wh extension
     let path = Path::new(file_path);
     if !path.exists() {
@@ -37,15 +37,25 @@ pub fn execute(file_path: &str) -> Result<()> {
         })
         .unwrap_or_else(|| "Component".to_string());
 
-    // Transpile to Kotlin
-    // Use a generic package name since we don't have full config
-    let package_name = "com.example.app";
+    // Determine package name
+    let package_name = package.unwrap_or("com.example.app");
 
+    // Transpile to Kotlin
     let kotlin_code = transpiler::transpile(&code, package_name, &component_name, None)
         .map_err(|e| anyhow::anyhow!("Transpilation error: {}", e))?;
 
     // Output the Kotlin code
-    println!("{}", kotlin_code);
+    if no_package {
+        // Strip package declaration for pasting into existing files
+        let code_without_package = kotlin_code
+            .lines()
+            .skip_while(|line| line.trim().is_empty() || line.starts_with("package "))
+            .collect::<Vec<_>>()
+            .join("\n");
+        println!("{}", code_without_package);
+    } else {
+        println!("{}", kotlin_code);
+    }
 
     Ok(())
 }

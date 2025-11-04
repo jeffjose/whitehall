@@ -23,6 +23,12 @@ enum Commands {
     Compile {
         /// Path to .wh file
         file: String,
+        /// Custom package name (default: com.example.app)
+        #[arg(long)]
+        package: Option<String>,
+        /// Omit package declaration (for pasting into existing files)
+        #[arg(long)]
+        no_package: bool,
     },
     /// Build the project (transpile .wh files to Kotlin + generate Android project)
     /// Works with both project directories (whitehall.toml) and single .wh files
@@ -54,8 +60,8 @@ fn main() {
         Commands::Init { name } => {
             commands::init::execute(&name)
         }
-        Commands::Compile { file } => {
-            commands::compile::execute(&file)
+        Commands::Compile { file, package, no_package } => {
+            commands::compile::execute(&file, package.as_deref(), no_package)
         }
         Commands::Build { target } => {
             commands::build::execute(&target)
