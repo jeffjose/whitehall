@@ -44,8 +44,8 @@ Tests hex color support with automatic RGBA→ARGB conversion for Android.
 package com.example.app
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -62,21 +62,25 @@ fun Colors() {
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         Text(
-            text = "Color Examples",
+            text = "Color Examples
+  ",
             fontSize = 24.sp,
             fontWeight = FontWeight.Bold,
             color = Color(0xFF1976D2)
         )
         Text(
-            text = "3-char hex: #F00",
+            text = "3-char hex: #F00
+  ",
             color = Color(0xFFFF0000)
         )
         Text(
-            text = "6-char hex: #4CAF50",
+            text = "6-char hex: #4CAF50
+  ",
             color = Color(0xFF4CAF50)
         )
         Text(
-            text = "8-char RGBA: #FF000080 (50% alpha)",
+            text = "8-char RGBA: #FF000080 (50% alpha)
+  ",
             color = Color(0x80FF0000)
         )
         Column(
@@ -87,9 +91,10 @@ fun Colors() {
         }
         Column(
             modifier = Modifier
-            .fillMaxWidth()
-            .background(Color(0xFFE3F2FD))
-            .padding(8.dp)
+      .fillMaxWidth()
+      .background(Color(0xFFE3F2FD))
+      .padding(8.dp)
+
         ) {
             Text(text = "Modifier with hex color")
         }
@@ -107,7 +112,7 @@ fun Colors() {
 
 ## Metadata
 
-```
+```yaml
 file: Colors.wh
 package: com.example.app
 ```
