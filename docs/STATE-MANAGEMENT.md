@@ -17,7 +17,7 @@
 | StateFlow (manual) | ⚠️ Works today | Use Kotlin files directly |
 | Effects | ⚠️ Works today | Use `LaunchedEffect` directly |
 | CompositionLocal | ⚠️ Works today | Use Kotlin directly |
-| Lifecycle hooks | 🤔 Under consideration | `onMount` vs `LaunchedEffect` |
+| Lifecycle hooks | ✅ Supported | `onMount`, `onDispose` |
 | Global stores | 🤔 Under consideration | Scope options TBD |
 | Persistence | 🤔 Under consideration | Future feature |
 
@@ -536,9 +536,9 @@ val counter = viewModel<Counter>()  // Regular viewModel, not hiltViewModel
 
 ## Open Questions
 
-### Question 1: Lifecycle Hooks ✅ DECIDED
+### Question 1: Lifecycle Hooks ✅ IMPLEMENTED
 
-**Decision:** Add lifecycle hooks for cleaner syntax.
+**Decision:** Add lifecycle hooks for cleaner syntax - **COMPLETE**
 
 **Syntax:**
 ```whitehall
@@ -547,25 +547,21 @@ val counter = viewModel<Counter>()  // Regular viewModel, not hiltViewModel
     analytics.trackScreenView("profile")
   }
 
-  onDestroy {
+  onDispose {
     subscription.cancel()
   }
 
   // Or for cleanup that needs setup:
   onMount {
     val subscription = eventBus.subscribe()
-    onDestroy {
+    onDispose {
       subscription.cancel()
     }
   }
 </script>
 ```
 
-**Naming decision needed:** `onDestroy` vs `onDispose`
-- **`onDestroy`** - Clearer intent (component is being destroyed)
-- **`onDispose`** - Matches Compose's `DisposableEffect { onDispose { } }`
-
-**Recommendation:** `onDispose` (more Kotlin/Compose-native)
+**Naming decision:** We chose `onDispose` (matches Compose's `DisposableEffect { onDispose { } }`)
 
 **Transpiles to:**
 ```kotlin
@@ -581,7 +577,9 @@ DisposableEffect(Unit) {
 }
 ```
 
-**Why add this:** Cleaner, familiar to web developers, less verbose than Compose's `LaunchedEffect`/`DisposableEffect`.
+**Smart combination:** When both `onMount` and `onDispose` are present, uses `DisposableEffect` with the mount code outside and dispose code inside `onDispose { }`.
+
+**Why we added this:** Cleaner, familiar to web developers, less verbose than Compose's `LaunchedEffect`/`DisposableEffect`.
 
 ---
 
@@ -1388,6 +1386,7 @@ class MyApplication : Application()
 - ✅ Props: `@prop val name: String`
 - ✅ Two-way binding: `bind:value={email}`
 - ✅ Derived values: `val doubled = count * 2`
+- ✅ Lifecycle hooks: `onMount`, `onDispose`
 - ✅ Manual StateFlow (Kotlin files)
 - ✅ Manual ViewModels (Kotlin files)
 - ✅ Effects: `LaunchedEffect`, `DisposableEffect`
@@ -1405,22 +1404,21 @@ class MyApplication : Application()
 10. **Auto-wrap suspend functions** - `suspend fun` automatically wrapped in `viewModelScope.launch { }`
 11. **Type inference** - Automatically infer types from literal values (Boolean, Int, String, Double)
 12. **Hilt integration** - Hybrid auto-detection: detect `@inject`/`@Inject` OR `@hilt` → auto-generate `@HiltViewModel` + use `hiltViewModel<T>()`
+13. **Lifecycle hooks** - `onMount` → `LaunchedEffect`, `onDispose` → `DisposableEffect`, smart combination when both present
 
 ### Decided - Pending Implementation ⏸️
 1. **Callable references** (`profile::save`) - Works in Kotlin, needs testing
-2. **Lifecycle hooks** (`onMount`, `onDispose`) - Not started
-3. **Global stores** - Design decided, not implemented
-4. **Persistence** - Manual (no special syntax needed)
+2. **Global stores** - Design decided, not implemented
+3. **Persistence** - Manual (no special syntax needed)
 
 ### Open Questions Needing Decisions
-1. **Lifecycle hook naming:** `onDestroy` vs `onDispose` (recommendation: `onDispose`)
-2. **Global stores:** Svelte-style singleton exports vs Kotlin repositories
+1. **Global stores:** Svelte-style singleton exports vs Kotlin repositories
 
 ---
 
 **Next Steps:**
 1. ✅ ~~Phase 0-5: Core @store implementation~~ **COMPLETE**
-2. Implement lifecycle hooks (`onMount`, `onDispose`)
+2. ✅ ~~Lifecycle hooks (`onMount`, `onDispose`)~~ **COMPLETE**
 3. Decide & implement: Global store pattern (Option A or B)
 4. Test: Callable references (`profile::save`)
 5. Test: Multiple store instances with auto-keying
