@@ -13,7 +13,7 @@
 | Two-way binding | ✅ Supported | `bind:value={email}` |
 | Derived values | ✅ Supported | `val doubled = count * 2` |
 | Hoisted state | ✅ Supported | Local state + props |
-| **Stores (screen-level)** | **✅ DECIDED - Not Implemented** | `@store val profile = UserProfile()` |
+| **Stores (screen-level)** | **✅ DECIDED - Not Implemented** | `@store class UserProfile {...}` + `val profile = UserProfile()` (auto-detected) |
 | StateFlow (manual) | ⚠️ Works today | Use Kotlin files directly |
 | Effects | ⚠️ Works today | Use `LaunchedEffect` directly |
 | CompositionLocal | ⚠️ Works today | Use Kotlin directly |
@@ -78,7 +78,10 @@ class UserProfile {
 <script>
   import com.app.stores.UserProfile
 
-  @store val profile = UserProfile()
+  val profile = UserProfile()  // Auto-detected as @store!
+
+  // Or be explicit (optional):
+  // @store val profile = UserProfile()
 </script>
 
 <Column>
@@ -91,7 +94,8 @@ class UserProfile {
 
 **Key principles:**
 - ✅ Explicit import (regular Kotlin import)
-- ✅ Explicit instantiation with `@store` annotation
+- ✅ Auto-detection: `@store` classes automatically use `viewModel<T>()`
+- ✅ Optional explicit annotation: `@store val profile = ...` for clarity
 - ✅ Kotlin-native syntax (callable references with `::`)
 - ✅ No magic auto-instantiation
 - ✅ Regular class usage
@@ -204,6 +208,53 @@ src/
 
 ## Implementation Plan
 
+### Phase 0: Extend Semantic Analyzer (FOUNDATION)
+
+**Goal:** Build a store registry during semantic analysis to enable auto-detection of `@store` classes.
+
+**Architecture:** Whitehall already has a semantic analysis phase (`src/transpiler/analyzer.rs`) that runs after parsing:
+```rust
+// Current pipeline in src/transpiler/mod.rs
+pub fn transpile(...) -> Result<String, String> {
+    let ast = parser.parse()?;
+    let semantic_info = Analyzer::analyze(&ast)?;  // ← Semantic analysis
+    let optimized_ast = Optimizer::optimize(ast, semantic_info);
+    codegen.generate(&optimized_ast)
+}
+```
+
+**Implementation steps:**
+1. Add `StoreRegistry` struct to `analyzer.rs`:
+   ```rust
+   pub struct StoreRegistry {
+       stores: HashMap<String, StoreInfo>
+   }
+
+   pub struct StoreInfo {
+       pub class_name: String,
+       pub has_hilt: bool,        // Has @HiltViewModel annotation?
+       pub has_inject: bool,      // Has @Inject constructor?
+       pub package: String,        // Fully qualified package
+   }
+   ```
+
+2. Add `store_registry: StoreRegistry` to `SemanticInfo` struct
+
+3. During `Analyzer::analyze()`, scan AST for classes with `@store` annotation:
+   - Extract class name
+   - Check for `@HiltViewModel` annotation
+   - Check for `@Inject constructor(...)`
+   - Store in registry
+
+4. Pass registry to codegen via `SemanticInfo`
+
+**Why this phase matters:**
+- Enables auto-detection of store classes at usage sites
+- Distinguishes between `viewModel<T>()` and `hiltViewModel<T>()`
+- Foundation for Phases 1-2
+
+---
+
 ### Phase 1: Basic Store Generation
 
 **Goal:** Generate ViewModel boilerplate from `@store` classes.
@@ -262,7 +313,7 @@ class UserProfile : ViewModel() {
 <script>
   import com.app.stores.UserProfile
 
-  @store val profile = UserProfile()
+  val profile = UserProfile()  // Auto-detected as @store class
 </script>
 
 <Input bind:value={profile.name} />
@@ -283,13 +334,22 @@ fun ProfileScreen() {
 ```
 
 **Implementation steps:**
-1. Detect `@store val profile = UserProfile()` pattern
-2. Generate `val profile = viewModel<UserProfile>()`
-3. Generate `val uiState by profile.uiState.collectAsState()`
-4. Rewrite references:
+1. **First pass:** Build registry of all `@store` annotated classes
+2. **Component pass:** Detect `val profile = UserProfile()` pattern
+3. **Check:** Is `UserProfile` in the `@store` registry?
+   - Yes → Treat as store (continue to step 4)
+   - No → Regular variable instantiation
+4. Generate `val profile = viewModel<UserProfile>()`
+5. Generate `val uiState by profile.uiState.collectAsState()`
+6. Rewrite references:
    - `profile.name` (in expressions) → `uiState.name`
    - `profile.name = value` (in assignments) → `profile.name = value`
    - `profile::save` → `{ profile.save() }` or direct reference
+
+**Optional explicit annotation:**
+- User can write `@store val profile = UserProfile()` to be explicit
+- Transpiler behavior is identical (checks registry first)
+- Useful for code clarity or when the type inference is ambiguous
 
 ---
 
@@ -383,7 +443,7 @@ class UserProfile @Inject constructor(
 **Usage:**
 ```whitehall
 <script>
-  @hiltViewModel val profile = UserProfile()
+  val profile = UserProfile()  // Auto-detects @HiltViewModel!
 </script>
 ```
 
@@ -400,13 +460,17 @@ class UserProfile @Inject constructor(
 
 **Output (usage):**
 ```kotlin
-val profile = hiltViewModel<UserProfile>()
+val profile = hiltViewModel<UserProfile>()  // Auto-generated!
 ```
 
 **Implementation:**
-1. Preserve `@HiltViewModel` and `@Inject constructor()`
-2. Detect `@hiltViewModel` annotation on usage
-3. Generate `hiltViewModel<T>()` instead of `viewModel<T>()`
+1. Preserve `@HiltViewModel` and `@Inject constructor()` on store class
+2. In store registry, track both `@store` and presence of `@HiltViewModel`
+3. When generating usage:
+   - Check if class has `@HiltViewModel` in registry
+   - Yes → Generate `hiltViewModel<T>()`
+   - No → Generate `viewModel<T>()`
+4. No annotation needed at usage site - fully automatic!
 
 ---
 
@@ -593,11 +657,11 @@ class AppSettings {
 
 **Decision:** Support multiple instances with automatic key generation.
 
-**Current expectation:**
+**Usage:**
 ```whitehall
 <script>
-  @store val adminProfile = UserProfile()
-  @store val guestProfile = UserProfile()
+  val adminProfile = UserProfile()  // Auto-detected
+  val guestProfile = UserProfile()  // Auto-detected
 </script>
 ```
 
@@ -612,7 +676,8 @@ val guestProfile = viewModel<UserProfile>(key = "guestProfile")
 ```
 
 **Implementation:**
-- Extract variable name from `@store val <name> = ...`
+- Detect `val <name> = UserProfile()` where `UserProfile` is in `@store` registry
+- Extract variable name `<name>`
 - Pass variable name as key to `viewModel(key = "...")`
 - Each variable gets its own instance
 
@@ -761,7 +826,7 @@ class UserProfile {
 <script>
   import com.app.stores.UserProfile
 
-  @store val profile = UserProfile()
+  val profile = UserProfile()  // Auto-detected as @store
 </script>
 
 <Input bind:value={profile.name} />
@@ -868,7 +933,7 @@ class UserProfile @Inject constructor(
 
 <!-- screens/ProfileScreen.wh -->
 <script>
-  @hiltViewModel val profile = UserProfile()
+  val profile = UserProfile()  // Auto-detects @HiltViewModel!
 </script>
 ```
 
@@ -999,7 +1064,7 @@ class UserProfile {
 <script>
   import com.app.stores.UserProfile
 
-  @store val profile = UserProfile()
+  val profile = UserProfile()  // Auto-detected as @store
 </script>
 
 <Scaffold>
@@ -1224,7 +1289,7 @@ class UserProfile @Inject constructor(
 <script>
   import com.app.stores.UserProfile
 
-  @hiltViewModel val profile = UserProfile()
+  val profile = UserProfile()  // Auto-detects @HiltViewModel!
 </script>
 
 <Column>
@@ -1268,14 +1333,16 @@ class MyApplication : Application()
 - ✅ Effects: `LaunchedEffect`, `DisposableEffect`
 
 ### Decided - Needs Implementation
-1. **@store annotation** for screen-level reactive state
-2. **@store val profile = UserProfile()** usage syntax
-3. **stores/** directory convention (recommended, not required)
-4. **Callable references** (`profile::save`)
-5. **Lifecycle hooks** (`onMount`, `onDispose`)
-6. **Multiple store instances** (auto-keyed by variable name)
-7. **All @annotations lowercase** (`@store`, `@prop`, not `@Store`)
-8. **Persistence** - Manual (no special syntax)
+1. **@store annotation** for screen-level reactive state (class definition only)
+2. **Auto-detection** - `val profile = UserProfile()` automatically uses `viewModel<T>()` when `UserProfile` has `@store`
+3. **Optional explicit annotation** - `@store val profile = ...` for clarity (same behavior)
+4. **Auto-detect Hilt** - Classes with `@HiltViewModel` automatically use `hiltViewModel<T>()`
+5. **stores/** directory convention (recommended, not required)
+6. **Callable references** (`profile::save`)
+7. **Lifecycle hooks** (`onMount`, `onDispose`)
+8. **Multiple store instances** (auto-keyed by variable name)
+9. **All @annotations lowercase** (`@store`, `@prop`, not `@Store`)
+10. **Persistence** - Manual (no special syntax)
 
 ### Open Questions Needing Decisions
 1. **Lifecycle hook naming:** `onDestroy` vs `onDispose` (recommendation: `onDispose`)

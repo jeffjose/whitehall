@@ -7,6 +7,7 @@ pub struct WhitehallFile {
     pub state: Vec<StateDeclaration>,
     pub functions: Vec<FunctionDeclaration>,
     pub lifecycle_hooks: Vec<LifecycleHook>,
+    pub classes: Vec<ClassDeclaration>,  // Store classes (@store annotation)
     pub markup: Markup,
 }
 
@@ -37,12 +38,37 @@ pub struct FunctionDeclaration {
     pub params: String,              // Parameters as string (e.g., "postId: String")
     pub return_type: Option<String>, // Optional return type (e.g., "String", "Unit")
     pub body: String,                // Just capture the whole function body as a string
+    pub is_suspend: bool,            // Whether this is a suspend function
 }
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct LifecycleHook {
     pub hook_type: String, // "onMount", "onUnmount", etc.
     pub body: String,      // Hook body content
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct ClassDeclaration {
+    pub annotations: Vec<String>,          // e.g., ["store", "HiltViewModel"]
+    pub name: String,                      // e.g., "UserProfile"
+    pub constructor: Option<ConstructorDeclaration>,  // Constructor with @Inject
+    pub properties: Vec<PropertyDeclaration>,  // var/val properties
+    pub functions: Vec<FunctionDeclaration>,   // Methods
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct ConstructorDeclaration {
+    pub annotations: Vec<String>,  // e.g., ["Inject"]
+    pub parameters: String,        // e.g., "private val repository: ProfileRepository"
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct PropertyDeclaration {
+    pub name: String,
+    pub mutable: bool,                   // var vs val
+    pub type_annotation: Option<String>, // e.g., "String"
+    pub initial_value: Option<String>,   // e.g., "\"\"" or "false"
+    pub getter: Option<String>,          // Custom getter for derived properties
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -121,6 +147,7 @@ impl WhitehallFile {
             state: Vec::new(),
             functions: Vec::new(),
             lifecycle_hooks: Vec::new(),
+            classes: Vec::new(),
             markup: Markup::Text(String::new()),
         }
     }

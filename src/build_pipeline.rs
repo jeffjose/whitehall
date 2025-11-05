@@ -45,19 +45,22 @@ pub fn execute_build(config: &Config, clean: bool) -> Result<BuildResult> {
     let files = discover_files(config)
         .context("Failed to discover source files")?;
 
-    // 3. Generate Android scaffold (only if clean or missing)
+    // 3. Build project-wide store registry for cross-file store detection
+    let global_store_registry = build_store_registry(&files)?;
+
+    // 4. Generate Android scaffold (only if clean or missing)
     let scaffold_exists = output_dir.join("app/build.gradle.kts").exists();
     if clean || !scaffold_exists {
         android_scaffold::generate(config, output_dir)
             .context("Failed to generate Android project scaffold")?;
     }
 
-    // 4. Transpile each file
+    // 5. Transpile each file
     let mut errors = Vec::new();
     let mut success_count = 0;
 
     for file in &files {
-        match transpile_file(file, config, output_dir) {
+        match transpile_file(file, config, output_dir, &global_store_registry) {
             Ok(_) => success_count += 1,
             Err(e) => errors.push(BuildError {
                 file: file.path.clone(),
@@ -66,14 +69,14 @@ pub fn execute_build(config: &Config, clean: bool) -> Result<BuildResult> {
         }
     }
 
-    // 5. Generate Routes.kt from route structure
+    // 6. Generate Routes.kt from route structure
     if errors.is_empty() {
         generate_routes_file(config, output_dir)?;
     }
 
-    // 6. Generate MainActivity if all files transpiled successfully
+    // 7. Generate MainActivity if all files transpiled successfully
     if errors.is_empty() {
-        generate_main_activity(config, output_dir, &files)?;
+        generate_main_activity(config, output_dir, &files, &global_store_registry)?;
     }
 
     Ok(BuildResult {
@@ -83,11 +86,42 @@ pub fn execute_build(config: &Config, clean: bool) -> Result<BuildResult> {
     })
 }
 
+/// Build project-wide store registry by scanning all files for @store classes
+fn build_store_registry(files: &[WhitehallFile]) -> Result<transpiler::StoreRegistry> {
+    let mut registry = transpiler::StoreRegistry::new();
+
+    for file in files {
+        let source = fs::read_to_string(&file.path)
+            .context(format!("Failed to read {} for store registry", file.path.display()))?;
+
+        // Quick parse to extract @store classes
+        // We only need the AST to find classes with @store annotation
+        if let Ok(ast) = transpiler::parse_for_stores(&source) {
+            for class in &ast.classes {
+                if class.annotations.contains(&"store".to_string()) {
+                    let store_info = transpiler::StoreInfo {
+                        class_name: class.name.clone(),
+                        has_hilt: class.annotations.iter().any(|a| a == "HiltViewModel"),
+                        has_inject: class.constructor.as_ref()
+                            .map(|c| c.annotations.contains(&"Inject".to_string()))
+                            .unwrap_or(false),
+                        package: file.package_path.clone(),
+                    };
+                    registry.insert(class.name.clone(), store_info);
+                }
+            }
+        }
+    }
+
+    Ok(registry)
+}
+
 /// Transpile a single .wh file to Kotlin
 fn transpile_file(
     file: &WhitehallFile,
     _config: &Config,
     output_dir: &Path,
+    global_store_registry: &transpiler::StoreRegistry,
 ) -> Result<()> {
     // Skip main.wh - it's handled separately in MainActivity generation
     if file.file_type == FileType::Main {
@@ -104,12 +138,13 @@ fn transpile_file(
         _ => None,
     };
 
-    // Transpile to Kotlin
-    let kotlin_code = transpiler::transpile(
+    // Transpile to Kotlin with global store registry
+    let kotlin_code = transpiler::transpile_with_registry(
         &source,
         &file.package_path,
         &file.component_name,
         component_type,
+        Some(global_store_registry),
     )
     .map_err(|e| anyhow::anyhow!("Transpilation error: {}", e))?;
 
@@ -137,6 +172,7 @@ fn generate_main_activity(
     config: &Config,
     output_dir: &Path,
     files: &[WhitehallFile],
+    global_store_registry: &transpiler::StoreRegistry,
 ) -> Result<()> {
     // Discover routes to determine if we need NavHost setup
     let discovered_routes = routes::discover_routes()?;
@@ -147,7 +183,7 @@ fn generate_main_activity(
     let main_content = if let Some(main_file) = main_file {
         // Use transpiled main.wh content as the App composable
         let source = fs::read_to_string(&main_file.path)?;
-        transpiler::transpile(&source, &config.android.package, "App", None)
+        transpiler::transpile_with_registry(&source, &config.android.package, "App", None, Some(global_store_registry))
             .map_err(|e| anyhow::anyhow!(e))?
     } else if !discovered_routes.is_empty() {
         // Generate MainActivity with NavHost for routing

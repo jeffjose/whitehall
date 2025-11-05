@@ -1,0 +1,23 @@
+@store
+class CounterStore {
+  var count: Int = 0
+  var lastIncrement: String? = null
+
+  val isPositive: Boolean
+    get() = count > 0
+
+  fun increment() {
+    count++
+    lastIncrement = "Incremented at ${System.currentTimeMillis()}"
+  }
+
+  fun decrement() {
+    count--
+    lastIncrement = null
+  }
+
+  fun reset() {
+    count = 0
+    lastIncrement = null
+  }
+}

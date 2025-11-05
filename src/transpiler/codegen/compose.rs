@@ -1,6 +1,7 @@
 /// Compose backend - generates Jetpack Compose code
 
-use crate::transpiler::ast::{ForLoopBlock, Markup, PropValue, WhitehallFile};
+use crate::transpiler::analyzer::StoreRegistry;
+use crate::transpiler::ast::{ClassDeclaration, ForLoopBlock, Markup, PropValue, WhitehallFile};
 use crate::transpiler::optimizer::Optimization;
 
 pub struct ComposeBackend {
@@ -11,6 +12,9 @@ pub struct ComposeBackend {
     nullable_vars: std::collections::HashSet<String>,
     var_types: std::collections::HashMap<String, (String, String)>, // Maps variable name to (type, default_value)
     optimizations: Vec<Optimization>, // Phase 6: Optimization plans for this component
+    store_registry: Option<StoreRegistry>, // Phase 2: Store registry for @store detection
+    uses_viewmodel: bool, // Phase 2: Track if any stores are used (for imports)
+    uses_hilt_viewmodel: bool, // Phase 2: Track if any Hilt stores are used (for imports)
 }
 
 /// Convert hex color string to Color(0x...) format
@@ -67,6 +71,9 @@ impl ComposeBackend {
             nullable_vars: std::collections::HashSet::new(),
             var_types: std::collections::HashMap::new(),
             optimizations: Vec::new(), // Phase 6: Start with empty optimizations
+            store_registry: None, // Phase 2: Will be set by generate_with_optimizations
+            uses_viewmodel: false, // Phase 2: Track store usage for imports
+            uses_hilt_viewmodel: false, // Phase 2: Track Hilt store usage for imports
         }
     }
 
@@ -79,15 +86,67 @@ impl ComposeBackend {
         &mut self,
         file: &WhitehallFile,
         optimizations: &[crate::transpiler::optimizer::Optimization],
+        semantic_info: &crate::transpiler::analyzer::SemanticInfo,
     ) -> Result<String, String> {
         // Phase 6: Store optimizations for use during for loop generation
         self.optimizations = optimizations.to_vec();
+
+        // Phase 2: Store registry for @store detection
+        self.store_registry = Some(semantic_info.store_registry.clone());
 
         // Generate code - for loop generation will check optimizations
         self.generate(file)
     }
 
+    /// Check if a value is a store instantiation (e.g., "CounterStore()")
+    /// Returns the store info if it matches a registered @store class
+    fn detect_store_instantiation(&self, value: &str) -> Option<crate::transpiler::analyzer::StoreInfo> {
+        // Check if value matches pattern: ClassName() or ClassName(...)
+        let trimmed = value.trim();
+        if !trimmed.ends_with(')') {
+            return None;
+        }
+
+        // Extract class name before '('
+        if let Some(paren_pos) = trimmed.find('(') {
+            let class_name = trimmed[..paren_pos].trim();
+
+            // Check if it's in the store registry
+            if let Some(ref registry) = self.store_registry {
+                return registry.get(class_name).cloned();
+            }
+        }
+
+        None
+    }
+
+    /// Pre-pass: Detect if the file uses any stores
+    /// Sets the uses_viewmodel and uses_hilt_viewmodel flags for import generation
+    fn detect_store_usage(&mut self, file: &WhitehallFile) {
+        for state in &file.state {
+            let transformed_value = self.transform_array_literal(&state.initial_value, false);
+            if let Some(store_info) = self.detect_store_instantiation(&transformed_value) {
+                self.uses_viewmodel = true;
+                if store_info.has_hilt {
+                    self.uses_hilt_viewmodel = true;
+                }
+            }
+        }
+    }
+
     pub fn generate(&mut self, file: &WhitehallFile) -> Result<String, String> {
+        // Check if this file contains a @store class
+        let store_class = file.classes.iter().find(|c| c.annotations.contains(&"store".to_string()));
+
+        if let Some(class) = store_class {
+            // Generate ViewModel code for @store class
+            return self.generate_store_class(class);
+        }
+
+        // Pre-pass: Detect store usage for import generation
+        self.detect_store_usage(file);
+
+        // Otherwise, generate standard Composable component
         let mut output = String::new();
 
         // Package declaration
@@ -153,6 +212,14 @@ impl ComposeBackend {
         // Add NavController import for screens
         if self.component_type.as_deref() == Some("screen") {
             imports.push("androidx.navigation.NavController".to_string());
+        }
+
+        // Add ViewModel imports for @store usage
+        if self.uses_viewmodel {
+            imports.push("androidx.lifecycle.viewmodel.compose.viewModel".to_string());
+        }
+        if self.uses_hilt_viewmodel {
+            imports.push("androidx.lifecycle.viewmodel.compose.hiltViewModel".to_string());
         }
 
         // Deduplicate and sort imports alphabetically (standard Kotlin convention)
@@ -287,7 +354,27 @@ impl ComposeBackend {
             // Transform array literals: [1,2,3] -> listOf(1,2,3)
             let transformed_value = self.transform_array_literal(&state.initial_value, false);
 
-            if state.is_derived_state {
+            // Check if this is a store instantiation
+            if let Some(store_info) = self.detect_store_instantiation(&transformed_value) {
+                // Track store usage for imports
+                self.uses_viewmodel = true;
+                if store_info.has_hilt {
+                    self.uses_hilt_viewmodel = true;
+                }
+
+                // Generate viewModel or hiltViewModel based on annotations
+                let view_model_call = if store_info.has_hilt {
+                    format!("hiltViewModel<{}>()", store_info.class_name)
+                } else {
+                    format!("viewModel<{}>()", store_info.class_name)
+                };
+
+                output.push_str(&format!("val {} = {}\n", state.name, view_model_call));
+
+                // Add collectAsState for uiState
+                output.push_str(&self.indent());
+                output.push_str(&format!("val uiState by {}.uiState.collectAsState()\n", state.name));
+            } else if state.is_derived_state {
                 // derivedStateOf needs special wrapping: val name by remember { derivedStateOf { ... } }
                 // Need to format with increased indent level for proper nesting
                 output.push_str(&format!("val {} by remember {{\n", state.name));
@@ -1193,7 +1280,12 @@ impl ComposeBackend {
                 .and_then(|_parent| self.package.strip_suffix(&format!(".{}", self.package.rsplit('.').next().unwrap_or(""))))
                 .unwrap_or(&self.package);
 
-            format!("{}.{}", base_package, rest.replace('.', "."))
+            // Add a dot between base package and the rest (e.g., "com.example.app" + "." + "models.User")
+            if rest.starts_with('.') {
+                format!("{}{}", base_package, rest)
+            } else {
+                format!("{}.{}", base_package, rest)
+            }
         } else {
             path.to_string()
         }
@@ -1694,6 +1786,36 @@ impl ComposeBackend {
         }
     }
 
+    /// Transform ternary to if-else expression (for values, not modifiers)
+    /// Transforms: condition ? value : value
+    /// To: if (condition) value else value
+    fn transform_ternary_to_if_else(&self, expr: &str) -> String {
+        // Find ? and : at the same depth level
+        let mut depth = 0;
+        let mut question_pos = None;
+        let mut colon_pos = None;
+
+        for (i, ch) in expr.char_indices() {
+            match ch {
+                '(' | '{' | '[' => depth += 1,
+                ')' | '}' | ']' => depth -= 1,
+                '?' if depth == 0 && question_pos.is_none() => question_pos = Some(i),
+                ':' if depth == 0 && question_pos.is_some() && colon_pos.is_none() => colon_pos = Some(i),
+                _ => {}
+            }
+        }
+
+        if let (Some(q), Some(c)) = (question_pos, colon_pos) {
+            let condition = expr[..q].trim();
+            let then_value = expr[q+1..c].trim();
+            let else_value = expr[c+1..].trim();
+
+            format!("if ({}) {} else {}", condition, then_value, else_value)
+        } else {
+            expr.to_string()
+        }
+    }
+
     fn transform_ternary(&self, expr: &str) -> String {
         // Transform ternary operator: condition ? value : value
         // To Kotlin: .let { if (condition) value else value }
@@ -1776,7 +1898,36 @@ impl ComposeBackend {
         Ok(result)
     }
 
+    /// Transform Whitehall string interpolation {expr} to Kotlin ${expr}
+    /// Handles strings like "Count: {uiState.count}" → "Count: ${uiState.count}"
+    fn transform_string_interpolation(&self, value: &str) -> String {
+        // Only process if value is a quoted string
+        if !((value.starts_with('"') && value.ends_with('"')) ||
+             (value.starts_with('\'') && value.ends_with('\''))) {
+            return value.to_string();
+        }
+
+        let mut result = String::new();
+        let mut chars = value.chars().peekable();
+
+        while let Some(ch) = chars.next() {
+            if ch == '{' {
+                // Transform {expr} to ${expr}
+                result.push('$');
+                result.push('{');
+            } else {
+                result.push(ch);
+            }
+        }
+
+        result
+    }
+
     fn transform_prop(&self, component: &str, prop_name: &str, prop_value: &str) -> Result<Vec<String>, String> {
+        // Transform string interpolation first: {expr} → ${expr}
+        let prop_value = self.transform_string_interpolation(prop_value);
+        let prop_value = prop_value.as_str();
+
         // Handle modifier prop - convert hex colors in background() calls
         if prop_name == "modifier" {
             let transformed = self.convert_hex_in_modifier(prop_value)?;
@@ -1919,23 +2070,59 @@ impl ComposeBackend {
             }
             // Text color string → MaterialTheme.colorScheme or Color(0x...)
             ("Text", "color") => {
-                let color = if value.starts_with('"') && value.ends_with('"') {
-                    let s = &value[1..value.len()-1];
+                // First transform ternary operators to Kotlin if-else (for non-modifier context)
+                let value_transformed = self.transform_ternary_to_if_else(&value);
+                let value = value_transformed.as_str();
 
-                    // Check if it's a hex color like "#F5F5F5" or "#AARRGGBB"
-                    if s.starts_with('#') {
-                        convert_hex_to_color(&s[1..])?
+                // Helper to convert a single color value (handles hex and named colors)
+                let convert_single_color = |color_str: &str| -> Result<String, String> {
+                    let trimmed = color_str.trim();
+                    if trimmed.starts_with('"') && trimmed.ends_with('"') {
+                        let s = &trimmed[1..trimmed.len()-1];
+                        if s.starts_with('#') {
+                            convert_hex_to_color(&s[1..])
+                        } else if s.chars().all(|c| c.is_alphanumeric()) {
+                            Ok(format!("MaterialTheme.colorScheme.{}", s))
+                        } else {
+                            Ok(trimmed.to_string())
+                        }
+                    } else {
+                        Ok(trimmed.to_string())
                     }
-                    // Check if it's a named Material color like "secondary", "primary"
-                    else if s.chars().all(|c| c.is_alphanumeric()) {
-                        format!("MaterialTheme.colorScheme.{}", s)
+                };
+
+                // Check if value contains if-else (from ternary transformation)
+                let color = if value.contains("if (") && value.contains(") ") && value.contains(" else ") {
+                    // Parse and transform if-else branches
+                    // Pattern: if (condition) value1 else value2
+                    if let Some(if_pos) = value.find("if (") {
+                        let cond_start = if_pos + 4; // After "if ("
+                        if let Some(cond_end_rel) = value[cond_start..].find(") ") {
+                            let cond_end = cond_start + cond_end_rel;
+                            let then_start = cond_end + 2; // After ") "
+                            if let Some(else_pos_rel) = value[then_start..].find(" else ") {
+                                let else_pos = then_start + else_pos_rel;
+                                let condition = &value[cond_start..cond_end];
+                                let then_value_str = &value[then_start..else_pos];
+                                let else_value_str = &value[else_pos + 6..]; // After " else "
+
+                                let then_converted = convert_single_color(then_value_str)?;
+                                let else_converted = convert_single_color(else_value_str)?;
+
+                                format!("if ({}) {} else {}", condition, then_converted, else_converted)
+                            } else {
+                                value.to_string()
+                            }
+                        } else {
+                            value.to_string()
+                        }
+                    } else {
+                        value.to_string()
                     }
-                    // Otherwise pass through
-                    else {
-                        value
-                    }
+                } else if value.starts_with('"') && value.ends_with('"') {
+                    convert_single_color(value)?
                 } else {
-                    value
+                    value.to_string()
                 };
                 Ok(vec![format!("color = {}", color)])
             }
@@ -2349,6 +2536,114 @@ impl ComposeBackend {
         output.push_str(&format!("{}    val density = Resources.getSystem().displayMetrics.density\n", indent_str));
         output.push_str(&format!("{}    return (this * density).toInt()\n", indent_str));
         output.push_str(&format!("{}}}\n", indent_str));
+
+        Ok(output)
+    }
+
+    /// Phase 1: Generate ViewModel code for @store class
+    fn generate_store_class(&self, class: &ClassDeclaration) -> Result<String, String> {
+        let mut output = String::new();
+
+        // Package declaration
+        output.push_str(&format!("package {}\n\n", self.package));
+
+        // Imports
+        output.push_str("import androidx.lifecycle.ViewModel\n");
+        output.push_str("import androidx.lifecycle.viewModelScope\n");
+        output.push_str("import kotlinx.coroutines.flow.MutableStateFlow\n");
+        output.push_str("import kotlinx.coroutines.flow.StateFlow\n");
+        output.push_str("import kotlinx.coroutines.flow.asStateFlow\n");
+        output.push_str("import kotlinx.coroutines.flow.update\n");
+        output.push_str("import kotlinx.coroutines.launch\n");
+
+        // Add Hilt imports if needed
+        let has_hilt = class.annotations.iter().any(|a| a == "HiltViewModel");
+        if has_hilt {
+            output.push_str("import dagger.hilt.android.lifecycle.HiltViewModel\n");
+            output.push_str("import javax.inject.Inject\n");
+        }
+
+        output.push('\n');
+
+        // Class annotations
+        if has_hilt {
+            output.push_str("@HiltViewModel\n");
+        }
+
+        // Class declaration
+        output.push_str(&format!("class {}", class.name));
+
+        // Constructor
+        if let Some(constructor) = &class.constructor {
+            output.push(' ');
+            if !constructor.annotations.is_empty() {
+                output.push_str("@Inject ");
+            }
+            output.push_str(&format!("constructor(\n    {}\n)", constructor.parameters));
+        }
+
+        output.push_str(" : ViewModel() {\n");
+
+        // Generate UiState data class
+        output.push_str("    data class UiState(\n");
+        for (i, prop) in class.properties.iter().enumerate() {
+            // Skip derived properties (with getters) - they don't go in UiState
+            if prop.getter.is_some() {
+                continue;
+            }
+
+            let type_str = prop.type_annotation.as_deref().unwrap_or("String");
+            let default_val = prop.initial_value.as_deref().unwrap_or("\"\"");
+            output.push_str(&format!("        val {}: {} = {}", prop.name, type_str, default_val));
+            if i < class.properties.len() - 1 {
+                output.push(',');
+            }
+            output.push('\n');
+        }
+        output.push_str("    )\n\n");
+
+        // Generate StateFlow
+        output.push_str("    private val _uiState = MutableStateFlow(UiState())\n");
+        output.push_str("    val uiState: StateFlow<UiState> = _uiState.asStateFlow()\n\n");
+
+        // Generate property accessors
+        for prop in &class.properties {
+            if prop.getter.is_some() {
+                // Derived property with getter
+                let type_str = prop.type_annotation.as_deref().unwrap_or("String");
+                let getter_expr = prop.getter.as_ref().unwrap();
+                output.push_str(&format!("    val {}: {}\n", prop.name, type_str));
+                output.push_str(&format!("        get() = {}\n\n", getter_expr));
+            } else {
+                // Regular property with setter
+                let type_str = prop.type_annotation.as_deref().unwrap_or("String");
+                output.push_str(&format!("    var {}: {}\n", prop.name, type_str));
+                output.push_str(&format!("        get() = _uiState.value.{}\n", prop.name));
+                output.push_str(&format!("        set(value) {{ _uiState.update {{ it.copy({} = value) }} }}\n\n", prop.name));
+            }
+        }
+
+        // Generate functions
+        for func in &class.functions {
+            output.push_str(&format!("    fun {}({})", func.name, func.params));
+            if let Some(return_type) = &func.return_type {
+                output.push_str(&format!(": {}", return_type));
+            }
+            output.push_str(" {\n");
+
+            // Wrap suspend functions in viewModelScope.launch
+            if func.is_suspend {
+                output.push_str("        viewModelScope.launch {\n");
+                output.push_str(&format!("            {}\n", func.body.trim()));
+                output.push_str("        }\n");
+            } else {
+                output.push_str(&format!("        {}\n", func.body.trim()));
+            }
+
+            output.push_str("    }\n\n");
+        }
+
+        output.push_str("}\n");
 
         Ok(output)
     }

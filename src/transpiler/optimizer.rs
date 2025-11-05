@@ -9,11 +9,12 @@
 use crate::transpiler::analyzer::{OptimizationHint, SemanticInfo};
 use crate::transpiler::ast::WhitehallFile;
 
-/// AST with optimization metadata
+/// AST with optimization metadata and semantic information
 #[derive(Debug, Clone)]
 pub struct OptimizedAST {
     pub ast: WhitehallFile,
     pub optimizations: Vec<Optimization>,
+    pub semantic_info: SemanticInfo,
 }
 
 /// Optimization decisions
@@ -51,7 +52,7 @@ impl Optimizer {
     /// Phase 3: Receives optimization hints from analyzer via SemanticInfo
     /// Phase 4: Consumes hints and generates Optimization plans
     pub fn optimize(ast: WhitehallFile, semantic_info: SemanticInfo) -> OptimizedAST {
-        let mut optimizer = Optimizer::new(semantic_info);
+        let mut optimizer = Optimizer::new(semantic_info.clone());
 
         // Phase 4: Plan optimizations based on hints
         optimizer.plan_optimizations();
@@ -59,6 +60,7 @@ impl Optimizer {
         OptimizedAST {
             ast,
             optimizations: optimizer.optimizations,
+            semantic_info,
         }
     }
 

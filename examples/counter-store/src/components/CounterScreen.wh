@@ -1,0 +1,45 @@
+import $.stores.CounterStore
+
+val counter = CounterStore()
+
+<Column padding={16} spacing={16}>
+  <Text
+    text="Counter with Store"
+    fontSize={24}
+    fontWeight="Bold"
+  />
+
+  <Card padding={24}>
+    <Column spacing={12}>
+      <Text
+        text="Count: {uiState.count}"
+        fontSize={48}
+        fontWeight="Bold"
+        color={counter.isPositive ? "#4CAF50" : "#666666"}
+      />
+
+      @if (counter.isPositive) {
+        <Text
+          text="✓ Count is positive!"
+          color="#4CAF50"
+          fontSize={16}
+        />
+      }
+
+      @if (uiState.lastIncrement != null) {
+        <Text
+          text="Last: {uiState.lastIncrement}"
+          fontSize={12}
+          color="#999999"
+        />
+      }
+    </Column>
+  </Card>
+
+  <Row spacing={8}>
+    <Button onClick={ { counter.decrement() } } text="−" />
+    <Button onClick={ { counter.increment() } } text="+" />
+  </Row>
+
+  <Button onClick={ { counter.reset() } } text="Reset" />
+</Column>

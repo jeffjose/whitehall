@@ -69,6 +69,8 @@ fn classify_file(path: &Path, config: &Config) -> Result<WhitehallFile> {
         (FileType::Component, Some("components"), filename)
     } else if is_under_directory(path, "src/screens") {
         (FileType::Screen, Some("screens"), filename)
+    } else if is_under_directory(path, "src/stores") {
+        (FileType::Component, Some("stores"), filename)
     } else if is_under_directory(path, "src/routes") {
         // Handle route files: src/routes/**/+screen.wh
         let screen_name = derive_screen_name_from_route(path)?;

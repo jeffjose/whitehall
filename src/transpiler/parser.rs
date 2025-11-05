@@ -1,9 +1,10 @@
 /// Parser for Whitehall syntax
 
 use crate::transpiler::ast::{
-    Component, ComponentProp, ElseIfBranch, ForLoopBlock, FunctionDeclaration, IfElseBlock,
-    Import, LifecycleHook, Markup, PropDeclaration, PropValue, StateDeclaration, WhenBlock,
-    WhenBranch, WhitehallFile,
+    ClassDeclaration, Component, ComponentProp, ConstructorDeclaration, ElseIfBranch,
+    ForLoopBlock, FunctionDeclaration, IfElseBlock, Import, LifecycleHook, Markup,
+    PropDeclaration, PropertyDeclaration, PropValue, StateDeclaration, WhenBlock, WhenBranch,
+    WhitehallFile,
 };
 
 pub struct Parser {
@@ -51,34 +52,76 @@ impl Parser {
         let mut state = Vec::new();
         let mut functions = Vec::new();
         let mut lifecycle_hooks = Vec::new();
+        let mut classes = Vec::new();
+        let mut pending_annotations = Vec::new();
 
-        // Parse imports, props, state, functions, and lifecycle hooks (before markup)
+        // Parse imports, props, state, functions, lifecycle hooks, and classes (before markup)
         loop {
             self.skip_whitespace();
-            if self.consume_word("import") {
+
+            // Check for annotations (@store, @HiltViewModel, etc.)
+            if self.peek_char() == Some('@') {
+                self.advance_char(); // Skip @
+                let annotation = self.parse_identifier()?;
+                pending_annotations.push(annotation.clone());
+
+                // Check if next is "class" keyword
+                self.skip_whitespace();
+                if self.peek_word() == Some("class") {
+                    classes.push(self.parse_class_declaration(pending_annotations.clone())?);
+                    pending_annotations.clear();
+                    continue;
+                } else if annotation == "prop" {
+                    // Handle @prop (legacy parsing)
+                    pending_annotations.clear();
+                    props.push(self.parse_prop_declaration()?);
+                    continue;
+                }
+                // Otherwise, continue to next iteration to collect more annotations
+                continue;
+            } else if self.consume_word("import") {
                 imports.push(self.parse_import()?);
-            } else if self.consume_word("@prop") {
-                props.push(self.parse_prop_declaration()?);
             } else if self.peek_word() == Some("var") || self.peek_word() == Some("val") {
                 state.push(self.parse_state_declaration()?);
             } else if self.consume_word("fun") {
-                functions.push(self.parse_function_declaration()?);
+                functions.push(self.parse_function_declaration(false)?);
             } else if self.consume_word("onMount") {
                 lifecycle_hooks.push(self.parse_lifecycle_hook("onMount")?);
             } else if self.consume_word("onDispose") {
                 lifecycle_hooks.push(self.parse_lifecycle_hook("onDispose")?);
+            } else if self.peek_char() == Some('<') {
+                // Check for <script> tags
+                let script_imports = self.try_parse_script_tag()?;
+                if !script_imports.is_empty() {
+                    imports.extend(script_imports);
+                    continue;
+                }
+                // Not a script tag, break to parse markup
+                break;
             } else {
                 break;
             }
         }
 
-        let markup = self.parse_markup()?;
+        // Parse markup (optional for store-only files)
+        self.skip_whitespace();
+        let markup = if !classes.is_empty() && self.peek_char().is_none() {
+            // Store-only file with no markup
+            Markup::Text(String::new())
+        } else if self.peek_char().is_some() {
+            self.parse_markup()?
+        } else {
+            // Empty file or whitespace only
+            Markup::Text(String::new())
+        };
+
         Ok(WhitehallFile {
             imports,
             props,
             state,
             functions,
             lifecycle_hooks,
+            classes,
             markup,
         })
     }
@@ -98,6 +141,89 @@ impl Parser {
 
         let path = self.input[start..self.pos].trim().to_string();
         Ok(Import { path })
+    }
+
+    /// Try to parse a <script> tag and extract imports
+    /// Returns empty vec if not a script tag (and doesn't advance position)
+    fn try_parse_script_tag(&mut self) -> Result<Vec<Import>, String> {
+        // Save position in case this isn't a script tag
+        let saved_pos = self.pos;
+
+        // Check for <script>
+        if self.peek_char() != Some('<') {
+            return Ok(Vec::new());
+        }
+        self.advance_char(); // consume <
+
+        // Check if it's "script"
+        let tag_start = self.pos;
+        while let Some(ch) = self.peek_char() {
+            if ch == '>' || ch.is_whitespace() {
+                break;
+            }
+            self.advance_char();
+        }
+
+        let tag_name = &self.input[tag_start..self.pos];
+        if tag_name != "script" {
+            // Not a script tag, restore position
+            self.pos = saved_pos;
+            return Ok(Vec::new());
+        }
+
+        // Skip to >
+        while self.peek_char() != Some('>') {
+            if self.peek_char().is_none() {
+                return Err("Unexpected EOF in script tag".to_string());
+            }
+            self.advance_char();
+        }
+        self.advance_char(); // consume >
+
+        // Extract content until </script>
+        let content_start = self.pos;
+        loop {
+            if self.peek_char().is_none() {
+                return Err("Unclosed <script> tag".to_string());
+            }
+
+            // Check for </script>
+            if self.peek_char() == Some('<') &&
+               self.peek_ahead(1) == Some('/') {
+                let check_pos = self.pos;
+                self.advance_char(); // <
+                self.advance_char(); // /
+
+                let close_tag_start = self.pos;
+                while let Some(ch) = self.peek_char() {
+                    if ch == '>' {
+                        break;
+                    }
+                    self.advance_char();
+                }
+
+                let close_tag = &self.input[close_tag_start..self.pos];
+                if close_tag == "script" {
+                    // Found </script>, extract content (convert to String to avoid borrow issues)
+                    let content = self.input[content_start..check_pos].to_string();
+                    self.advance_char(); // consume >
+
+                    // Parse imports from content
+                    let mut imports = Vec::new();
+                    for line in content.lines() {
+                        let trimmed = line.trim();
+                        if trimmed.starts_with("import ") {
+                            let path = trimmed["import ".len()..].trim().to_string();
+                            imports.push(Import { path });
+                        }
+                    }
+
+                    return Ok(imports);
+                }
+            }
+
+            self.advance_char();
+        }
     }
 
     fn parse_prop_declaration(&mut self) -> Result<PropDeclaration, String> {
@@ -249,7 +375,7 @@ impl Parser {
         })
     }
 
-    fn parse_function_declaration(&mut self) -> Result<FunctionDeclaration, String> {
+    fn parse_function_declaration(&mut self, is_suspend: bool) -> Result<FunctionDeclaration, String> {
         // Parse: fun name(params): ReturnType { body } or fun name(params) { body }
         self.skip_whitespace();
         let name = self.parse_identifier()?;
@@ -311,6 +437,7 @@ impl Parser {
             params,
             return_type,
             body: body.trim().to_string(),
+            is_suspend,
         })
     }
 
@@ -348,6 +475,179 @@ impl Parser {
             hook_type: hook_type.to_string(),
             body: body.trim().to_string(),
         })
+    }
+
+    fn parse_class_declaration(&mut self, annotations: Vec<String>) -> Result<ClassDeclaration, String> {
+        // Parse: class ClassName { ... } or class ClassName constructor(...) { ... }
+        self.skip_whitespace();
+        self.expect_word("class")?;
+        self.skip_whitespace();
+
+        let name = self.parse_identifier()?;
+        self.skip_whitespace();
+
+        // Parse optional constructor
+        let constructor = if self.peek_word() == Some("constructor") || self.peek_char() == Some('(') {
+            Some(self.parse_constructor()?)
+        } else {
+            None
+        };
+
+        self.skip_whitespace();
+        self.expect_char('{')?;
+
+        // Parse class body: properties and functions
+        let mut properties = Vec::new();
+        let mut functions = Vec::new();
+
+        loop {
+            self.skip_whitespace();
+
+            // Check for end of class
+            if self.peek_char() == Some('}') {
+                self.advance_char();
+                break;
+            }
+
+            // Check for property (var/val)
+            if self.peek_word() == Some("var") || self.peek_word() == Some("val") {
+                properties.push(self.parse_property_declaration()?);
+            }
+            // Check for function
+            else if self.peek_word() == Some("fun") || self.peek_word() == Some("suspend") {
+                let is_suspend = self.consume_word("suspend"); // Optional suspend
+                if is_suspend {
+                    self.skip_whitespace();
+                }
+                self.expect_word("fun")?;
+                functions.push(self.parse_function_declaration(is_suspend)?);
+            }
+            // Unknown content, skip
+            else if self.peek_char().is_some() {
+                return Err(self.error_at_pos("Unexpected content in class body"));
+            } else {
+                return Err("Unexpected EOF in class body".to_string());
+            }
+        }
+
+        Ok(ClassDeclaration {
+            annotations,
+            name,
+            constructor,
+            properties,
+            functions,
+        })
+    }
+
+    fn parse_constructor(&mut self) -> Result<ConstructorDeclaration, String> {
+        self.skip_whitespace();
+
+        // Check for @Inject annotation
+        let mut annotations = Vec::new();
+        if self.peek_char() == Some('@') {
+            self.advance_char();
+            let annotation = self.parse_identifier()?;
+            annotations.push(annotation);
+            self.skip_whitespace();
+        }
+
+        // Optional "constructor" keyword
+        self.consume_word("constructor");
+        self.skip_whitespace();
+
+        // Parse parameters
+        self.expect_char('(')?;
+        let param_start = self.pos;
+        let mut depth = 1;
+        while depth > 0 {
+            match self.peek_char() {
+                Some('(') => { depth += 1; self.advance_char(); }
+                Some(')') => { depth -= 1; if depth > 0 { self.advance_char(); } }
+                Some(_) => { self.advance_char(); }
+                None => return Err("Unexpected EOF in constructor".to_string()),
+            }
+        }
+        let parameters = self.input[param_start..self.pos].trim().to_string();
+        self.expect_char(')')?;
+
+        Ok(ConstructorDeclaration {
+            annotations,
+            parameters,
+        })
+    }
+
+    fn parse_property_declaration(&mut self) -> Result<PropertyDeclaration, String> {
+        // Parse: var name: Type = value or val name = value or val name get() = expression
+        let mutable = if self.consume_word("var") {
+            true
+        } else if self.consume_word("val") {
+            false
+        } else {
+            return Err("Expected 'var' or 'val'".to_string());
+        };
+
+        self.skip_whitespace();
+        let name = self.parse_identifier()?;
+        self.skip_whitespace();
+
+        // Parse optional type annotation
+        let type_annotation = if self.peek_char() == Some(':') {
+            self.expect_char(':')?;
+            self.skip_whitespace();
+            Some(self.parse_type()?)
+        } else {
+            None
+        };
+
+        self.skip_whitespace();
+
+        // Check for getter (val name get() = ...)
+        let (initial_value, getter) = if self.peek_word() == Some("get") {
+            self.consume_word("get");
+            self.skip_whitespace();
+            self.expect_char('(')?;
+            self.expect_char(')')?;
+            self.skip_whitespace();
+            self.expect_char('=')?;
+            self.skip_whitespace();
+
+            // Parse getter expression (until newline or closing brace)
+            let start = self.pos;
+            while let Some(ch) = self.peek_char() {
+                if ch == '\n' || ch == '}' {
+                    break;
+                }
+                self.advance_char();
+            }
+            (None, Some(self.input[start..self.pos].trim().to_string()))
+        } else {
+            // Parse initial value
+            let initial_value = if self.peek_char() == Some('=') {
+                self.expect_char('=')?;
+                self.skip_whitespace();
+                Some(self.parse_value()?)
+            } else {
+                None
+            };
+
+            (initial_value, None)
+        };
+
+        Ok(PropertyDeclaration {
+            name,
+            mutable,
+            type_annotation,
+            initial_value,
+            getter,
+        })
+    }
+
+    fn expect_word(&mut self, word: &str) -> Result<(), String> {
+        if !self.consume_word(word) {
+            Err(self.error_at_pos(&format!("Expected '{}'", word)))
+        } else {
+            Ok(())
+        }
     }
 
     fn parse_value(&mut self) -> Result<String, String> {
@@ -1155,6 +1455,14 @@ impl Parser {
             Some("@prop")
         } else if remaining.starts_with("fun ") {
             Some("fun")
+        } else if remaining.starts_with("class ") {
+            Some("class")
+        } else if remaining.starts_with("suspend ") {
+            Some("suspend")
+        } else if remaining.starts_with("constructor") {
+            Some("constructor")
+        } else if remaining.starts_with("get") {
+            Some("get")
         } else if remaining.starts_with("onMount") {
             Some("onMount")
         } else if remaining.starts_with("onDispose") {
@@ -1168,8 +1476,8 @@ impl Parser {
         let remaining = &self.input[self.pos..];
         if remaining.starts_with(word) {
             let next_pos = self.pos + word.len();
-            // For @prop, don't require whitespace after
-            if word == "@prop" {
+            // For @prop and get, don't require whitespace after
+            if word == "@prop" || word == "get" {
                 self.pos = next_pos;
                 return true;
             }

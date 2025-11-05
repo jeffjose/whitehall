@@ -34,15 +34,15 @@ impl CodeGenerator {
     /// - If optimizations present: May use View backend with RecyclerView
     /// - Default: Compose backend
     pub fn generate(&mut self, optimized_ast: &OptimizedAST) -> Result<String, String> {
-        // Phase 5: Pass optimizations to Compose backend
+        // Phase 5: Pass optimizations and semantic info to Compose backend
         // Compose backend will check for RecyclerView optimizations
-        // and route for loops accordingly
+        // and use store registry for @store detection
         let mut backend = compose::ComposeBackend::new(
             &self.package,
             &self.component_name,
             self.component_type.as_deref(),
         );
 
-        backend.generate_with_optimizations(&optimized_ast.ast, &optimized_ast.optimizations)
+        backend.generate_with_optimizations(&optimized_ast.ast, &optimized_ast.optimizations, &optimized_ast.semantic_info)
     }
 }

@@ -1,0 +1,5 @@
+<script>
+  import com.example.counterstore.components.CounterScreen
+</script>
+
+<CounterScreen />

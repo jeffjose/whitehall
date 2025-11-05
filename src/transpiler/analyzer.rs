@@ -22,6 +22,52 @@ pub struct SemanticInfo {
     pub symbol_table: SymbolTable,
     pub mutability_info: MutabilityInfo,
     pub optimization_hints: Vec<OptimizationHint>,
+    pub store_registry: StoreRegistry,  // Phase 0: Registry of @store classes
+}
+
+/// Store registry: tracks all @store annotated classes
+#[derive(Debug, Clone)]
+pub struct StoreRegistry {
+    stores: HashMap<String, StoreInfo>,
+}
+
+impl StoreRegistry {
+    pub fn new() -> Self {
+        StoreRegistry {
+            stores: HashMap::new(),
+        }
+    }
+
+    pub fn insert(&mut self, name: String, info: StoreInfo) {
+        self.stores.insert(name, info);
+    }
+
+    pub fn get(&self, name: &str) -> Option<&StoreInfo> {
+        self.stores.get(name)
+    }
+
+    pub fn contains(&self, name: &str) -> bool {
+        self.stores.contains_key(name)
+    }
+
+    pub fn is_hilt_view_model(&self, name: &str) -> bool {
+        self.get(name)
+            .map(|info| info.has_hilt)
+            .unwrap_or(false)
+    }
+
+    pub fn iter(&self) -> impl Iterator<Item = (&String, &StoreInfo)> {
+        self.stores.iter()
+    }
+}
+
+/// Information about a @store class
+#[derive(Debug, Clone)]
+pub struct StoreInfo {
+    pub class_name: String,
+    pub has_hilt: bool,        // Has @HiltViewModel annotation?
+    pub has_inject: bool,      // Has @Inject constructor?
+    pub package: String,        // Package name (will be filled during codegen)
 }
 
 /// Symbol table: tracks all declarations
@@ -177,6 +223,7 @@ pub struct Analyzer {
     symbol_table: SymbolTable,
     mutable_vars: HashSet<String>,
     immutable_vals: HashSet<String>,
+    store_registry: StoreRegistry,  // Phase 0: Registry of @store classes
     // Phase 1: Track current context for usage tracking
     current_for_loop: Option<String>, // Current @for loop collection name
 }
@@ -187,6 +234,7 @@ impl Analyzer {
             symbol_table: SymbolTable::new(),
             mutable_vars: HashSet::new(),
             immutable_vals: HashSet::new(),
+            store_registry: StoreRegistry::new(),  // Phase 0: Initialize store registry
             current_for_loop: None, // Phase 1: Not in any loop initially
         }
     }
@@ -194,6 +242,9 @@ impl Analyzer {
     /// Main entry point: analyze an AST and produce semantic info
     pub fn analyze(ast: &WhitehallFile) -> Result<SemanticInfo, String> {
         let mut analyzer = Analyzer::new();
+
+        // Pass 0: Collect @store classes (Phase 0)
+        analyzer.collect_stores(ast);
 
         // Pass 1: Collect declarations (Phase 0)
         analyzer.collect_declarations(ast);
@@ -208,7 +259,38 @@ impl Analyzer {
             symbol_table: analyzer.symbol_table.clone(),
             mutability_info: analyzer.build_mutability_info(),
             optimization_hints, // Phase 2: Return detected optimization hints
+            store_registry: analyzer.store_registry.clone(),  // Phase 0: Return store registry
         })
+    }
+
+    /// Phase 0: Collect @store annotated classes
+    fn collect_stores(&mut self, ast: &WhitehallFile) {
+        for class in &ast.classes {
+            // Check if class has @store annotation
+            let has_store = class.annotations.iter().any(|a| a == "store");
+            if !has_store {
+                continue;
+            }
+
+            // Check for @HiltViewModel annotation
+            let has_hilt = class.annotations.iter().any(|a| a == "HiltViewModel");
+
+            // Check for @Inject constructor
+            let has_inject = class.constructor.as_ref()
+                .map(|c| c.annotations.iter().any(|a| a == "Inject"))
+                .unwrap_or(false);
+
+            // Register the store
+            self.store_registry.insert(
+                class.name.clone(),
+                StoreInfo {
+                    class_name: class.name.clone(),
+                    has_hilt,
+                    has_inject,
+                    package: String::new(),  // Will be filled during codegen
+                },
+            );
+        }
     }
 
     fn collect_declarations(&mut self, ast: &WhitehallFile) {
