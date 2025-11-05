@@ -4,6 +4,7 @@ pub mod watch;
 pub mod run;
 pub mod compile;
 pub mod toolchain;
+pub mod doctor;
 
 use std::path::Path;
 

@@ -22,23 +22,17 @@ pub fn execute_install(manifest_path: &str) -> Result<()> {
     // Initialize toolchain manager
     let toolchain = Toolchain::new()?;
 
-    // Download/verify Java
-    println!("{} Java {}...", "Ensuring".cyan().bold(), config.toolchain.java);
-    let java_home = toolchain.ensure_java(&config.toolchain.java)?;
-    println!("  ✓ Java {} available at {}", config.toolchain.java, java_home.display());
-
-    // Download/verify Gradle
-    println!("{} Gradle {}...", "Ensuring".cyan().bold(), config.toolchain.gradle);
-    let gradle_bin = toolchain.ensure_gradle(&config.toolchain.gradle)?;
-    println!("  ✓ Gradle {} available at {}", config.toolchain.gradle, gradle_bin.display());
-
-    // Download/verify Android SDK
-    println!("{} Android SDK...", "Ensuring".cyan().bold());
-    let android_home = toolchain.ensure_android_sdk()?;
-    println!("  ✓ Android SDK available at {}", android_home.display());
+    // Download all toolchains in parallel for faster installation
+    let (java_home, gradle_bin, android_home) = toolchain.ensure_all_parallel(
+        &config.toolchain.java,
+        &config.toolchain.gradle
+    )?;
 
     println!();
     println!("{} All toolchains ready!", "Success:".green().bold());
+    println!("  Java: {}", java_home.display());
+    println!("  Gradle: {}", gradle_bin.display());
+    println!("  Android SDK: {}", android_home.display());
     println!("  Location: {}", toolchain.root().display());
 
     Ok(())

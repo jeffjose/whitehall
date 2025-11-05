@@ -1,4 +1,5 @@
 use anyhow::{Context, Result};
+use colored::Colorize;
 use indicatif::{ProgressBar, ProgressStyle};
 use reqwest::blocking::Client;
 use std::fs::{self, File};
@@ -6,6 +7,8 @@ use std::io::{self, Read, Write};
 use std::path::{Path, PathBuf};
 
 use super::Platform;
+
+const MAX_RETRIES: usize = 3;
 
 /// Download a file from URL with progress bar
 ///
@@ -80,6 +83,101 @@ pub fn download_with_progress(url: &str, dest_path: &Path) -> Result<PathBuf> {
         .with_context(|| format!("Failed to rename {} to {}", temp_path.display(), dest_path.display()))?;
 
     Ok(dest_path.to_path_buf())
+}
+
+/// Download with automatic retry on failure
+///
+/// Prompts user to retry if download fails
+/// Optionally verifies checksum if provided
+pub fn download_with_retry(url: &str, dest_path: &Path) -> Result<PathBuf> {
+    download_with_retry_and_checksum(url, dest_path, None)
+}
+
+/// Download with retry and optional checksum verification
+///
+/// # Arguments
+/// * `url` - URL to download from
+/// * `dest_path` - Destination file path
+/// * `expected_checksum` - Optional SHA256 checksum to verify
+pub fn download_with_retry_and_checksum(
+    url: &str,
+    dest_path: &Path,
+    expected_checksum: Option<&str>
+) -> Result<PathBuf> {
+    let mut attempt = 1;
+
+    loop {
+        match download_with_progress(url, dest_path) {
+            Ok(path) => {
+                // Verify checksum if provided
+                if let Some(expected) = expected_checksum {
+                    if let Err(e) = verify_checksum(&path, expected) {
+                        eprintln!("\n{} {}", "error:".red().bold(), e);
+
+                        // Clean up invalid file
+                        let _ = fs::remove_file(&path);
+
+                        if attempt >= MAX_RETRIES {
+                            eprintln!("\n{} Maximum retry attempts reached.", "error:".red().bold());
+                            return Err(e);
+                        }
+
+                        print!("\n{} Retry download? [Y/n]: ", "?".yellow().bold());
+                        io::stdout().flush()?;
+
+                        let mut input = String::new();
+                        io::stdin().read_line(&mut input)?;
+                        let input = input.trim().to_lowercase();
+
+                        if input == "n" || input == "no" {
+                            eprintln!("{} Download cancelled by user.", "info:".cyan());
+                            return Err(e);
+                        }
+
+                        println!("\n{} Retrying download...", "info:".cyan().bold());
+                        attempt += 1;
+                        continue;
+                    }
+                }
+
+                return Ok(path);
+            },
+            Err(e) => {
+                eprintln!("\n{} Download failed (attempt {}/{}): {}",
+                    "error:".red().bold(), attempt, MAX_RETRIES, e);
+
+                if attempt >= MAX_RETRIES {
+                    eprintln!("\n{} Maximum retry attempts reached.", "error:".red().bold());
+                    return Err(e);
+                }
+
+                // Ask user if they want to retry
+                print!("\n{} Retry download? [Y/n]: ", "?".yellow().bold());
+                io::stdout().flush()?;
+
+                let mut input = String::new();
+                io::stdin().read_line(&mut input)?;
+                let input = input.trim().to_lowercase();
+
+                if input == "n" || input == "no" {
+                    eprintln!("{} Download cancelled by user.", "info:".cyan());
+                    return Err(e);
+                }
+
+                println!("\n{} Retrying download...", "info:".cyan().bold());
+                attempt += 1;
+
+                // Clean up partial download if it exists
+                if dest_path.exists() {
+                    let _ = fs::remove_file(dest_path);
+                }
+                let temp_path = dest_path.with_extension("tmp");
+                if temp_path.exists() {
+                    let _ = fs::remove_file(&temp_path);
+                }
+            }
+        }
+    }
 }
 
 /// Extract a .tar.gz archive

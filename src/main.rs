@@ -70,6 +70,12 @@ enum Commands {
         #[arg(long, default_value = "whitehall.toml")]
         manifest: String,
     },
+    /// Check system health and toolchain status
+    Doctor {
+        /// Path to whitehall.toml (defaults to current directory, optional)
+        #[arg(default_value = "whitehall.toml")]
+        manifest: String,
+    },
 }
 
 #[derive(Subcommand)]
@@ -150,6 +156,9 @@ fn main() {
         }
         Commands::Shell { manifest } => {
             commands::toolchain::execute_shell(&manifest)
+        }
+        Commands::Doctor { manifest } => {
+            commands::doctor::execute(&manifest)
         }
     };
 
