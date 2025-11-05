@@ -62,12 +62,12 @@ fun PostList(
                     ) {
                         Column(modifier = Modifier.padding(12.dp)) {
                             Text(
-                                text = post.title,
+                                text = "${post.title}",
                                 fontSize = 16.sp,
                                 fontWeight = FontWeight.Bold
                             )
                             Text(
-                                text = post.excerpt,
+                                text = "${post.excerpt}",
                                 color = MaterialTheme.colorScheme.secondary
                             )
                         }

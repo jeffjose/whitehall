@@ -155,8 +155,9 @@ impl ComposeBackend {
             imports.push("androidx.navigation.NavController".to_string());
         }
 
-        // Sort imports alphabetically (standard Kotlin convention)
+        // Deduplicate and sort imports alphabetically (standard Kotlin convention)
         imports.sort();
+        imports.dedup();
 
         // Write all imports
         for import in imports {
@@ -852,7 +853,12 @@ impl ComposeBackend {
                         if !modifiers.is_empty() {
                             if modifiers.len() == 1 && !modifiers[0].starts_with('.') {
                                 // Single non-chained modifier (from explicit modifier with ternary)
-                                params.push(format!("modifier = Modifier{}", modifiers[0]));
+                                // Check if it already starts with "Modifier" to avoid duplication
+                                if modifiers[0].starts_with("Modifier") {
+                                    params.push(format!("modifier = {}", modifiers[0]));
+                                } else {
+                                    params.push(format!("modifier = Modifier{}", modifiers[0]));
+                                }
                             } else {
                                 // Chain of modifiers
                                 let modifier_chain = modifiers.iter()
@@ -1136,7 +1142,7 @@ impl ComposeBackend {
                         // Check if text is an R.string reference
                         if text.starts_with("R.string.") {
                             let transformed = self.transform_string_resource(&text);
-                            output.push_str(&format!("{}    Text(text = {})\n", indent_str, transformed));
+                            output.push_str(&format!("{}    Text(text = \"${{{}}}\")\n", indent_str, transformed));
                         } else {
                             output.push_str(&format!("{}    Text(\"{}\")\n", indent_str, text));
                         }
@@ -1221,6 +1227,55 @@ impl ComposeBackend {
                         if !prop_imports.contains(&import) {
                             prop_imports.push(import);
                         }
+
+                        // Check for specific Modifier extension functions
+                        if prop_expr.contains("fillMaxSize") {
+                            self.add_import_if_missing(prop_imports, "androidx.compose.foundation.layout.fillMaxSize");
+                        }
+                        if prop_expr.contains("fillMaxWidth") {
+                            self.add_import_if_missing(prop_imports, "androidx.compose.foundation.layout.fillMaxWidth");
+                        }
+                        if prop_expr.contains("fillMaxHeight") {
+                            self.add_import_if_missing(prop_imports, "androidx.compose.foundation.layout.fillMaxHeight");
+                        }
+                        if prop_expr.contains(".padding(") {
+                            self.add_import_if_missing(prop_imports, "androidx.compose.foundation.layout.padding");
+                            self.add_import_if_missing(prop_imports, "androidx.compose.ui.unit.dp");
+                        }
+                        if prop_expr.contains(".size(") {
+                            self.add_import_if_missing(prop_imports, "androidx.compose.foundation.layout.size");
+                            self.add_import_if_missing(prop_imports, "androidx.compose.ui.unit.dp");
+                        }
+                        if prop_expr.contains(".height(") {
+                            self.add_import_if_missing(prop_imports, "androidx.compose.foundation.layout.height");
+                            self.add_import_if_missing(prop_imports, "androidx.compose.ui.unit.dp");
+                        }
+                        if prop_expr.contains(".width(") {
+                            self.add_import_if_missing(prop_imports, "androidx.compose.foundation.layout.width");
+                            self.add_import_if_missing(prop_imports, "androidx.compose.ui.unit.dp");
+                        }
+                        if prop_expr.contains(".weight(") {
+                            // weight is a RowScope/ColumnScope extension, no import needed
+                        }
+                        if prop_expr.contains(".background(") {
+                            self.add_import_if_missing(prop_imports, "androidx.compose.foundation.background");
+                            self.add_import_if_missing(prop_imports, "androidx.compose.ui.graphics.Color");
+                        }
+                    }
+                    if prop_expr.contains("Arrangement.") {
+                        self.add_import_if_missing(prop_imports, "androidx.compose.foundation.layout.Arrangement");
+                    }
+                    if prop_expr.contains("Alignment.") {
+                        self.add_import_if_missing(prop_imports, "androidx.compose.ui.Alignment");
+                    }
+                    if prop_expr.contains("TextAlign.") {
+                        self.add_import_if_missing(prop_imports, "androidx.compose.ui.text.style.TextAlign");
+                    }
+                    if prop_expr.contains("FontWeight.") {
+                        self.add_import_if_missing(prop_imports, "androidx.compose.ui.text.font.FontWeight");
+                    }
+                    if prop_expr.contains("Color.") {
+                        self.add_import_if_missing(prop_imports, "androidx.compose.ui.graphics.Color");
                     }
                     if prop_expr.contains("clickable") {
                         let import = "androidx.compose.foundation.clickable".to_string();
@@ -1310,6 +1365,11 @@ impl ComposeBackend {
                             // backgroundColor → CardDefaults.cardColors()
                             self.add_import_if_missing(prop_imports, "androidx.compose.material3.CardDefaults");
                             self.add_import_if_missing(prop_imports, "androidx.compose.material3.MaterialTheme");
+                        }
+                        ("Card", "elevation") => {
+                            // elevation → CardDefaults.cardElevation()
+                            self.add_import_if_missing(prop_imports, "androidx.compose.material3.CardDefaults");
+                            self.add_import_if_missing(prop_imports, "androidx.compose.ui.unit.dp");
                         }
                         ("Box", "width") | ("Box", "height") => {
                             // width/height → Modifier.size()
@@ -1580,10 +1640,11 @@ impl ComposeBackend {
         if non_whitespace_children.len() == 1 {
             match non_whitespace_children[0] {
                 Markup::Text(text) => return Ok(format!("\"{}\"", text)),
-                // Single interpolation - use bare expression (no quotes, no $)
+                // Single interpolation - wrap in string template to ensure string conversion
                 Markup::Interpolation(expr) => {
                     let transformed = self.transform_string_resource(expr);
-                    return Ok(self.add_null_assertions(&transformed));
+                    let with_assertions = self.add_null_assertions(&transformed);
+                    return Ok(format!("\"${{{}}}\"", with_assertions));
                 }
                 _ => {}
             }
@@ -1798,11 +1859,13 @@ impl ComposeBackend {
             }
             // Column spacing → verticalArrangement = Arrangement.spacedBy(N.dp)
             ("Column", "spacing") => {
-                Ok(vec![format!("verticalArrangement = Arrangement.spacedBy({}.dp)", value)])
+                let spacing_value = if value.ends_with(".dp") { value.to_string() } else { format!("{}.dp", value) };
+                Ok(vec![format!("verticalArrangement = Arrangement.spacedBy({})", spacing_value)])
             }
             // Column padding → modifier = Modifier.padding(N.dp)
             ("Column", "padding") => {
-                Ok(vec![format!("modifier = Modifier.padding({}.dp)", value)])
+                let padding_value = if value.ends_with(".dp") { value.to_string() } else { format!("{}.dp", value) };
+                Ok(vec![format!("modifier = Modifier.padding({})", padding_value)])
             }
             // Column/Row backgroundColor → modifier = Modifier.background(Color)
             ("Column", "backgroundColor") | ("Row", "backgroundColor") => {
@@ -1820,23 +1883,28 @@ impl ComposeBackend {
             }
             // LazyColumn spacing → verticalArrangement = Arrangement.spacedBy(N.dp)
             ("LazyColumn", "spacing") => {
-                Ok(vec![format!("verticalArrangement = Arrangement.spacedBy({}.dp)", value)])
+                let spacing_value = if value.ends_with(".dp") { value.to_string() } else { format!("{}.dp", value) };
+                Ok(vec![format!("verticalArrangement = Arrangement.spacedBy({})", spacing_value)])
             }
             // LazyColumn padding → contentPadding = PaddingValues(N.dp)
             ("LazyColumn", "padding") => {
-                Ok(vec![format!("contentPadding = PaddingValues({}.dp)", value)])
+                let padding_value = if value.ends_with(".dp") { value.to_string() } else { format!("{}.dp", value) };
+                Ok(vec![format!("contentPadding = PaddingValues({})", padding_value)])
             }
             // Row spacing → horizontalArrangement = Arrangement.spacedBy(N.dp)
             ("Row", "spacing") => {
-                Ok(vec![format!("horizontalArrangement = Arrangement.spacedBy({}.dp)", value)])
+                let spacing_value = if value.ends_with(".dp") { value.to_string() } else { format!("{}.dp", value) };
+                Ok(vec![format!("horizontalArrangement = Arrangement.spacedBy({})", spacing_value)])
             }
             // Row padding → modifier = Modifier.padding(N.dp)
             ("Row", "padding") => {
-                Ok(vec![format!("modifier = Modifier.padding({}.dp)", value)])
+                let padding_value = if value.ends_with(".dp") { value.to_string() } else { format!("{}.dp", value) };
+                Ok(vec![format!("modifier = Modifier.padding({})", padding_value)])
             }
             // Text fontSize → fontSize = N.sp
             ("Text", "fontSize") => {
-                Ok(vec![format!("fontSize = {}.sp", value)])
+                let font_size_value = if value.ends_with(".sp") { value.to_string() } else { format!("{}.sp", value) };
+                Ok(vec![format!("fontSize = {}", font_size_value)])
             }
             // Text fontWeight string → FontWeight enum
             ("Text", "fontWeight") => {
@@ -1887,6 +1955,11 @@ impl ComposeBackend {
                     "colors = CardDefaults.cardColors(\n                    containerColor = MaterialTheme.colorScheme.{}\n                )",
                     color_name
                 )])
+            }
+            // Card elevation → CardDefaults.cardElevation() (Material3 API)
+            ("Card", "elevation") => {
+                let elevation_value = if value.ends_with(".dp") { value.to_string() } else { format!("{}.dp", value) };
+                Ok(vec![format!("elevation = CardDefaults.cardElevation(defaultElevation = {})", elevation_value)])
             }
             // Default: no transformation
             _ => {

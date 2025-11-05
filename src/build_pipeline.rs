@@ -179,10 +179,18 @@ fn generate_main_activity(
         }
 
         let app_code = app_code_lines.join("\n");
-        let app_imports_str = if app_imports.is_empty() {
+
+        // Deduplicate app imports and remove MaterialTheme since it's in the template
+        let mut unique_imports: Vec<String> = app_imports.into_iter()
+            .filter(|imp| !imp.contains("androidx.compose.material3.MaterialTheme"))
+            .collect();
+        unique_imports.sort();
+        unique_imports.dedup();
+
+        let app_imports_str = if unique_imports.is_empty() {
             String::new()
         } else {
-            format!("\n{}", app_imports.join("\n"))
+            format!("\n{}", unique_imports.join("\n"))
         };
 
         format!(

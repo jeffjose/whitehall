@@ -54,19 +54,19 @@ fun WelcomeScreen(
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
         Text(
-            text = stringResource(R.string.welcome_title),
+            text = "${stringResource(R.string.welcome_title)}",
             fontSize = 24.sp,
             fontWeight = FontWeight.Bold
         )
         Text(
-            text = stringResource(R.string.greeting, userName),
+            text = "${stringResource(R.string.greeting, userName)}",
             color = MaterialTheme.colorScheme.secondary
         )
         Text(
-            text = stringResource(R.string.items_count, itemCount)
+            text = "${stringResource(R.string.items_count, itemCount)}"
         )
         Button(onClick = { navigate(Routes.Home) }) {
-            Text(text = stringResource(R.string.action_continue))
+            Text(text = "${stringResource(R.string.action_continue)}")
         }
     }
 }

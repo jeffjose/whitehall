@@ -50,7 +50,7 @@ fun ActionCard(
             .let { if (isClickable && onClick != null) it.clickable { onClick() } else it }
     ) {
         Text(
-            text = text,
+            text = "${text}",
             modifier = Modifier
                 .padding(16.dp)
                 .fillMaxWidth()

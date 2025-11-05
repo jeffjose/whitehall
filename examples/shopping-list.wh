@@ -9,13 +9,13 @@ var searchQuery = ""
 
 fun addItem() {
   if (newItem.isNotEmpty()) {
-    items = items + newItem
+    items = (items + newItem).toMutableList()
     newItem = ""
   }
 }
 
 fun removeItem(item: String) {
-  items = items.filter { it != item }
+  items = items.filter { it != item }.toMutableList()
 }
 
 val filteredItems = if (searchQuery.isEmpty()) {

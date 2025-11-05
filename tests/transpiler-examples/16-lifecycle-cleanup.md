@@ -63,7 +63,7 @@ fun MessageList() {
     ) {
         messages.forEach { message ->
             key(message) {
-                Text(text = message)
+                Text(text = "${message}")
             }
         }
     }

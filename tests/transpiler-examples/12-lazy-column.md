@@ -59,12 +59,12 @@ fun PostFeed(
             Card(onClick = { onPostClick(post.id) }) {
                 Column(modifier = Modifier.padding(16.dp)) {
                     Text(
-                        text = post.title,
+                        text = "${post.title}",
                         fontSize = 18.sp,
                         fontWeight = FontWeight.Bold
                     )
                     Text(
-                        text = post.author,
+                        text = "${post.author}",
                         color = MaterialTheme.colorScheme.secondary
                     )
                 }

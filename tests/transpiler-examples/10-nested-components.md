@@ -86,7 +86,7 @@ fun ItemList(
                             horizontalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
                             Icon(name = "check")
-                            Text(text = item)
+                            Text(text = "${item}")
                         }
                     }
                 }

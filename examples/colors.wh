@@ -5,30 +5,22 @@
 <Column padding={16} spacing={12}>
   <Text fontSize={24} fontWeight="bold">Color Examples</Text>
 
-  <Text fontSize={18} fontWeight="bold" color="#1976D2">
-    Hex Colors (#RRGGBB)
-  </Text>
+  <Text fontSize={18} fontWeight="bold" color="#1976D2">Hex Colors (#RRGGBB)</Text>
   <Text color="#F44336">Red: #F44336</Text>
   <Text color="#4CAF50">Green: #4CAF50</Text>
   <Text color="#2196F3">Blue: #2196F3</Text>
 
-  <Text fontSize={18} fontWeight="bold" color="#1976D2">
-    Shorthand Hex (#RGB)
-  </Text>
+  <Text fontSize={18} fontWeight="bold" color="#1976D2">Shorthand Hex (#RGB)</Text>
   <Text color="#F00">Red: #F00</Text>
   <Text color="#0F0">Green: #0F0</Text>
   <Text color="#00F">Blue: #00F</Text>
 
-  <Text fontSize={18} fontWeight="bold" color="#1976D2">
-    Material Theme Colors
-  </Text>
+  <Text fontSize={18} fontWeight="bold" color="#1976D2">Material Theme Colors</Text>
   <Text color="primary">Primary color</Text>
   <Text color="secondary">Secondary color</Text>
   <Text color="error">Error color</Text>
 
-  <Text fontSize={18} fontWeight="bold" color="#1976D2">
-    Shades of Gray
-  </Text>
+  <Text fontSize={18} fontWeight="bold" color="#1976D2">Shades of Gray</Text>
   <Text color="#222">Dark gray: #222</Text>
   <Text color="#666">Medium gray: #666</Text>
   <Text color="#AAA">Light gray: #AAA</Text>

@@ -142,7 +142,7 @@ fun ComplexStateManagement() {
                             onClick = { handleUserSelect(user.id) },
                             selected = user.id == selectedUserId
                         ) {
-                            Text(text = user.name)
+                            Text(text = "${user.name}")
                         }
                     }
                 }
@@ -159,7 +159,7 @@ fun ComplexStateManagement() {
                         fontSize = 20.sp
                     )
                     Text(
-                        text = selectedUser!!.email,
+                        text = "${selectedUser!!.email}",
                         color = MaterialTheme.colorScheme.secondary
                     )
                 }

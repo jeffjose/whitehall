@@ -41,7 +41,7 @@ fun StatusView(
         } else if (error != null) {
             ErrorView(message = error)
         } else {
-            Text(text = data ?: "No data")
+            Text(text = "${data ?: "No data"}")
         }
     }
 }

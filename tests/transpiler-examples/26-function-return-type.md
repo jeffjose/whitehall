@@ -39,8 +39,8 @@ fun FunctionReturnType() {
     }
 
     Column {
-        Text(text = getMessage())
-        Text(text = getCount(5))
+        Text(text = "${getMessage()}")
+        Text(text = "${getCount(5)}")
     }
 }
 ```

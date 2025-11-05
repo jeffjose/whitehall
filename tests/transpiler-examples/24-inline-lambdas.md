@@ -47,7 +47,7 @@ fun ItemList(
         items.forEach { item ->
             key(item) {
                 Card(onClick = { onItemClick(item) }) {
-                    Text(text = item)
+                    Text(text = "${item}")
                 }
             }
         }

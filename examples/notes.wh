@@ -12,13 +12,13 @@ var newNote = ""
 
 fun addNote() {
   if (newNote.isNotEmpty()) {
-    notes = notes + newNote
+    notes = (notes + newNote).toMutableList()
     newNote = ""
   }
 }
 
 fun deleteNote(note: String) {
-  notes = notes.filter { it != note }
+  notes = notes.filter { it != note }.toMutableList()
 }
 
 <Column modifier={Modifier.fillMaxSize().padding(16.dp)} spacing={16.dp}>

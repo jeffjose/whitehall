@@ -22,7 +22,7 @@ import androidx.compose.runtime.Composable
 fun SingleProp(
     message: String
 ) {
-    Text(text = message)
+    Text(text = "${message}")
 }
 ```
 

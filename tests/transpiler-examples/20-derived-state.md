@@ -141,7 +141,7 @@ fun ProductFilter(
             key(product.id) {
                 Card {
                     Column(modifier = Modifier.padding(12.dp)) {
-                        Text(text = product.name)
+                        Text(text = "${product.name}")
                         Text(
                             text = "\$${product.price}",
                             color = MaterialTheme.colorScheme.secondary

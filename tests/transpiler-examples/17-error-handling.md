@@ -110,7 +110,7 @@ fun UserProfile() {
                         fontWeight = FontWeight.Bold
                     )
                     Text(
-                        text = error!!,
+                        text = "${error!!}",
                         color = MaterialTheme.colorScheme.error
                     )
                 }
@@ -119,11 +119,11 @@ fun UserProfile() {
             Card {
                 Column(modifier = Modifier.padding(16.dp)) {
                     Text(
-                        text = user!!.name,
+                        text = "${user!!.name}",
                         fontSize = 20.sp
                     )
                     Text(
-                        text = user!!.email,
+                        text = "${user!!.email}",
                         color = MaterialTheme.colorScheme.secondary
                     )
                 }
