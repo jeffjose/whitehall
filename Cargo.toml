@@ -15,7 +15,7 @@ dirs = "5.0"
 sha2 = "0.10"
 colored = "2.1"
 # Phase 2: Downloader dependencies
-reqwest = { version = "0.11", features = ["blocking"] }
+reqwest = { version = "0.11", features = ["blocking", "rustls-tls"], default-features = false }
 indicatif = "0.17"
 tar = "0.4"
 flate2 = "1.0"

@@ -157,7 +157,9 @@ pub fn execute_exec(manifest_path: &str, command: &str, args: &[String]) -> Resu
     let mut path_components = vec![
         java_home.join("bin").display().to_string(),
         gradle_bin.parent().unwrap().display().to_string(),
+        android_home.join("emulator").display().to_string(),
         android_home.join("platform-tools").display().to_string(),
+        android_home.join("cmdline-tools/latest/bin").display().to_string(),
     ];
 
     // Add existing PATH
@@ -216,7 +218,9 @@ pub fn execute_shell(manifest_path: &str) -> Result<()> {
     let mut path_components = vec![
         java_home.join("bin").display().to_string(),
         gradle_bin.parent().unwrap().display().to_string(),
+        android_home.join("emulator").display().to_string(),
         android_home.join("platform-tools").display().to_string(),
+        android_home.join("cmdline-tools/latest/bin").display().to_string(),
     ];
 
     // Add existing PATH
