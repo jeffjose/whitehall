@@ -524,7 +524,7 @@ val finalPrice = total * (1 - discount)
 <Column padding={16} spacing={12}>
   <Text fontSize={20} fontWeight="bold">Price Calculator</Text>
 
-  <Text>Price: ${price}</Text>
+  <Text>Price: \${price}</Text>
   <Text>Quantity: {quantity}</Text>
 
   <Row spacing={8}>
@@ -532,12 +532,12 @@ val finalPrice = total * (1 - discount)
     <Button onClick={() => if (quantity > 1) quantity--}>-</Button>
   </Row>
 
-  <Text>Subtotal: ${total}</Text>
+  <Text>Subtotal: \${total}</Text>
   <Text color="#4CAF50">
     Discount: {discount * 100}%
   </Text>
   <Text fontSize={18} fontWeight="bold">
-    Total: ${finalPrice}
+    Total: \${finalPrice}
   </Text>
 </Column>`
     },
@@ -680,9 +680,9 @@ val total = cart.sumOf { it["price"] as Int * it["qty"] as Int }
           {item["name"]}
         </Text>
         <Row spacing={8}>
-          <Text>${item["price"]} x {item["qty"]}</Text>
+          <Text>\${item["price"]} x {item["qty"]}</Text>
           <Text fontWeight="bold">
-            = ${item["price"] as Int * item["qty"] as Int}
+            = \${item["price"] as Int * item["qty"] as Int}
           </Text>
         </Row>
       </Column>
@@ -695,7 +695,7 @@ val total = cart.sumOf { it["price"] as Int * it["qty"] as Int }
         Total:
       </Text>
       <Text fontSize={20} fontWeight="bold" color="#4CAF50">
-        ${total}
+        \${total}
       </Text>
     </Row>
   </Card>
