@@ -182,17 +182,17 @@ pub fn hash_content(content: &str) -> String {
     format!("{:x}", result)
 }
 
-/// Get the build directory for a given content hash
-/// Uses a local build/ directory instead of system cache
+/// Get the cache directory for a given content hash
 pub fn get_cache_dir(content_hash: &str) -> Result<PathBuf> {
-    let build_dir = if let Ok(custom_dir) = std::env::var("WHITEHALL_BUILD_DIR") {
-        PathBuf::from(custom_dir)
+    let cache_dir = if let Ok(custom_cache) = std::env::var("WHITEHALL_CACHE_DIR") {
+        PathBuf::from(custom_cache)
     } else {
-        // Use local build/ directory (like cargo's target/)
-        PathBuf::from("build")
+        dirs::cache_dir()
+            .context("Failed to determine system cache directory")?
+            .join("whitehall")
     };
 
-    Ok(build_dir.join(&content_hash[..16])) // Use first 16 chars of hash
+    Ok(cache_dir.join(&content_hash[..16])) // Use first 16 chars of hash
 }
 
 /// Generate temporary project structure for single-file mode
@@ -207,18 +207,18 @@ pub fn generate_temp_project(
         .context("Failed to read single-file")?;
     let content_hash = hash_content(&original_content);
 
-    // Get build directory
-    let build_dir = get_cache_dir(&content_hash)?;
+    // Get cache directory
+    let cache_dir = get_cache_dir(&content_hash)?;
 
-    // Check if build already exists (for incremental builds)
-    let whitehall_toml_path = build_dir.join("whitehall.toml");
+    // Check if cache already exists
+    let whitehall_toml_path = cache_dir.join("whitehall.toml");
     if whitehall_toml_path.exists() {
-        return Ok(build_dir);
+        return Ok(cache_dir);
     }
 
-    // Create build directory
-    fs::create_dir_all(&build_dir)
-        .context("Failed to create build directory")?;
+    // Create cache directory
+    fs::create_dir_all(&cache_dir)
+        .context("Failed to create cache directory")?;
 
     // Generate whitehall.toml
     let toml_content = format!(
@@ -241,14 +241,14 @@ output_dir = "build"
         .context("Failed to write whitehall.toml")?;
 
     // Create src/ directory and write main.wh
-    let src_dir = build_dir.join("src");
+    let src_dir = cache_dir.join("src");
     fs::create_dir_all(&src_dir)?;
 
     let main_wh_path = src_dir.join("main.wh");
     fs::write(&main_wh_path, code)
         .context("Failed to write src/main.wh")?;
 
-    Ok(build_dir)
+    Ok(cache_dir)
 }
 
 #[cfg(test)]
