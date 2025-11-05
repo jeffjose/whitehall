@@ -8,33 +8,277 @@
 
 | **Pattern** | **Status** | **Whitehall Syntax** |
 |-------------|-----------|---------------------|
-| Local state | ✅ Supported | `var count = 0` |
+| Local state (inline) | ✅ Supported → 🔄 **Changing** | `var count = 0` (auto-ViewModel if has `var`) |
 | Props | ✅ Supported | `@prop val name: String` |
 | Two-way binding | ✅ Supported | `bind:value={email}` |
 | Derived values | ✅ Supported | `val doubled = count * 2` |
 | Hoisted state | ✅ Supported | Local state + props |
-| **Stores (screen-level)** | **✅ Supported** | `@store class UserProfile {...}` + `val profile = UserProfile()` (auto-detected, Hilt ready) |
+| **Screen-level stores** | **✅ Supported → 🔄 Changing** | `class UserProfile { var name = "" }` (NO annotation, auto-ViewModel on `var` detection) |
+| **Global stores (singletons)** | **🔄 New Design** | `@store object AppSettings { var darkMode = false }` |
 | StateFlow (manual) | ⚠️ Works today | Use Kotlin files directly |
 | Effects | ⚠️ Works today | Use `LaunchedEffect` directly |
 | CompositionLocal | ⚠️ Works today | Use Kotlin directly |
 | Lifecycle hooks | ✅ Supported | `onMount`, `onDispose` |
-| Global stores | 🤔 Under consideration | Scope options TBD |
-| Persistence | 🤔 Under consideration | Future feature |
+| Persistence | 🤔 Future | Manual integration recommended |
 
 **Legend:**
 - ✅ **Supported** - Works today with clean syntax
+- 🔄 **Changing** - New design decided, pending implementation
 - ⚠️ **Works today** - No special syntax, use Kotlin/Compose directly
-- 🤔 **Under consideration** - Options available, decision needed
+- 🤔 **Future** - Options available, decision needed
 
 ---
 
 ## Table of Contents
 
-1. [Decisions Made](#decisions-made)
-2. [Implementation Plan](#implementation-plan)
-3. [Open Questions](#open-questions)
-4. [Background: Android/Kotlin Patterns](#background-androidkotlin-patterns)
-5. [Full Examples](#full-examples)
+1. [🆕 Proposed Design Change: ViewModel by Default](#-proposed-design-change-viewmodel-by-default)
+2. [Decisions Made](#decisions-made)
+3. [Implementation Plan](#implementation-plan)
+4. [Open Questions](#open-questions)
+5. [Background: Android/Kotlin Patterns](#background-androidkotlin-patterns)
+6. [Full Examples](#full-examples)
+
+---
+
+## 🆕 Proposed Design Change: ViewModel by Default
+
+**Status:** 📋 TODO - Refinement of current implementation
+
+### Summary of New Design
+
+| What | Old Way | New Way |
+|------|---------|---------|
+| Screen-scoped state | `@store class UserProfile { var name = "" }` | `class UserProfile { var name = "" }` (no annotation) |
+| Global singleton | N/A (under consideration) | `@store object AppSettings { var darkMode = false }` |
+| Detection mechanism | Look for `@store` annotation | Look for `var` properties |
+| Annotation meaning | Screen-scoped ViewModel | Global singleton |
+
+**Key insight:** `var` = mutable state = needs reactivity. The `var` itself signals ViewModel generation.
+
+### Current Implementation (Explicit @store)
+
+```whitehall
+<!-- Requires @store annotation on class -->
+@store
+class UserProfile {
+  var name = ""
+}
+
+<!-- Usage -->
+<script>
+  val profile = UserProfile()  // Auto-detected as @store
+</script>
+```
+
+### Proposed Change: Auto-ViewModel Based on `var` Detection
+
+**Core Principle:** Any `var` (mutable state) automatically becomes ViewModel state - whether inline in a component or in a separate class. Only global singletons need the `@store` annotation.
+
+**Rationale:**
+- **Rotation survival should be default** - Users shouldn't lose data on screen rotation
+- **Simpler mental model** - Don't choose between `remember` vs ViewModel, just use `var`
+- **`var` = needs reactivity** - Mutable state signals the need for rotation survival + StateFlow
+- **Annotate the special case, not the common case** - Only global singletons need `@store`
+
+### The Rules
+
+**1. Inline `var` in components → Auto-ViewModel**
+
+Generate ViewModel if there are ANY local `var` declarations (excluding `@prop var`):
+
+```whitehall
+<!-- AutoViewModel.wh - Has local var -->
+<script>
+  var count = 0           // ← Local var, generates ViewModel automatically
+  var name = ""           // ← Another var, same ViewModel
+
+  suspend fun save() {    // ← Auto-wrapped in viewModelScope
+    repository.save(name)
+  }
+</script>
+
+<Button onClick={() => count++}>Count: {count}</Button>
+```
+
+**Transpiles to:**
+```kotlin
+class AutoViewModelViewModel : ViewModel() {
+    data class UiState(
+        val count: Int = 0,
+        val name: String = ""
+    )
+
+    private val _uiState = MutableStateFlow(UiState())
+    val uiState = _uiState.asStateFlow()
+
+    fun save() {
+        viewModelScope.launch {
+            repository.save(_uiState.value.name)
+        }
+    }
+}
+
+@Composable
+fun AutoViewModel() {
+    val vm = viewModel<AutoViewModelViewModel>()
+    val uiState by vm.uiState.collectAsState()
+    // ...
+}
+```
+
+**2. Separate class with `var` → Auto-ViewModel on instantiation**
+
+```whitehall
+<!-- stores/UserProfile.wh -->
+class UserProfile {
+  var name = ""           // ← Has var properties
+  var email = ""
+
+  suspend fun save() {
+    repository.save(name, email)
+  }
+}
+```
+
+**Usage:**
+```whitehall
+<!-- ProfileScreen.wh -->
+<script>
+  import com.app.stores.UserProfile
+
+  val profile = UserProfile()  // ← Auto-detects var, uses viewModel<UserProfile>()
+</script>
+
+<Input bind:value={profile.name} />
+<Button onClick={profile::save}>Save</Button>
+```
+
+**Transpiles to:**
+```kotlin
+@Composable
+fun ProfileScreen() {
+    val profile = viewModel<UserProfile>(key = "profile")
+    val uiState by profile.uiState.collectAsState()
+    // ...
+}
+```
+
+**The detection:** Does the class have ANY `var` properties? If yes, instantiation becomes `viewModel<T>()`.
+
+**When to use separate classes:**
+- Reusability (multiple screens use same logic)
+- Dependency injection (`@Inject constructor(...)`)
+- Complex business logic
+- Unit testing
+- Multiple instances on same screen
+
+### Cases That DON'T Generate ViewModel
+
+```whitehall
+<!-- NoViewModel.wh - Only immutable values and props -->
+<script>
+  val title = "Hello"              // ← val, no ViewModel needed
+  @prop val onClick: () -> Unit    // ← prop, no ViewModel needed
+  @prop var count: Int             // ← @prop var, NO ViewModel (parent's state)
+</script>
+```
+
+```whitehall
+<!-- PlainDataClass.wh -->
+data class User(val name: String, val age: Int)  // ← No var, plain class
+
+<script>
+  val user = User("John", 25)  // ← Regular instantiation, not ViewModel
+</script>
+```
+
+**Why `@prop var` doesn't generate ViewModel:**
+- `@prop var` means "this is hoisted state from parent"
+- The parent owns the state, child just receives it
+- ViewModel is generated in parent (where the local `var` is declared)
+
+### Singletons (Global State) - `@store` annotation
+
+**NEW: `@store` is redefined to mean global singleton state (not screen-scoped).**
+
+```whitehall
+@store
+object AppSettings {
+  var darkMode = false
+  var language = "en"
+}
+```
+
+**Usage:**
+```whitehall
+<script>
+  import com.app.stores.AppSettings
+  // No instantiation - direct access to singleton
+</script>
+
+<Switch bind:checked={AppSettings.darkMode} />
+```
+
+**Generates:**
+```kotlin
+object AppSettings {
+    data class State(
+        val darkMode: Boolean = false,
+        val language: String = "en"
+    )
+
+    private val _state = MutableStateFlow(State())
+    val state: StateFlow<State> = _state.asStateFlow()
+
+    var darkMode: Boolean
+        get() = _state.value.darkMode
+        set(value) { _state.update { it.copy(darkMode = value) } }
+
+    var language: String
+        get() = _state.value.language
+        set(value) { _state.update { it.copy(language = value) } }
+}
+```
+
+**Lifecycle:** Lives for entire app lifetime, shared across all screens.
+
+### TODO: Implementation Tasks
+
+1. **Auto-ViewModel for inline `var` declarations:**
+   - Scan `<script>` blocks for local `var` declarations (exclude `@prop var`)
+   - If found, auto-generate ViewModel for the component
+   - Generate UiState data class from all `var` declarations
+   - Auto-wrap suspend functions in `viewModelScope.launch` (?)
+   - Generate proper `collectAsState()` and reference rewriting
+
+2. **Auto-ViewModel for imported classes with `var`:**
+   - During parsing of imported classes, detect presence of `var` properties
+   - Build registry of "reactive classes" (classes with `var`)
+   - When `val x = ReactiveClass()` is detected in `<script>`, generate `viewModel<ReactiveClass>(key = "x")`
+   - Same UiState + StateFlow generation as inline
+   - Support `@Inject constructor()` for Hilt integration
+
+3. **Redefine `@store` for singletons:**
+   - Detect `@store object` pattern
+   - Generate StateFlow-based singleton (NOT ViewModel)
+   - No `viewModel()` call, direct property access
+   - Lives for app lifetime
+
+4. **Suspend function handling (OPEN QUESTION):**
+   - When to use `viewModelScope.launch` vs `LaunchedEffect` vs `rememberCoroutineScope()`?
+   - How to handle suspend functions in different contexts?
+   - Need to clarify scoping rules
+
+5. **Update existing examples/tests**
+
+### Migration Path
+
+This is a **significant refinement** of the current implementation:
+- **BREAKING CHANGE:** `@store` now means singleton, not screen-scoped
+- Screen-scoped state no longer needs `@store` annotation
+- Most logic already exists (Phase 0-5 complete)
+- Main change: trigger ViewModel generation based on `var` detection, not `@store` annotation
+- Registry system needs update: track "has var" instead of "has @store"
 
 ---
 
