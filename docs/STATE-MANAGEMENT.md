@@ -133,12 +133,14 @@ class UserProfile {
 
 ### Decision 3: Stores Directory Convention
 
-**Decision:** Store files live in `stores/` directory, plain data models in `models/` or `data/`.
+**Decision:** `stores/` is the **recommended convention** for organizing store classes, but not required.
 
-**Project structure:**
+**Important:** The `@Store` annotation is what matters - it works regardless of file location. The directory structure is purely for organization.
+
+**Recommended structure:**
 ```
 src/
-  stores/              ← Reactive stores (@Store)
+  stores/              ← Reactive stores (@Store) - RECOMMENDED location
     UserProfile.wh
     Settings.wh
     Cart.wh
@@ -152,6 +154,51 @@ src/
   components/
     Button.wh
 ```
+
+**Alternative organizations (all work fine):**
+
+**Option A: Co-located with screens**
+```
+src/
+  screens/
+    profile/
+      ProfileScreen.wh
+      ProfileStore.wh    ← Store next to screen
+    settings/
+      SettingsScreen.wh
+      SettingsStore.wh
+```
+
+**Option B: Feature-based**
+```
+src/
+  features/
+    auth/
+      LoginScreen.wh
+      LoginStore.wh
+    profile/
+      ProfileScreen.wh
+      ProfileStore.wh
+```
+
+**Option C: Android-style**
+```
+src/
+  viewmodels/          ← If you prefer Android terminology
+    ProfileViewModel.wh
+    SettingsViewModel.wh
+  ui/
+    screens/
+      ProfileScreen.wh
+```
+
+**Why we recommend `stores/`:**
+- ✅ Clear separation from plain data models
+- ✅ Familiar to web developers (Svelte, Redux, Zustand)
+- ✅ Easy to find all reactive state in one place
+- ✅ Natural grouping for shared state
+
+**But use whatever structure fits your project!** The compiler only cares about the `@Store` annotation.
 
 ---
 
