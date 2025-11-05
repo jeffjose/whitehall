@@ -79,9 +79,8 @@ pub fn execute_clean() -> Result<()> {
     let toolchain = Toolchain::new()?;
     let root = toolchain.root();
 
-    println!("{} Do you want to delete all toolchains?", "Warning:".yellow().bold());
-    println!("Location: {}", root.display());
-    print!("\nType 'yes' to confirm: ");
+    println!("Remove all toolchains at {}", root.display());
+    print!("Continue? [y/n]: ");
 
     use std::io::{self, Write};
     io::stdout().flush()?;
@@ -89,18 +88,13 @@ pub fn execute_clean() -> Result<()> {
     let mut input = String::new();
     io::stdin().read_line(&mut input)?;
 
-    if input.trim() != "yes" {
-        println!("Cancelled.");
+    let input = input.trim().to_lowercase();
+    if input != "y" && input != "yes" {
         return Ok(());
     }
 
-    println!("\n{} toolchains...", "Removing".red().bold());
-
     if root.exists() {
         std::fs::remove_dir_all(root)?;
-        println!("{} All toolchains removed", "Success:".green().bold());
-    } else {
-        println!("No toolchains directory found.");
     }
 
     Ok(())
