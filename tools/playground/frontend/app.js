@@ -374,7 +374,7 @@ const examples = {
 </Column>`
     },
     'button': {
-        name: '17. Buttons & State',
+        name: '06. Buttons & State',
         code: `// Reactive state: just declare 'var' and modify it!
 var count = 0
 
@@ -396,7 +396,7 @@ var count = 0
 </Column>`
     },
     'binding': {
-        name: '17. Two-Way Binding',
+        name: '07. Two-Way Binding',
         code: `var name = ""
 
 // bind:value creates two-way binding - changes flow both ways!
@@ -413,7 +413,7 @@ var count = 0
 </Column>`
     },
     'multistate': {
-        name: '17. Multiple State',
+        name: '08. Multiple State',
         code: `// Manage multiple reactive variables independently
 var likes = 0
 var dislikes = 0
@@ -440,7 +440,7 @@ var dislikes = 0
 </Column>`
     },
     'conditional': {
-        name: '17. Conditionals',
+        name: '09. Conditionals',
         code: `var isLoggedIn = false
 
 // @if for conditional rendering (like Kotlin 'if' expressions)
@@ -459,7 +459,7 @@ var dislikes = 0
 </Column>`
     },
     'list': {
-        name: '17. Lists & Loops',
+        name: '10. Lists & Loops',
         code: `var items = ["Apple", "Banana", "Cherry", "Date"]
 
 // @for loops over collections
@@ -474,7 +474,7 @@ var dislikes = 0
 </Column>`
     },
     'interactive-list': {
-        name: '17. Interactive List',
+        name: '11. Interactive List',
         code: `var items = ["Apple", "Banana", "Cherry"]
 var newItem = ""
 
@@ -511,7 +511,7 @@ var newItem = ""
 </Column>`
     },
     'derived': {
-        name: '17. Derived State',
+        name: '12. Derived State',
         code: `// Use 'var' for mutable state, 'val' for derived/computed values
 var price = 10
 var quantity = 1
@@ -524,7 +524,7 @@ val finalPrice = total * (1 - discount)
 <Column padding={16} spacing={12}>
   <Text fontSize={20} fontWeight="bold">Price Calculator</Text>
 
-  <Text>Price: $\{price}</Text>
+  <Text>Price: ${price}</Text>
   <Text>Quantity: {quantity}</Text>
 
   <Row spacing={8}>
@@ -532,17 +532,17 @@ val finalPrice = total * (1 - discount)
     <Button onClick={() => if (quantity > 1) quantity--}>-</Button>
   </Row>
 
-  <Text>Subtotal: $\{total}</Text>
+  <Text>Subtotal: ${total}</Text>
   <Text color="#4CAF50">
     Discount: {discount * 100}%
   </Text>
   <Text fontSize={18} fontWeight="bold">
-    Total: $\{finalPrice}
+    Total: ${finalPrice}
   </Text>
 </Column>`
     },
     'todo': {
-        name: '17. Todo App',
+        name: '13. Todo App',
         code: `var todos = ["Buy milk", "Write code"]
 var newTodo = ""
 
@@ -584,7 +584,7 @@ var newTodo = ""
 </Column>`
     },
     'form': {
-        name: '17. Form Validation',
+        name: '14. Form Validation',
         code: `var name = ""
 var email = ""
 var age = ""
@@ -623,7 +623,7 @@ val canSubmit = name.isNotEmpty() && isValidEmail && isValidAge && agreed
 </Column>`
     },
     'counter-list': {
-        name: '17. List Mutations',
+        name: '15. List Mutations',
         code: `var counters = [0, 0, 0]
 
 // Working with list indices for complex updates
@@ -660,7 +660,7 @@ val canSubmit = name.isNotEmpty() && isValidEmail && isValidAge && agreed
 </Column>`
     },
     'shopping': {
-        name: '17. Complex Data',
+        name: '16. Shopping Cart',
         code: `// Work with maps and complex data structures
 var cart = [
   { "name": "Laptop", "price": 999, "qty": 1 },
@@ -680,9 +680,9 @@ val total = cart.sumOf { it["price"] as Int * it["qty"] as Int }
           {item["name"]}
         </Text>
         <Row spacing={8}>
-          <Text>$\{item["price"]} x {item["qty"]}</Text>
+          <Text>${item["price"]} x {item["qty"]}</Text>
           <Text fontWeight="bold">
-            = $\{item["price"] as Int * item["qty"] as Int}
+            = ${item["price"] as Int * item["qty"] as Int}
           </Text>
         </Row>
       </Column>
@@ -695,14 +695,14 @@ val total = cart.sumOf { it["price"] as Int * it["qty"] as Int }
         Total:
       </Text>
       <Text fontSize={20} fontWeight="bold" color="#4CAF50">
-        $\{total}
+        ${total}
       </Text>
     </Row>
   </Card>
 </Column>`
     },
     'navigation': {
-        name: '17. File-Based Routing',
+        name: '17. Navigation',
         files: {
             'App.wh': `// App.wh - Main entry point with NavHost
 // File-based routing: routes/[name]/+screen.wh
