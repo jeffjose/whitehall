@@ -1833,11 +1833,167 @@ object UserRepository {
 
 ---
 
-### Strategy 2: ViewModel with Hilt/DI
+### Strategy 2: ViewModel with Dependency Injection (Hilt)
 
-**When to use:** Screen-level state with dependencies
+**When to use:** Screen-level state that needs access to repositories, APIs, or other services
 
-**Implementation:**
+---
+
+#### The Problem: ViewModels Need Dependencies
+
+ViewModels often need access to:
+- Repositories (data layer)
+- API clients
+- Analytics services
+- Database DAOs
+- Other business logic
+
+**Bad approach: Hardcoded dependencies**
+```kotlin
+class ProfileViewModel : ViewModel() {
+    private val repository = UserRepository()  // ❌ Hardcoded - can't test or swap
+    private val analytics = FirebaseAnalytics()  // ❌ Tightly coupled
+}
+```
+
+**Problems:**
+- Can't test (can't inject mocks)
+- Can't swap implementations
+- Violates dependency inversion principle
+- Hard to maintain
+
+---
+
+#### Solution 1: Manual Dependency Injection
+
+**Pass dependencies through constructor:**
+
+```kotlin
+// ProfileViewModel.kt
+class ProfileViewModel(
+    private val userRepository: UserRepository,
+    private val analytics: Analytics
+) : ViewModel() {
+
+    val user: StateFlow<User?> = userRepository.currentUser
+        .stateIn(viewModelScope, SharingStarted.Lazily, null)
+
+    fun updateProfile(name: String) {
+        viewModelScope.launch {
+            userRepository.updateUser(name)
+            analytics.trackEvent("profile_updated")
+        }
+    }
+}
+```
+
+**Usage in Composable:**
+
+```kotlin
+@Composable
+fun ProfileScreen(
+    userRepository: UserRepository,
+    analytics: Analytics
+) {
+    val viewModel = viewModel {
+        ProfileViewModel(
+            userRepository = userRepository,
+            analytics = analytics
+        )
+    }
+
+    val user by viewModel.user.collectAsState()
+
+    // UI...
+}
+```
+
+**Problems with manual DI:**
+- **Prop drilling:** Every screen needs to pass dependencies down
+- **Boilerplate:** Repetitive factory code
+- **Error-prone:** Easy to forget a dependency
+- **Hard to refactor:** Adding a new dependency requires updating every call site
+
+---
+
+#### Solution 2: Hilt (Automated Dependency Injection)
+
+**What is Hilt?**
+
+Hilt is Google's recommended dependency injection library for Android, built on top of Dagger. It automatically:
+1. Creates instances of your dependencies
+2. Manages their lifecycles
+3. Injects them where needed
+4. Handles scoping (singleton, per-activity, per-viewmodel, etc.)
+
+**How it works:**
+
+1. **Define what can be injected** (tell Hilt how to create instances)
+2. **Mark where to inject** (ViewModels, Repositories, etc.)
+3. **Hilt generates code** to wire everything together
+4. **Access dependencies** without manual passing
+
+---
+
+#### Hilt Setup & Usage
+
+**1. Add Hilt dependencies** (in `build.gradle`):
+
+```gradle
+plugins {
+    id 'com.google.dagger.hilt.android'
+    id 'kotlin-kapt'
+}
+
+dependencies {
+    implementation 'com.google.dagger:hilt-android:2.48'
+    kapt 'com.google.dagger:hilt-compiler:2.48'
+    implementation 'androidx.hilt:hilt-navigation-compose:1.1.0'
+}
+```
+
+**2. Mark your Application class:**
+
+```kotlin
+@HiltAndroidApp
+class MyApplication : Application()
+```
+
+**3. Provide dependencies** (tell Hilt how to create them):
+
+```kotlin
+// di/AppModule.kt
+@Module
+@InstallIn(SingletonComponent::class)
+object AppModule {
+
+    @Provides
+    @Singleton
+    fun provideUserRepository(
+        api: ApiClient,
+        database: AppDatabase
+    ): UserRepository {
+        return UserRepositoryImpl(api, database)
+    }
+
+    @Provides
+    @Singleton
+    fun provideAnalytics(): Analytics {
+        return FirebaseAnalytics()
+    }
+
+    @Provides
+    @Singleton
+    fun provideApiClient(): ApiClient {
+        return Retrofit.Builder()
+            .baseUrl("https://api.example.com")
+            .build()
+            .create(ApiClient::class.java)
+    }
+}
+```
+
+**4. Mark ViewModel for injection:**
 
 ```kotlin
 // ProfileViewModel.kt
@@ -1859,15 +2015,352 @@ class ProfileViewModel @Inject constructor(
 }
 ```
 
-**Usage:**
+**Key annotations:**
+- `@HiltViewModel` - Marks this as a Hilt-managed ViewModel
+- `@Inject constructor()` - Tells Hilt to inject these dependencies
+
+**5. Use in Composable:**
+
+```kotlin
+@Composable
+fun ProfileScreen(
+    viewModel: ProfileViewModel = hiltViewModel()
+) {
+    val user by viewModel.user.collectAsState()
+
+    Column {
+        Text("User: ${user?.name}")
+        Button(onClick = { viewModel.updateProfile("New Name") }) {
+            Text("Update")
+        }
+    }
+}
+```
+
+**That's it!** No manual dependency passing. Hilt handles everything.
+
+---
+
+#### Comparison: Manual DI vs Hilt
+
+**Manual DI:**
+```kotlin
+@Composable
+fun ProfileScreen(
+    userRepository: UserRepository,  // ❌ Must pass manually
+    analytics: Analytics,            // ❌ Must pass manually
+    database: AppDatabase,           // ❌ Needed for nested deps
+    apiClient: ApiClient             // ❌ Needed for nested deps
+) {
+    val viewModel = viewModel {
+        ProfileViewModel(
+            userRepository = UserRepository(apiClient, database),
+            analytics = analytics
+        )
+    }
+}
+
+// Caller must provide everything:
+ProfileScreen(
+    userRepository = UserRepository(apiClient, database),
+    analytics = FirebaseAnalytics(),
+    database = appDatabase,
+    apiClient = retrofitClient
+)
+```
+
+**With Hilt:**
+```kotlin
+@Composable
+fun ProfileScreen(
+    viewModel: ProfileViewModel = hiltViewModel()  // ✅ Auto-injected
+) {
+    // Just use it!
+}
+
+// Caller doesn't need to know about dependencies:
+ProfileScreen()
+```
+
+---
+
+#### Hilt Scopes
+
+Hilt manages object lifecycles with scopes:
+
+| **Scope** | **Lifetime** | **Use Case** |
+|-----------|--------------|--------------|
+| `@Singleton` | App lifetime | Repositories, API clients, Database |
+| `@ActivityScoped` | Activity lifetime | Activity-specific services |
+| `@ViewModelScoped` | ViewModel lifetime | ViewModel-specific helpers |
+
+**Example:**
+
+```kotlin
+@Module
+@InstallIn(SingletonComponent::class)
+object AppModule {
+    @Provides
+    @Singleton  // ✅ One instance for entire app
+    fun provideDatabase(): AppDatabase {
+        return Room.databaseBuilder(...)
+    }
+}
+
+@Module
+@InstallIn(ViewModelComponent::class)
+object ViewModelModule {
+    @Provides
+    @ViewModelScoped  // ✅ New instance per ViewModel
+    fun provideUseCaseHelper(): UseCaseHelper {
+        return UseCaseHelper()
+    }
+}
+```
+
+---
+
+#### Whitehall Integration
+
+**Standard Kotlin/Compose with Hilt:**
+
+```kotlin
+// ProfileViewModel.kt
+@HiltViewModel
+class ProfileViewModel @Inject constructor(
+    private val userRepository: UserRepository,
+    private val analytics: Analytics
+) : ViewModel() {
+    val user = userRepository.currentUser
+        .stateIn(viewModelScope, SharingStarted.Lazily, null)
+
+    fun updateProfile(name: String) {
+        viewModelScope.launch {
+            userRepository.updateUser(name)
+            analytics.trackEvent("profile_updated")
+        }
+    }
+}
+
+// ProfileScreen.kt
+@Composable
+fun ProfileScreen(
+    viewModel: ProfileViewModel = hiltViewModel()
+) {
+    val user by viewModel.user.collectAsState()
+
+    Column {
+        Text("Name: ${user?.name}")
+        Button(onClick = { viewModel.updateProfile("New") }) {
+            Text("Update")
+        }
+    }
+}
+```
+
+**Whitehall syntax:**
 
 ```whitehall
 <!-- ProfileScreen.wh -->
 <script>
   val viewModel: ProfileViewModel = hiltViewModel()
   val user by viewModel.user.collectAsState()
+
+  fun handleUpdate() {
+    viewModel.updateProfile("New Name")
+  }
 </script>
+
+<Column>
+  <Text>Name: {user?.name}</Text>
+  <Button onClick={handleUpdate}>Update</Button>
+</Column>
 ```
+
+**Note:** ViewModel definition still requires Kotlin file with `@HiltViewModel` annotation. Hilt modules also defined in Kotlin.
+
+---
+
+#### Pros & Cons
+
+**Pros:**
+- ✅ No prop drilling
+- ✅ Easy to test (swap implementations)
+- ✅ Type-safe
+- ✅ Compile-time validation
+- ✅ Industry standard (Google recommended)
+- ✅ Automatic lifecycle management
+
+**Cons:**
+- ❌ Steeper learning curve
+- ❌ More setup (annotations, modules)
+- ❌ Longer build times (annotation processing)
+- ❌ Cryptic error messages if misconfigured
+- ❌ Overkill for simple apps
+
+---
+
+#### When to Use Hilt vs Manual DI
+
+**Use Manual DI when:**
+- Simple app with few dependencies
+- Prototyping/learning
+- Want full control over object creation
+- Don't want build-time overhead
+
+**Use Hilt when:**
+- Medium-to-large app
+- Many dependencies
+- Multiple layers (data, domain, presentation)
+- Team development
+- Need testability
+
+---
+
+#### Full Example: Profile Screen with Hilt
+
+**Hilt Setup:**
+
+```kotlin
+// di/AppModule.kt
+@Module
+@InstallIn(SingletonComponent::class)
+object AppModule {
+
+    @Provides
+    @Singleton
+    fun provideUserRepository(
+        api: ApiClient,
+        database: UserDao
+    ): UserRepository = UserRepositoryImpl(api, database)
+
+    @Provides
+    @Singleton
+    fun provideAnalytics(): Analytics = FirebaseAnalytics()
+
+    @Provides
+    @Singleton
+    fun provideApiClient(): ApiClient {
+        return Retrofit.Builder()
+            .baseUrl("https://api.example.com")
+            .addConverterFactory(GsonConverterFactory.create())
+            .build()
+            .create(ApiClient::class.java)
+    }
+
+    @Provides
+    @Singleton
+    fun provideDatabase(@ApplicationContext context: Context): AppDatabase {
+        return Room.databaseBuilder(
+            context,
+            AppDatabase::class.java,
+            "app-database"
+        ).build()
+    }
+
+    @Provides
+    fun provideUserDao(database: AppDatabase): UserDao {
+        return database.userDao()
+    }
+}
+```
+
+**ViewModel:**
+
+```kotlin
+// ProfileViewModel.kt
+@HiltViewModel
+class ProfileViewModel @Inject constructor(
+    private val userRepository: UserRepository,
+    private val analytics: Analytics
+) : ViewModel() {
+
+    data class UiState(
+        val user: User? = null,
+        val isLoading: Boolean = true,
+        val error: String? = null
+    )
+
+    private val _uiState = MutableStateFlow(UiState())
+    val uiState: StateFlow<UiState> = _uiState.asStateFlow()
+
+    init {
+        loadUser()
+    }
+
+    private fun loadUser() {
+        viewModelScope.launch {
+            _uiState.update { it.copy(isLoading = true) }
+            try {
+                userRepository.currentUser.collect { user ->
+                    _uiState.update { it.copy(user = user, isLoading = false) }
+                }
+            } catch (e: Exception) {
+                _uiState.update { it.copy(error = e.message, isLoading = false) }
+            }
+        }
+    }
+
+    fun updateProfile(name: String) {
+        viewModelScope.launch {
+            try {
+                userRepository.updateUser(name)
+                analytics.trackEvent("profile_updated")
+            } catch (e: Exception) {
+                _uiState.update { it.copy(error = e.message) }
+            }
+        }
+    }
+}
+```
+
+**Whitehall Screen:**
+
+```whitehall
+<!-- ProfileScreen.wh -->
+<script>
+  val viewModel: ProfileViewModel = hiltViewModel()
+  val uiState by viewModel.uiState.collectAsState()
+</script>
+
+<Scaffold>
+  @if (uiState.isLoading) {
+    <Box fillMaxSize contentAlignment={Alignment.Center}>
+      <CircularProgressIndicator />
+    </Box>
+  } @else if (uiState.error != null) {
+    <Box fillMaxSize contentAlignment={Alignment.Center}>
+      <Text color={Color.Red}>Error: {uiState.error}</Text>
+    </Box>
+  } @else {
+    <Column padding={16}>
+      <Text fontSize={24}>Profile</Text>
+
+      <Input
+        value={uiState.user?.name ?: ""}
+        onValueChange={(name) => viewModel.updateProfile(name)}
+        label="Name"
+      />
+
+      <Text>Email: {uiState.user?.email}</Text>
+    </Column>
+  }
+</Scaffold>
+```
+
+**Application:**
+
+```kotlin
+// MyApplication.kt
+@HiltAndroidApp
+class MyApplication : Application()
+```
+
+**That's it!** Hilt handles creating and injecting:
+- `UserRepository` (with `ApiClient` and `UserDao`)
+- `Analytics`
+- `AppDatabase`
+- Everything needed
 
 ---
 
