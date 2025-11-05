@@ -45,14 +45,14 @@
 
 **Problem:** ViewModels in Android require massive boilerplate (StateFlow, MutableStateFlow, update blocks, property accessors).
 
-**Decision:** Use `@Store` annotation to generate ViewModel boilerplate from simple class definitions.
+**Decision:** Use `@store` annotation to generate ViewModel boilerplate from simple class definitions.
 
 **Syntax:**
 
 **Define a store:**
 ```whitehall
 <!-- stores/UserProfile.wh -->
-@Store
+@store
 class UserProfile {
   var name = ""
   var email = ""
@@ -135,12 +135,12 @@ class UserProfile {
 
 **Decision:** `stores/` is the **recommended convention** for organizing store classes, but not required.
 
-**Important:** The `@Store` annotation is what matters - it works regardless of file location. The directory structure is purely for organization.
+**Important:** The `@store` annotation is what matters - it works regardless of file location. The directory structure is purely for organization.
 
 **Recommended structure:**
 ```
 src/
-  stores/              ← Reactive stores (@Store) - RECOMMENDED location
+  stores/              ← Reactive stores (@store) - RECOMMENDED location
     UserProfile.wh
     Settings.wh
     Cart.wh
@@ -198,7 +198,7 @@ src/
 - ✅ Easy to find all reactive state in one place
 - ✅ Natural grouping for shared state
 
-**But use whatever structure fits your project!** The compiler only cares about the `@Store` annotation.
+**But use whatever structure fits your project!** The compiler only cares about the `@store` annotation.
 
 ---
 
@@ -206,11 +206,11 @@ src/
 
 ### Phase 1: Basic Store Generation
 
-**Goal:** Generate ViewModel boilerplate from `@Store` classes.
+**Goal:** Generate ViewModel boilerplate from `@store` classes.
 
 **Input:** `stores/UserProfile.wh`
 ```whitehall
-@Store
+@store
 class UserProfile {
   var name = ""
   var email = ""
@@ -247,7 +247,7 @@ class UserProfile : ViewModel() {
 ```
 
 **Implementation steps:**
-1. Parse `@Store` annotation on class
+1. Parse `@store` annotation on class
 2. Extract all `var` declarations → generate UiState data class fields
 3. Generate `_uiState` and `uiState` StateFlow pair
 4. Generate property accessors (getter/setter with `.update { it.copy(...) }`)
@@ -297,7 +297,7 @@ fun ProfileScreen() {
 
 **Input:**
 ```whitehall
-@Store
+@store
 class UserProfile {
   var firstName = ""
   var lastName = ""
@@ -330,7 +330,7 @@ class UserProfile : ViewModel() {
 
 **Input:**
 ```whitehall
-@Store
+@store
 class UserProfile {
   var isLoading = false
 
@@ -365,7 +365,7 @@ class UserProfile : ViewModel() {
 
 **Input:**
 ```whitehall
-@Store
+@store
 @HiltViewModel
 class UserProfile @Inject constructor(
   private val repository: ProfileRepository,
@@ -412,77 +412,124 @@ val profile = hiltViewModel<UserProfile>()
 
 ## Open Questions
 
-### Question 1: Lifecycle Hooks vs Direct Compose
+### Question 1: Lifecycle Hooks ✅ DECIDED
 
-**Option A: Use Compose directly (Current decision)**
-```whitehall
-<script>
-  LaunchedEffect(Unit) {
-    analytics.trackScreenView("profile")
-  }
+**Decision:** Add lifecycle hooks for cleaner syntax.
 
-  DisposableEffect(Unit) {
-    val subscription = eventBus.subscribe()
-    onDispose { subscription.cancel() }
-  }
-</script>
-```
-
-**Option B: Add lifecycle hooks**
+**Syntax:**
 ```whitehall
 <script>
   onMount {
     analytics.trackScreenView("profile")
   }
 
-  onDispose {
+  onDestroy {
     subscription.cancel()
+  }
+
+  // Or for cleanup that needs setup:
+  onMount {
+    val subscription = eventBus.subscribe()
+    onDestroy {
+      subscription.cancel()
+    }
   }
 </script>
 ```
 
-**Trade-offs:**
-- Option A: ✅ No new syntax, standard Compose | ❌ More verbose
-- Option B: ✅ Cleaner, familiar to web devs | ❌ More syntax to learn
+**Naming decision needed:** `onDestroy` vs `onDispose`
+- **`onDestroy`** - Clearer intent (component is being destroyed)
+- **`onDispose`** - Matches Compose's `DisposableEffect { onDispose { } }`
 
-**Decision needed:** Stick with Option A or add Option B sugar?
+**Recommendation:** `onDispose` (more Kotlin/Compose-native)
+
+**Transpiles to:**
+```kotlin
+LaunchedEffect(Unit) {
+    analytics.trackScreenView("profile")
+}
+
+DisposableEffect(Unit) {
+    val subscription = eventBus.subscribe()
+    onDispose {
+        subscription.cancel()
+    }
+}
+```
+
+**Why add this:** Cleaner, familiar to web developers, less verbose than Compose's `LaunchedEffect`/`DisposableEffect`.
 
 ---
 
-### Question 2: Global vs Screen-Scoped Stores
+### Question 2: Global Stores (App-Wide State)
 
-**Current:** All `@store` instances are screen-scoped (cleared on navigation away)
+**Question:** How to define stores that live for the entire app lifetime (not screen-scoped)?
 
-**Question:** How to support app-wide stores?
+**Context:** Stores defined with `@store val settings = AppSettings()` inside a component are screen-scoped. For global state (like app settings, current user), we need a different pattern.
 
-**Option A: Scope parameter**
+**Option A: Global store files (Svelte-style)** ← RECOMMENDED
+
+Define stores in standalone files that export singletons:
+
 ```whitehall
-@store(scope = "global") val settings = AppSettings()
+<!-- stores/AppSettings.wh -->
+@store(singleton = true)
+class AppSettings {
+  var darkMode = false
+  var language = "en"
+}
+
+// Auto-export singleton
+export val appSettings = AppSettings()
 ```
 
-**Option B: Different annotation**
 ```whitehall
-@globalStore val settings = AppSettings()
+<!-- screens/SettingsScreen.wh -->
+<script>
+  import { appSettings } from "../stores/AppSettings"
+
+  // No @store annotation - just use the singleton
+</script>
+
+<Switch bind:checked={appSettings.darkMode} label="Dark Mode" />
 ```
 
-**Option C: Use Repository pattern (Kotlin files)**
+**Pros:**
+- ✅ Clear separation (global vs screen-scoped)
+- ✅ Familiar to web developers
+- ✅ Explicit singleton
+- ✅ Reusable across all screens
+
+**Option B: Repository pattern (Kotlin files)**
+
 ```kotlin
-// kotlin/repositories/SettingsRepository.kt
-object SettingsRepository {
-    private val _theme = MutableStateFlow(Theme.Light)
-    val theme: StateFlow<Theme> = _theme.asStateFlow()
+// repositories/AppSettings.kt
+object AppSettings {
+    private val _darkMode = MutableStateFlow(false)
+    val darkMode: StateFlow<Boolean> = _darkMode.asStateFlow()
+
+    fun toggleDarkMode() {
+        _darkMode.value = !_darkMode.value
+    }
 }
 ```
 
 ```whitehall
 <script>
-  import com.app.repositories.SettingsRepository
+  import com.app.repositories.AppSettings
 
-  val theme by SettingsRepository.theme.collectAsState()
+  val darkMode by AppSettings.darkMode.collectAsState()
 </script>
 ```
 
-**Decision needed:** Which approach for global state?
+**Pros:**
+- ✅ Standard Kotlin pattern
+- ✅ No new whitehall syntax
+
+**Cons:**
+- ❌ Still verbose (manual StateFlow boilerplate)
+
+**Decision needed:** Option A (global store files) or Option B (Kotlin repositories)?
 
 ---
 
@@ -490,49 +537,63 @@ object SettingsRepository {
 
 **Question:** How to persist store state across app restarts?
 
-**Option A: Manual (current)**
+**Context:** Android has multiple persistence options:
+- DataStore (modern, coroutine-based)
+- SharedPreferences (legacy, synchronous)
+- Room (database)
+- File system
+
+**Decision:** Keep it manual (no special syntax)
+
+**Rationale:**
+- DataStore is just one option, not the only one
+- `@persisted` annotation would be too opinionated
+- Manual approach is flexible and explicit
+
+**Recommended pattern:**
 ```whitehall
-@Store
-class Settings {
+@store
+class AppSettings {
   var darkMode = false
 
   init {
-    loadFromDataStore()
+    loadSettings()
   }
 
-  fun save() {
-    saveToDataStore()
+  private fun loadSettings() {
+    viewModelScope.launch {
+      dataStore.data.collect { prefs ->
+        darkMode = prefs[DARK_MODE_KEY] ?: false
+      }
+    }
+  }
+
+  fun saveDarkMode(value: Boolean) {
+    darkMode = value
+    viewModelScope.launch {
+      dataStore.edit { prefs ->
+        prefs[DARK_MODE_KEY] = value
+      }
+    }
   }
 }
 ```
 
-**Option B: Annotation-based**
+**Future consideration:** Could add a helper library (not annotation):
 ```whitehall
-@Store
-class Settings {
-  @Persisted var darkMode = false  // Auto-saves to DataStore
+@store
+class AppSettings {
+  var darkMode by persistedState("dark_mode", false)  // Helper, not compiler magic
 }
 ```
-
-**Option C: Helper function**
-```whitehall
-@Store
-class Settings {
-  var darkMode by persisted("dark_mode", false)
-}
-```
-
-**Decision needed:** Phase 1 (manual), Phase 2+ (helper)?
 
 ---
 
-### Question 4: Multiple Store Instances
+### Question 4: Multiple Store Instances ✅ DECIDED
 
-**Question:** Can a screen have multiple instances of the same store?
+**Decision:** Support multiple instances with automatic key generation.
 
-**Current design:** No, each `@store val profile = UserProfile()` creates one instance.
-
-**Potential need:**
+**Current expectation:**
 ```whitehall
 <script>
   @store val adminProfile = UserProfile()
@@ -540,14 +601,27 @@ class Settings {
 </script>
 ```
 
-**Problem:** Both would generate same `viewModel<UserProfile>()`, only one instance created.
+**Problem:** Android's `viewModel<UserProfile>()` creates a singleton per type. Calling it twice returns the same instance.
 
-**Options:**
-- A: Don't support (force different store classes)
-- B: Support with keys: `@store(key = "admin") val adminProfile = UserProfile()`
-- C: Generate different instances automatically based on variable name
+**Solution:** Generate unique keys based on variable name.
 
-**Decision needed:** Support or not?
+**Transpiles to:**
+```kotlin
+val adminProfile = viewModel<UserProfile>(key = "adminProfile")
+val guestProfile = viewModel<UserProfile>(key = "guestProfile")
+```
+
+**Implementation:**
+- Extract variable name from `@store val <name> = ...`
+- Pass variable name as key to `viewModel(key = "...")`
+- Each variable gets its own instance
+
+**Why this works:** Kotlin's `viewModel()` supports keys for multiple instances of the same type.
+
+**Manual key override (if needed):**
+```whitehall
+@store(key = "custom_key") val profile = UserProfile()
+```
 
 ---
 
@@ -671,7 +745,7 @@ fun ProfileScreen() {
 **Whitehall:** ✅ DECIDED (not implemented)
 ```whitehall
 <!-- stores/UserProfile.wh -->
-@Store
+@store
 class UserProfile {
   var name = ""
   var isLoading = false
@@ -779,7 +853,7 @@ fun ProfileScreen() {
 **Whitehall with Hilt:**
 ```whitehall
 <!-- stores/UserProfile.wh -->
-@Store
+@store
 @HiltViewModel
 class UserProfile @Inject constructor(
   private val repository: ProfileRepository,
@@ -890,7 +964,7 @@ fun Counter() {
 
 ```whitehall
 <!-- stores/UserProfile.wh -->
-@Store
+@store
 class UserProfile {
   var name = ""
   var email = ""
@@ -1115,7 +1189,7 @@ fun ProfileScreen() {
 
 ```whitehall
 <!-- stores/UserProfile.wh -->
-@Store
+@store
 @HiltViewModel
 class UserProfile @Inject constructor(
   private val repository: ProfileRepository,
@@ -1193,18 +1267,23 @@ class MyApplication : Application()
 - ✅ Manual ViewModels (Kotlin files)
 - ✅ Effects: `LaunchedEffect`, `DisposableEffect`
 
-### Decided but Not Implemented
-- **@Store annotation** for screen-level reactive state
-- **@store val profile = UserProfile()** usage syntax
-- **stores/** directory convention
-- **Callable references** (`profile::save`)
+### Decided - Needs Implementation
+1. **@store annotation** for screen-level reactive state
+2. **@store val profile = UserProfile()** usage syntax
+3. **stores/** directory convention (recommended, not required)
+4. **Callable references** (`profile::save`)
+5. **Lifecycle hooks** (`onMount`, `onDispose`)
+6. **Multiple store instances** (auto-keyed by variable name)
+7. **All @annotations lowercase** (`@store`, `@prop`, not `@Store`)
+8. **Persistence** - Manual (no special syntax)
 
 ### Open Questions Needing Decisions
-1. Lifecycle hooks (`onMount`) vs direct Compose (`LaunchedEffect`)
-2. Global store support (annotation vs repository pattern)
-3. Persistence strategy (manual, annotation, helper)
-4. Multiple store instances support
+1. **Lifecycle hook naming:** `onDestroy` vs `onDispose` (recommendation: `onDispose`)
+2. **Global stores:** Svelte-style singleton exports vs Kotlin repositories
 
 ---
 
-**Next Steps:** Implement Phase 1 (basic store generation) from the Implementation Plan above.
+**Next Steps:**
+1. Implement Phase 1 (basic @store generation) from Implementation Plan
+2. Decide: `onDestroy` vs `onDispose`
+3. Decide: Global store pattern (Option A or B)
