@@ -2197,124 +2197,847 @@ whitehall build
 
 ## Implementation Plan
 
-### Phase 1: C++ Support (4-6 weeks)
+> **Philosophy**: Build incrementally. Each phase is independently testable and builds confidence. Ship early, iterate often.
 
-**Goal**: Basic C++ FFI working end-to-end
+---
+
+### Phase 0: Manual Proof-of-Concept (2-4 hours)
+
+**Goal**: Prove FFI works in a Whitehall project **with zero automation**
+
+**Why this phase?** Before writing any Whitehall code, verify the entire stack works manually.
 
 **Tasks**:
-1. ✅ **Config parsing** (`src/config.rs`)
+
+1. **Create test project** (`examples/ffi-poc/`)
+   ```bash
+   whitehall init ffi-poc
+   cd ffi-poc
+   mkdir -p src/ffi
+   ```
+
+2. **Write simplest C++ function** (`src/ffi/math.cpp`)
+   ```cpp
+   #include <jni.h>
+
+   extern "C" JNIEXPORT jint JNICALL
+   Java_com_example_ffi_1poc_ffi_NativeMath_add(
+       JNIEnv* env, jobject, jint a, jint b) {
+       return a + b;
+   }
+   ```
+
+3. **Write CMakeLists.txt** (`src/ffi/CMakeLists.txt`)
+   ```cmake
+   cmake_minimum_required(VERSION 3.22.1)
+   add_library(nativemath SHARED math.cpp)
+   ```
+
+4. **Manually write Kotlin wrapper** (`src/ffi/NativeMath.kt`)
+   ```kotlin
+   package com.example.ffi_poc.ffi
+
+   object NativeMath {
+       external fun add(a: Int, b: Int): Int
+
+       init {
+           System.loadLibrary("nativemath")
+       }
+   }
+   ```
+
+5. **Manually edit build.gradle.kts**
+   - Add `externalNativeBuild` block pointing to CMakeLists.txt
+   - Add NDK/CMake configuration
+
+6. **Use in a component** (`src/components/App.wh`)
+   ```whitehall
+   <script>
+     import com.example.ffi_poc.ffi.NativeMath
+
+     val result = NativeMath.add(2, 3)
+   </script>
+
+   <Text>2 + 3 = {result}</Text>
+   ```
+
+7. **Build and test**
+   ```bash
+   gradle build  # Not whitehall build yet!
+   # Install APK, verify it shows "2 + 3 = 5"
+   ```
+
+**Success Criteria**:
+- ✅ APK builds successfully
+- ✅ Native library included in APK (`lib/arm64-v8a/libnativemath.so` exists)
+- ✅ App runs and displays correct result
+- ✅ You understand the full manual process
+
+**Deliverable**: Working example project in `examples/ffi-poc/` (all manual, no Whitehall automation)
+
+**Time**: 2-4 hours
+
+---
+
+### Phase 1: File Detection & Copying (3-5 days)
+
+**Goal**: Whitehall automatically detects and copies FFI code
+
+**Why this phase?** Simplest automation - just move files around. No code generation yet.
+
+**What you'll build**:
+
+1. **Config parsing** (`src/config.rs`)
+   ```rust
+   #[derive(Deserialize)]
+   pub struct FfiConfig {
+       pub enabled: bool,
+       pub cpp: Option<CppConfig>,
+       pub rust: Option<RustConfig>,
+   }
+   ```
    - Parse `[ffi]` section from `whitehall.toml`
-   - Validate FFI configuration
-   - Time: 2 hours
+   - Validate configuration
+   - Handle `[ffi.cpp]` and `[ffi.rust]` subsections
 
-2. ✅ **File discovery** (`src/project.rs`)
-   - Detect `src/ffi/` directory
-   - Scan for `*.cpp` files and `CMakeLists.txt`
-   - Classify as FFI code
-   - Time: 2 hours
+2. **File discovery** (`src/ffi/detection.rs` - new module)
+   ```rust
+   pub struct FfiDetection {
+       pub has_cpp: bool,
+       pub has_rust: bool,
+       pub cpp_files: Vec<PathBuf>,
+       pub rust_files: Vec<PathBuf>,
+   }
 
-3. ✅ **FFI code copying** (`src/build_pipeline.rs`)
-   - Copy `src/ffi/` → `build/app/src/main/cpp/`
-   - Preserve directory structure
-   - Time: 1 hour
+   pub fn detect_ffi(project_root: &Path) -> FfiDetection {
+       // Scan src/ffi/ for *.cpp, *.h, CMakeLists.txt
+       // Scan src/ffi/ for *.rs, Cargo.toml
+   }
+   ```
 
-4. ✅ **Gradle integration** (`src/android_scaffold.rs`)
-   - Generate `externalNativeBuild` block in `build.gradle.kts`
-   - Add CMake configuration
-   - Time: 2-3 hours
+3. **File copying** (`src/build_pipeline.rs`)
+   ```rust
+   fn copy_ffi_code(&self) -> Result<()> {
+       // Copy src/ffi/*.cpp → build/app/src/main/cpp/
+       // Copy src/ffi/CMakeLists.txt → build/app/src/main/cpp/
+       // Preserve directory structure
+   }
+   ```
 
-5. ✅ **Kotlin binding generation** (NEW module: `src/ffi_bindings.rs`)
-   - Parse C++ function signatures from comments or separate manifest
-   - Generate Kotlin `object` with `external fun` declarations
-   - Add `System.loadLibrary()` calls
-   - Time: 8-12 hours
+4. **Logging**
+   ```
+   [INFO] FFI: Detected C++ files in src/ffi/
+   [INFO] FFI: Copied 2 C++ files to build/app/src/main/cpp/
+   ```
 
-6. ✅ **Import resolution** (`src/transpiler/codegen.rs`)
-   - Resolve `$ffi.*` to `{package}.ffi.*`
-   - Add imports to generated Kotlin
-   - Time: 2 hours
+**What you'll test**:
+```bash
+# In ffi-poc project, add to whitehall.toml:
+[ffi]
+enabled = true
 
-7. ✅ **Testing**
-   - Create example project with C++ FFI
-   - Test `whitehall build`
-   - Test APK installation and execution
-   - Time: 4-6 hours
+# Run whitehall build
+whitehall build
 
-**Milestone**: Can use C++ FFI in Whitehall components, APK builds and runs.
+# Verify:
+ls build/app/src/main/cpp/  # Should contain math.cpp, CMakeLists.txt
+```
 
----
+**Success Criteria**:
+- ✅ `whitehall build` detects FFI code
+- ✅ Files copied to correct locations
+- ✅ Helpful error if `[ffi]` enabled but no FFI code found
+- ✅ Works with both simple (`src/ffi/`) and mixed (`src/ffi/cpp/`, `src/ffi/rust/`) layouts
 
-### Phase 2: Rust Support (2-3 weeks)
+**What you still do manually**: Write Kotlin wrappers, edit Gradle config
 
-**Goal**: Add Rust FFI support via cargo-ndk
+**Deliverable**: Whitehall detects and copies FFI code automatically
 
-**Tasks**:
-1. ✅ **Detect Rust code**
-   - Scan for `Cargo.toml` in `src/ffi/`
-   - Time: 1 hour
-
-2. ✅ **Install cargo-ndk check**
-   - Verify `cargo-ndk` is installed
-   - Provide helpful error if missing
-   - Time: 1 hour
-
-3. ✅ **Build integration**
-   - Run `cargo ndk build` during `whitehall build`
-   - Copy built `.so` files to `build/app/src/main/jniLibs/`
-   - Time: 4-6 hours
-
-4. ✅ **Kotlin binding generation**
-   - Parse Rust `#[no_mangle]` functions
-   - Generate Kotlin wrappers
-   - Time: 6-8 hours
-
-5. ✅ **Testing**
-   - Create example with Rust FFI
-   - Test end-to-end
-   - Time: 3-4 hours
-
-**Milestone**: Can use both C++ and Rust FFI in same project.
+**Time**: 3-5 days
 
 ---
 
-### Phase 3: Auto-Generated Bindings (4-6 weeks)
+### Phase 2: Build System Integration (1-2 weeks)
 
-**Goal**: Reduce boilerplate, auto-generate JNI glue code
+**Goal**: Whitehall generates Gradle configuration for native builds
 
-**Option A: Annotation-based (simpler)**
+**Why this phase?** Automate the build plumbing so users don't touch Gradle.
+
+**What you'll build**:
+
+1. **Gradle generation** (`src/android_scaffold.rs`)
+   ```rust
+   fn generate_gradle_ffi_config(&self, ffi: &FfiDetection) -> String {
+       if ffi.has_cpp {
+           r#"
+           android {
+               externalNativeBuild {
+                   cmake {
+                       path = file("src/main/cpp/CMakeLists.txt")
+                       version = "3.22.1"
+                   }
+               }
+               defaultConfig {
+                   externalNativeBuild {
+                       cmake {
+                           cppFlags += ["-std=c++17", "-Wall"]
+                           arguments += ["-DANDROID_STL=c++_shared"]
+                       }
+                   }
+               }
+           }
+           "#
+       }
+   }
+   ```
+
+2. **Smart ABI selection**
+   - Debug builds: Only `arm64-v8a` (fast iteration)
+   - Release builds: All ABIs (`arm64-v8a`, `armeabi-v7a`, `x86_64`, `x86`)
+   ```rust
+   let abis = if self.is_release {
+       vec!["arm64-v8a", "armeabi-v7a", "x86_64", "x86"]
+   } else {
+       vec!["arm64-v8a"]  // Debug: fast builds
+   };
+   ```
+
+3. **NDK version detection**
+   ```rust
+   fn detect_ndk_version() -> Result<String> {
+       // Check $ANDROID_NDK_HOME
+       // Check $ANDROID_HOME/ndk/
+       // Provide helpful error if not found
+   }
+   ```
+
+4. **CMake wrapper generation**
+   - If user provides CMakeLists.txt: use as-is
+   - If not: generate minimal one
+   ```cmake
+   # Generated by Whitehall
+   cmake_minimum_required(VERSION 3.22.1)
+   project("${PROJECT_NAME}")
+
+   file(GLOB_RECURSE CPP_SOURCES "*.cpp")
+   add_library(${PROJECT_NAME} SHARED ${CPP_SOURCES})
+
+   find_library(log-lib log)
+   target_link_libraries(${PROJECT_NAME} ${log-lib})
+   ```
+
+**What you'll test**:
+```bash
+# In ffi-poc, REMOVE manual Gradle edits
+# Only keep [ffi] in whitehall.toml
+
+whitehall build
+
+# Verify:
+# 1. build.gradle.kts contains externalNativeBuild
+# 2. APK contains libmath.so
+# 3. gradle assembleDebug works
+```
+
+**Success Criteria**:
+- ✅ `whitehall build` generates complete Gradle config
+- ✅ Native library builds automatically
+- ✅ Debug builds only target arm64-v8a (3x faster)
+- ✅ Release builds target all ABIs
+- ✅ Helpful error if NDK not installed
+- ✅ Works with user-provided or auto-generated CMakeLists.txt
+
+**What you still do manually**: Write Kotlin wrappers
+
+**Deliverable**: `whitehall build` compiles native code, no Gradle edits needed
+
+**Time**: 1-2 weeks
+
+---
+
+### Phase 3: Import Resolution (3-5 days)
+
+**Goal**: Support `import $ffi.MyClass` syntax in `.wh` files
+
+**Why this phase?** Make FFI feel native to Whitehall - use special syntax instead of full package names.
+
+**What you'll build**:
+
+1. **Import parser** (`src/transpiler/imports.rs`)
+   ```rust
+   enum Import {
+       Regular(String),           // import com.foo.Bar
+       Ffi(String),                // import $ffi.MyClass
+       FfiExplicit(String, String), // import $ffi.cpp.MyClass
+   }
+
+   fn parse_import(line: &str) -> Import {
+       if line.contains("$ffi.") {
+           // Parse FFI import
+       }
+   }
+   ```
+
+2. **Import resolver** (`src/transpiler/codegen.rs`)
+   ```rust
+   fn resolve_ffi_import(&self, import: &str) -> String {
+       let package = &self.config.android.package;
+
+       match import {
+           "$ffi.MyClass" => format!("{}.ffi.MyClass", package),
+           "$ffi.cpp.MyClass" => format!("{}.ffi.cpp.MyClass", package),
+           "$ffi.rust.MyClass" => format!("{}.ffi.rust.MyClass", package),
+           _ => panic!("Invalid FFI import: {}", import),
+       }
+   }
+   ```
+
+3. **Name conflict detection**
+   ```rust
+   fn check_ffi_conflicts(&self, ffi: &FfiDetection) -> Result<()> {
+       // If both cpp/VideoDecoder.kt and rust/VideoDecoder.kt exist
+       // Require explicit imports: $ffi.cpp.VideoDecoder
+       if has_name_conflict {
+           return Err("Ambiguous import: use $ffi.cpp.X or $ffi.rust.X");
+       }
+   }
+   ```
+
+4. **Codegen** (Kotlin generation)
+   ```kotlin
+   // Input (.wh):
+   import $ffi.NativeMath
+
+   // Output (.kt):
+   import com.example.ffi_poc.ffi.NativeMath
+   ```
+
+**What you'll test**:
+```whitehall
+// src/components/App.wh
+import $ffi.NativeMath  // ✨ New syntax!
+
+<script>
+  val result = NativeMath.add(2, 3)
+</script>
+
+<Text>Result: {result}</Text>
+```
+
+```bash
+whitehall build
+# Verify generated Kotlin has correct import
+cat build/app/.../App.kt | grep "import com.example"
+```
+
+**Success Criteria**:
+- ✅ `import $ffi.MyClass` works in `.wh` files
+- ✅ Resolves to correct package path
+- ✅ `import $ffi.cpp.MyClass` works for mixed projects
+- ✅ Error on ambiguous imports in mixed projects
+- ✅ Autocomplete/IDE shows available FFI classes (if IDE support exists)
+
+**What you still do manually**: Write Kotlin wrappers (but can use cleaner imports!)
+
+**Deliverable**: `$ffi.*` imports work in Whitehall components
+
+**Time**: 3-5 days
+
+---
+
+### Phase 4: Rust Support (1-2 weeks)
+
+**Goal**: Add Rust FFI via cargo-ndk
+
+**Why this phase?** Parallel to C++, validates multi-language design.
+
+**What you'll build**:
+
+1. **cargo-ndk detection** (`src/ffi/rust.rs` - new module)
+   ```rust
+   fn check_cargo_ndk() -> Result<()> {
+       match Command::new("cargo-ndk").arg("--version").output() {
+           Ok(_) => Ok(()),
+           Err(_) => Err(FfiError::CargoNdkNotFound(
+               "Install with: cargo install cargo-ndk"
+           ))
+       }
+   }
+   ```
+
+2. **Rust target detection**
+   ```rust
+   fn check_rust_targets() -> Vec<String> {
+       // Run: rustup target list --installed
+       // Check for:
+       // - aarch64-linux-android (required)
+       // - armv7-linux-androideabi
+       // - i686-linux-android
+       // - x86_64-linux-android
+   }
+   ```
+
+3. **Rust build integration** (`src/build_pipeline.rs`)
+   ```rust
+   fn build_rust_ffi(&self) -> Result<()> {
+       let targets = if self.is_release {
+           vec!["aarch64-linux-android", "armv7-linux-androideabi",
+                "i686-linux-android", "x86_64-linux-android"]
+       } else {
+           vec!["aarch64-linux-android"]  // Debug: fast
+       };
+
+       for target in targets {
+           Command::new("cargo")
+               .args(["ndk", "-t", target, "build"])
+               .arg(if self.is_release { "--release" } else { "" })
+               .current_dir("src/ffi/rust")
+               .status()?;
+       }
+
+       // Copy .so files from target/*/release/ to jniLibs/
+       self.copy_rust_libs()?;
+   }
+   ```
+
+4. **jniLibs organization**
+   ```
+   build/app/src/main/jniLibs/
+   ├── arm64-v8a/
+   │   ├── libnativemath.so     (C++)
+   │   └── libimageproc.so      (Rust)
+   ├── armeabi-v7a/
+   │   ├── libnativemath.so
+   │   └── libimageproc.so
+   └── x86_64/
+       └── ...
+   ```
+
+5. **Helpful errors**
+   ```
+   [ERROR] cargo-ndk not found
+
+   Install with:
+     cargo install cargo-ndk
+
+   Then add Android targets:
+     rustup target add aarch64-linux-android
+     rustup target add armv7-linux-androideabi
+   ```
+
+**What you'll test**:
+```bash
+# Create Rust FFI example
+mkdir -p src/ffi/rust
+cd src/ffi/rust
+cargo init --lib
+
+# Edit Cargo.toml
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+jni = "0.21"
+
+# Write lib.rs
+#[no_mangle]
+pub extern "system" fn Java_com_example_ffi_1poc_ffi_RustMath_multiply(
+    env: JNIEnv, _: JClass, a: i32, b: i32
+) -> i32 {
+    a * b
+}
+
+# Build
+whitehall build
+
+# Verify both C++ and Rust libraries exist
+ls build/app/src/main/jniLibs/arm64-v8a/
+# Should show: libnativemath.so, libimageproc.so
+```
+
+**Success Criteria**:
+- ✅ Detects `src/ffi/Cargo.toml` or `src/ffi/rust/Cargo.toml`
+- ✅ Runs `cargo ndk build` automatically
+- ✅ Copies `.so` files to correct ABI directories
+- ✅ Debug builds only compile for arm64 (fast)
+- ✅ Works alongside C++ FFI (mixed projects)
+- ✅ Helpful errors if cargo-ndk or targets missing
+
+**What you still do manually**: Write Kotlin wrappers for Rust functions
+
+**Deliverable**: Rust FFI works, can mix C++ and Rust in same project
+
+**Time**: 1-2 weeks
+
+---
+
+### Phase 5: Kotlin Binding Generation (3-4 weeks)
+
+**Goal**: Auto-generate Kotlin wrappers - the "magic" phase
+
+**Why this phase?** Most complex, most user-facing. Do last when everything else works.
+
+**Design Decision First**: Choose binding specification format
+
+**Option A: YAML Manifest** (recommended for MVP)
+```yaml
+# src/ffi/bindings.yaml
+library: nativemath
+
+classes:
+  - name: NativeMath
+    functions:
+      - name: add
+        params:
+          - name: a
+            type: Int
+          - name: b
+            type: Int
+        returns: Int
+
+      - name: processArray
+        params:
+          - name: data
+            type: IntArray
+        returns: IntArray
+```
+
+**Option B: C++ Annotations** (future, more complex)
 ```cpp
-// src/ffi/video-decoder.cpp
-
-/// @whitehall-export
-/// fun decodeFrame(videoUrl: String, frameIndex: Int): Bitmap
-extern "C" JNIEXPORT jobject JNICALL
-Java_com_example_myapp_ffi_VideoDecoder_decodeFrame(...) {
-    // ...
+/// @whitehall-class NativeMath
+/// @whitehall-function add(a: Int, b: Int): Int
+extern "C" JNIEXPORT jint JNICALL
+Java_com_example_ffi_NativeMath_add(JNIEnv* env, jobject, jint a, jint b) {
+    return a + b;
 }
 ```
 
-Whitehall parses `@whitehall-export` comments and generates Kotlin wrapper.
+**What you'll build (Option A - YAML)**:
 
-**Option B: Manifest file (more flexible)**
-```yaml
-# src/ffi/bindings.yaml
-library: video-decoder
+1. **Manifest parser** (`src/ffi/bindings.rs` - new module)
+   ```rust
+   #[derive(Deserialize)]
+   struct FfiManifest {
+       library: String,
+       classes: Vec<FfiClass>,
+   }
 
-functions:
-  - name: decodeFrame
-    params:
-      - name: videoUrl
-        type: String
-      - name: frameIndex
-        type: Int
-    returns: Bitmap
+   #[derive(Deserialize)]
+   struct FfiClass {
+       name: String,
+       functions: Vec<FfiFunction>,
+   }
+
+   #[derive(Deserialize)]
+   struct FfiFunction {
+       name: String,
+       params: Vec<Param>,
+       returns: String,
+   }
+   ```
+
+2. **JNI name generator** (`src/ffi/jni_names.rs`)
+   ```rust
+   fn generate_jni_name(package: &str, class: &str, function: &str) -> String {
+       let mangled_package = package.replace(".", "_");
+       format!("Java_{}_{}_{}_{}",
+               mangled_package, "ffi", class, function)
+   }
+
+   // Example output:
+   // Java_com_example_ffi_1poc_ffi_NativeMath_add
+   ```
+
+3. **Kotlin codegen** (`src/ffi/kotlin_gen.rs`)
+   ```rust
+   fn generate_kotlin_binding(manifest: &FfiManifest, package: &str) -> String {
+       format!(r#"
+   package {}.ffi
+
+   object {} {{
+       {}
+
+       init {{
+           System.loadLibrary("{}")
+       }}
+   }}
+   "#,
+       package,
+       manifest.class.name,
+       generate_functions(&manifest.class.functions),
+       manifest.library
+       )
+   }
+
+   fn generate_functions(funcs: &[FfiFunction]) -> String {
+       funcs.iter().map(|f| {
+           let params = f.params.iter()
+               .map(|p| format!("{}: {}", p.name, p.type))
+               .collect::<Vec<_>>()
+               .join(", ");
+
+           format!("external fun {}({}): {}", f.name, params, f.returns)
+       }).collect::<Vec<_>>().join("\n    ")
+   }
+   ```
+
+4. **Validation**
+   ```rust
+   fn validate_manifest(manifest: &FfiManifest) -> Result<()> {
+       // Check JNI function exists in compiled .so
+       // Check type compatibility
+       // Warn about common mistakes
+   }
+   ```
+
+5. **Helpful errors**
+   ```
+   [ERROR] FFI function not found in library
+
+   Expected JNI function:
+     Java_com_example_ffi_1poc_ffi_NativeMath_add
+
+   But library libnativemath.so only contains:
+     Java_com_example_ffi_NativeMath_add  (missing _1poc)
+
+   Check package name in whitehall.toml matches C++ function name.
+   ```
+
+**What you'll test**:
+```bash
+# Create bindings.yaml
+cat > src/ffi/bindings.yaml << EOF
+library: nativemath
+classes:
+  - name: NativeMath
+    functions:
+      - name: add
+        params:
+          - name: a
+            type: Int
+          - name: b
+            type: Int
+        returns: Int
+EOF
+
+# Build - now Kotlin wrapper is auto-generated!
+whitehall build
+
+# Verify generated code
+cat build/app/src/main/java/com/example/ffi_poc/ffi/NativeMath.kt
+
+# Use in component (no manual Kotlin wrapper!)
+# src/components/App.wh
+import $ffi.NativeMath
+
+<script>
+  val result = NativeMath.add(2, 3)
+</script>
 ```
 
-**Option C: Use existing tools**
-- C++: Use SWIG or djinni
-- Rust: Use mozilla/uniffi-rs
+**Success Criteria**:
+- ✅ Parses `bindings.yaml` correctly
+- ✅ Generates Kotlin wrappers with correct JNI names
+- ✅ Validates JNI function names match compiled library
+- ✅ Supports all basic types (primitives, String, ByteArray)
+- ✅ Helpful errors for mismatches
+- ✅ Documentation generation (KDoc comments)
+- ✅ Works for both C++ and Rust
 
-**Recommendation**: Start with Option A (comments), consider Option C later.
+**What you no longer do manually**: Write Kotlin wrappers! 🎉
+
+**Deliverable**: Fully automated FFI - just write C++/Rust + YAML manifest
+
+**Time**: 3-4 weeks
+
+---
+
+### Phase 6: Polish & Developer Experience (2-3 weeks)
+
+**Goal**: Make FFI delightful to use
+
+**What you'll build**:
+
+1. **FFI templates**
+   ```bash
+   whitehall ffi add cpp-hello-world
+   # Creates src/ffi/hello.cpp, CMakeLists.txt, bindings.yaml
+
+   whitehall ffi add rust-image-processing
+   # Creates src/ffi/rust/lib.rs, Cargo.toml, bindings.yaml
+   ```
+
+2. **Build caching**
+   ```rust
+   // Only rebuild native code if source changed
+   fn should_rebuild_ffi(&self) -> bool {
+       let ffi_hash = hash_directory("src/ffi/");
+       let cached_hash = read_cache(".whitehall/ffi_cache");
+       ffi_hash != cached_hash
+   }
+   ```
+
+3. **Hot reload support**
+   ```
+   [INFO] FFI: Detected change in src/ffi/math.cpp
+   [INFO] FFI: Rebuilding native library...
+   [INFO] FFI: Reinstalling APK...
+   [INFO] FFI: App restarted
+   ```
+
+4. **Better error messages**
+   ```
+   [ERROR] Native crash detected!
+
+   Signal 11 (SIGSEGV) at address 0x0
+
+   Stack trace:
+     #00 pc 00001234  libnativemath.so (add+56)
+         src/ffi/math.cpp:15
+
+   This looks like a null pointer dereference.
+   Check that your JNI parameters are not null before use.
+
+   See: https://whitehall.dev/docs/ffi/debugging
+   ```
+
+5. **Documentation generation**
+   ```rust
+   // Generate docs/FFI.md with:
+   // - List of available FFI functions
+   // - Type signatures
+   // - Usage examples
+   ```
+
+6. **Prebuilt library support**
+   ```toml
+   [ffi.cpp]
+   libraries = ["opencv", "ffmpeg"]  # Link against prebuilt libs
+   ```
+
+7. **Debug symbols**
+   ```toml
+   [ffi.cpp]
+   debug_symbols = true  # Include in release builds for better crash reports
+   ```
+
+**Success Criteria**:
+- ✅ Templates for common FFI patterns
+- ✅ Fast incremental builds (cache native code)
+- ✅ Hot reload works with FFI changes
+- ✅ Crash reports include source file:line
+- ✅ Can link against system libraries
+- ✅ Documentation auto-generated
+
+**Deliverable**: Production-ready FFI system with great DX
+
+**Time**: 2-3 weeks
+
+---
+
+### Phase 7: Advanced Features (Future)
+
+**Not required for MVP, but nice to have:**
+
+1. **Auto-generated bindings from C++ headers**
+   - Parse C++ headers with libclang
+   - Generate YAML automatically
+   - Or use SWIG/djinni
+
+2. **Rust uniffi integration**
+   - Use Mozilla's uniffi-rs
+   - Define interfaces in .udl files
+   - Auto-generate JNI bindings
+
+3. **Multi-platform FFI**
+   - Same FFI code for Android + iOS
+   - Via Kotlin Multiplatform
+
+4. **FFI marketplace**
+   - Share FFI modules (OpenCV wrapper, ML inference)
+   - `whitehall ffi install opencv-wrapper`
+
+5. **GPU acceleration**
+   - OpenCL, Vulkan, RenderScript integration
+
+6. **FFI profiling**
+   - Built-in performance monitoring
+   - JNI call overhead tracking
+
+---
+
+## Phasing Summary
+
+| Phase | Duration | Automation Level | User Still Does |
+|-------|----------|------------------|----------------|
+| **0: Manual POC** | 2-4 hours | 0% | Everything manually |
+| **1: File Detection** | 3-5 days | 20% | Kotlin wrappers, Gradle config |
+| **2: Build Integration** | 1-2 weeks | 50% | Kotlin wrappers |
+| **3: Import Resolution** | 3-5 days | 60% | Kotlin wrappers (but cleaner imports) |
+| **4: Rust Support** | 1-2 weeks | 70% | Kotlin wrappers |
+| **5: Binding Generation** | 3-4 weeks | 95% | Write C++/Rust + YAML manifest |
+| **6: Polish** | 2-3 weeks | 99% | Just write native code! |
+
+**Total time to MVP (Phase 5)**: ~8-12 weeks
+**Total time to production-ready (Phase 6)**: ~10-15 weeks
+
+---
+
+## Decision Points
+
+### After Phase 1:
+**Question**: Is file detection working reliably?
+- ✅ Yes → Continue to Phase 2
+- ❌ No → Fix detection logic, add more tests
+
+### After Phase 2:
+**Question**: Does build integration work for both simple and complex projects?
+- ✅ Yes → Continue to Phase 3
+- ❌ No → Improve Gradle generation, handle edge cases
+
+### After Phase 3:
+**Question**: Ship Phase 1-3 as "manual FFI" feature?
+- Option A: Ship now (users write Kotlin wrappers, but build system works)
+- Option B: Wait for Phase 5 (full automation)
+
+**Recommendation**: Ship after Phase 4 with "experimental" flag.
+
+### Phase 5 Design Choice:
+**Question**: YAML manifests or C++ annotations?
+- YAML (Option A): Simpler to parse, language-agnostic
+- Annotations (Option B): More ergonomic, requires C++ parser
+- Existing tools (Option C): Least work, most dependencies
+
+**Recommendation**: Start with YAML (Option A), consider Option C (uniffi for Rust) later.
+
+---
+
+## Testing Strategy Per Phase
+
+### Phase 0-1:
+- Manual testing with example project
+- Verify files in correct locations
+
+### Phase 2-3:
+- Unit tests for file detection
+- Integration tests: build example project, verify APK contents
+- Test error cases (missing NDK, invalid config)
+
+### Phase 4:
+- Add Rust example project
+- Test mixed C++/Rust projects
+- Test all ABI targets
+
+### Phase 5:
+- Comprehensive YAML parsing tests
+- JNI name generation tests
+- Generated Kotlin validation
+- End-to-end: YAML → Kotlin → APK → run
+
+### Phase 6:
+- Performance tests (build speed, cache hit rate)
+- Crash testing (verify stack traces)
+- Documentation tests (verify generated docs are correct)
 
 ---
 
