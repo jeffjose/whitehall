@@ -305,7 +305,7 @@ targets = ["arm64-v8a", "armeabi-v7a"]  # Target architectures
 
 ---
 
-## Usage Examples
+## Complete Examples
 
 ### Example 1: C++ Video Decoder
 
@@ -1367,6 +1367,831 @@ pub extern "system" fn Java_com_example_Native_divideChecked(
 3. **Use logging** (`__android_log_print` in C++, `android_logger` in Rust)
 4. **Throw meaningful exceptions** to Kotlin/Java layer
 5. **Document error conditions** in function comments
+
+---
+
+## Debugging Native Code
+
+### The Challenge
+
+Native crashes don't provide Kotlin stack traces! You see:
+```
+A/libc: Fatal signal 11 (SIGSEGV), code 1, fault addr 0x0 in tid 12345
+```
+
+### Enable Debug Symbols
+
+**CMakeLists.txt:**
+```cmake
+cmake_minimum_required(VERSION 3.22.1)
+project("mylib")
+
+# Enable debug symbols
+set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -g -O0")
+set(CMAKE_C_FLAGS_DEBUG "${CMAKE_C_FLAGS_DEBUG} -g -O0")
+
+# Disable optimization for debug builds
+add_compile_options(-fno-omit-frame-pointer)
+
+add_library(mylib SHARED mylib.cpp)
+```
+
+**Cargo.toml** (Rust):
+```toml
+[profile.dev]
+debug = true
+opt-level = 0
+
+[profile.release]
+debug = true  # Keep symbols in release
+```
+
+### Using Android Studio Debugger
+
+1. **Attach LLDB Debugger**:
+   - Run → Debug → Select process
+   - Or use "Attach Debugger to Android Process"
+
+2. **Set Breakpoints**:
+   - Open C++/Rust source files in Android Studio
+   - Click gutter to set breakpoints
+   - Debugger stops at native breakpoints!
+
+3. **Inspect Variables**:
+   - View native variables in Variables pane
+   - Use LLDB console for advanced queries
+
+### Command-Line Debugging with ndk-stack
+
+```bash
+# Capture logcat during crash
+adb logcat > crash.log
+
+# Symbolicate the stack trace
+$ANDROID_NDK/ndk-stack -sym build/app/obj/local/arm64-v8a -dump crash.log
+```
+
+**Output:**
+```
+*** *** *** *** *** *** *** *** *** *** *** *** *** *** *** ***
+Build fingerprint: '...'
+Revision: '0'
+ABI: 'arm64'
+pid: 12345, tid: 12345, name: com.example.app  >>> com.example.app <<<
+signal 11 (SIGSEGV), code 1 (SEGV_MAPERR), fault addr 0x0
+    #00 pc 00001234  /data/app/.../lib/arm64/libmylib.so (myFunction+56)
+    #01 pc 00005678  /data/app/.../lib/arm64/libmylib.so (Java_com_example_Native_process+12)
+```
+
+### Using addr2line
+
+```bash
+# Get function name and line number from address
+$ANDROID_NDK/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-addr2line \
+  -e build/app/obj/local/arm64-v8a/libmylib.so \
+  0x1234
+```
+
+**Output:**
+```
+/path/to/mylib.cpp:42
+```
+
+### Logging from Native Code
+
+#### C++ Logging
+
+```cpp
+#include <android/log.h>
+
+#define LOG_TAG "MyNative"
+#define LOGV(...) __android_log_print(ANDROID_LOG_VERBOSE, LOG_TAG, __VA_ARGS__)
+#define LOGD(...) __android_log_print(ANDROID_LOG_DEBUG, LOG_TAG, __VA_ARGS__)
+#define LOGI(...) __android_log_print(ANDROID_LOG_INFO, LOG_TAG, __VA_ARGS__)
+#define LOGW(...) __android_log_print(ANDROID_LOG_WARN, LOG_TAG, __VA_ARGS__)
+#define LOGE(...) __android_log_print(ANDROID_LOG_ERROR, LOG_TAG, __VA_ARGS__)
+
+extern "C" JNIEXPORT void JNICALL
+Java_com_example_Native_debug(JNIEnv* env, jobject) {
+    LOGD("Debug message: value=%d", 42);
+    LOGI("Processing started");
+    LOGW("Warning: unusual condition");
+    LOGE("Error occurred!");
+}
+```
+
+**CMakeLists.txt** (link log library):
+```cmake
+find_library(log-lib log)
+target_link_libraries(mylib ${log-lib})
+```
+
+#### Rust Logging
+
+```toml
+# Cargo.toml
+[dependencies]
+android_logger = "0.13"
+log = "0.4"
+```
+
+```rust
+use android_logger::Config;
+use log::{debug, info, warn, error, LevelFilter};
+
+#[no_mangle]
+pub extern "system" fn JNI_OnLoad(vm: JavaVM, _: *mut std::ffi::c_void) -> jint {
+    // Initialize logger
+    android_logger::init_once(
+        Config::default()
+            .with_max_level(LevelFilter::Debug)
+            .with_tag("MyRustLib")
+    );
+
+    debug!("Rust library loaded");
+    jni::sys::JNI_VERSION_1_6
+}
+
+#[no_mangle]
+pub extern "system" fn Java_com_example_Native_process(/*...*/) {
+    debug!("Processing started");
+    info!("Value: {}", 42);
+    warn!("Unusual condition");
+    error!("Error occurred!");
+}
+```
+
+### Common Crash Causes
+
+#### 1. Null Pointer Dereference
+
+```cpp
+// ❌ CRASH: Segmentation fault
+jstring bad(JNIEnv* env, jstring input) {
+    const char* str = env->GetStringUTFChars(input, nullptr);
+    return env->NewStringUTF(str);  // Crashes if input is null!
+}
+
+// ✅ SAFE
+jstring good(JNIEnv* env, jstring input) {
+    if (input == nullptr) {
+        return env->NewStringUTF("");
+    }
+    const char* str = env->GetStringUTFChars(input, nullptr);
+    if (str == nullptr) {
+        return nullptr;
+    }
+    jstring result = env->NewStringUTF(str);
+    env->ReleaseStringUTFChars(input, str);
+    return result;
+}
+```
+
+#### 2. Use After Free
+
+```cpp
+// ❌ CRASH: Use after delete
+extern "C" JNIEXPORT void JNICALL
+Java_com_example_Bad_crash(JNIEnv* env, jobject, jstring str) {
+    const char* cstr = env->GetStringUTFChars(str, nullptr);
+    env->ReleaseStringUTFChars(str, cstr);
+    printf("%s", cstr);  // ❌ CRASH: Already released!
+}
+```
+
+#### 3. Stack Overflow
+
+```cpp
+// ❌ CRASH: Stack overflow
+void recursive(int n) {
+    char buffer[1024 * 1024];  // 1MB on stack!
+    if (n > 0) recursive(n - 1);
+}
+
+// ✅ SAFE: Use heap
+void safe(int n) {
+    std::vector<char> buffer(1024 * 1024);  // On heap
+    if (n > 0) safe(n - 1);
+}
+```
+
+### Memory Leak Detection
+
+#### Using AddressSanitizer (ASan)
+
+**whitehall.toml:**
+```toml
+[ffi.cpp]
+flags = ["-fsanitize=address", "-fno-omit-frame-pointer"]
+```
+
+**CMakeLists.txt:**
+```cmake
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fsanitize=address -fno-omit-frame-pointer")
+target_link_options(mylib PRIVATE -fsanitize=address)
+```
+
+Run app, ASan will report leaks and memory errors in logcat!
+
+---
+
+## Security Best Practices
+
+### Why Security Matters
+
+Native code bypasses Android's sandbox and memory safety. A vulnerability here can:
+- Crash the entire app (not just isolate exceptions)
+- Allow memory corruption exploits
+- Expose sensitive data
+- Enable privilege escalation
+
+### Input Validation
+
+**Always validate at the JNI boundary!**
+
+```cpp
+extern "C" JNIEXPORT void JNICALL
+Java_com_example_Native_processFile(JNIEnv* env, jobject, jstring path) {
+    // ✅ VALIDATE: Check for null
+    if (path == nullptr) {
+        throwException(env, "java/lang/IllegalArgumentException", "Path cannot be null");
+        return;
+    }
+
+    const char* cpath = env->GetStringUTFChars(path, nullptr);
+
+    // ✅ VALIDATE: Check path traversal
+    if (strstr(cpath, "..") != nullptr) {
+        env->ReleaseStringUTFChars(path, cpath);
+        throwException(env, "java/lang/SecurityException", "Path traversal detected");
+        return;
+    }
+
+    // ✅ VALIDATE: Check allowed directories
+    if (strncmp(cpath, "/data/data/com.example", 22) != 0) {
+        env->ReleaseStringUTFChars(path, cpath);
+        throwException(env, "java/lang/SecurityException", "Access denied");
+        return;
+    }
+
+    // Now safe to use
+    FILE* file = fopen(cpath, "r");
+    // ...
+
+    env->ReleaseStringUTFChars(path, cpath);
+}
+```
+
+### Buffer Overflow Prevention
+
+```cpp
+// ❌ DANGEROUS: Buffer overflow
+void bad_copy(const char* input) {
+    char buffer[64];
+    strcpy(buffer, input);  // No bounds checking!
+}
+
+// ✅ SAFE: Bounded copy
+void safe_copy(const char* input) {
+    char buffer[64];
+    strncpy(buffer, input, sizeof(buffer) - 1);
+    buffer[sizeof(buffer) - 1] = '\0';  // Ensure null termination
+}
+
+// ✅ BETTER: Use std::string
+void modern_copy(const char* input) {
+    std::string buffer(input);  // Automatic bounds checking
+}
+```
+
+### Integer Overflow Prevention
+
+```cpp
+// ❌ DANGEROUS: Integer overflow
+extern "C" JNIEXPORT jint JNICALL
+Java_com_example_Native_allocate(JNIEnv* env, jobject, jint size) {
+    void* buffer = malloc(size * 4);  // Overflow if size > INT_MAX/4!
+    // ...
+}
+
+// ✅ SAFE: Check for overflow
+extern "C" JNIEXPORT jint JNICALL
+Java_com_example_Native_allocateSafe(JNIEnv* env, jobject, jint size) {
+    if (size <= 0 || size > INT_MAX / 4) {
+        throwException(env, "java/lang/IllegalArgumentException", "Invalid size");
+        return -1;
+    }
+    void* buffer = malloc(size * 4);
+    // ...
+}
+```
+
+### Format String Vulnerabilities
+
+```cpp
+// ❌ DANGEROUS: Format string attack
+void bad_log(const char* user_input) {
+    __android_log_print(ANDROID_LOG_INFO, "TAG", user_input);  // Exploitable!
+}
+
+// ✅ SAFE: Use format specifier
+void safe_log(const char* user_input) {
+    __android_log_print(ANDROID_LOG_INFO, "TAG", "%s", user_input);
+}
+```
+
+### Secure Data Handling
+
+```cpp
+// ❌ DANGEROUS: Leaves sensitive data in memory
+void bad_password(const char* password) {
+    std::string pwd(password);
+    // Use password...
+    // String lingers in memory!
+}
+
+// ✅ SAFE: Zero memory after use
+void safe_password(const char* password) {
+    size_t len = strlen(password);
+    char* pwd = new char[len + 1];
+    strcpy(pwd, password);
+
+    // Use password...
+
+    // Overwrite memory
+    memset(pwd, 0, len);
+    delete[] pwd;
+}
+```
+
+### Rust Security Advantages
+
+Rust prevents entire classes of vulnerabilities:
+- **No buffer overflows** (bounds-checked by default)
+- **No null pointer dereferences** (Option<T> type system)
+- **No use-after-free** (ownership system)
+- **No data races** (borrow checker)
+
+```rust
+// ✅ Rust prevents common vulnerabilities automatically
+pub fn process_data(data: &[u8]) -> Vec<u8> {
+    let mut output = Vec::new();
+
+    // Bounds-checked (panics instead of memory corruption)
+    for byte in data {
+        output.push(*byte);
+    }
+
+    output
+}
+```
+
+---
+
+## Testing FFI Code
+
+### Strategy
+
+1. **Unit test native code** separately (C++ with Google Test, Rust with built-in tests)
+2. **Integration test** JNI boundary (Kotlin ↔ Native)
+3. **Mock FFI** in Kotlin tests
+
+### C++ Unit Testing with Google Test
+
+**tests/native_test.cpp:**
+```cpp
+#include <gtest/gtest.h>
+#include "mylib.h"
+
+TEST(MyLibTest, BasicFunctionality) {
+    int result = add(2, 3);
+    EXPECT_EQ(result, 5);
+}
+
+TEST(MyLibTest, EdgeCase) {
+    int result = add(INT_MAX, 1);
+    // Test overflow handling
+}
+```
+
+**CMakeLists.txt:**
+```cmake
+# Add Google Test
+enable_testing()
+add_subdirectory(googletest)
+
+add_executable(native_test tests/native_test.cpp mylib.cpp)
+target_link_libraries(native_test gtest gtest_main)
+```
+
+**Run tests:**
+```bash
+cmake --build build/tests
+./build/tests/native_test
+```
+
+### Rust Unit Testing
+
+```rust
+// lib.rs
+
+pub fn add(a: i32, b: i32) -> i32 {
+    a + b
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_add() {
+        assert_eq!(add(2, 3), 5);
+    }
+
+    #[test]
+    fn test_overflow() {
+        let result = add(i32::MAX, 1);
+        // Test overflow behavior
+    }
+}
+```
+
+**Run tests:**
+```bash
+cd src/ffi
+cargo test
+```
+
+### Integration Testing (Kotlin ↔ Native)
+
+**src/test/kotlin/FfiTest.kt:**
+```kotlin
+import org.junit.Test
+import org.junit.Assert.*
+
+class FfiTest {
+    @Test
+    fun testNativeFunction() {
+        System.loadLibrary("mylib")
+
+        val result = MyNative.add(2, 3)
+        assertEquals(5, result)
+    }
+
+    @Test(expected = IllegalArgumentException::class)
+    fun testNativeValidation() {
+        MyNative.processData(null)  // Should throw
+    }
+}
+```
+
+### Mocking FFI for Faster Tests
+
+**src/main/kotlin/MyNative.kt:**
+```kotlin
+interface NativeInterface {
+    fun add(a: Int, b: Int): Int
+    fun processData(data: ByteArray): ByteArray
+}
+
+object MyNative : NativeInterface {
+    external override fun add(a: Int, b: Int): Int
+    external override fun processData(data: ByteArray): ByteArray
+
+    init {
+        System.loadLibrary("mylib")
+    }
+}
+```
+
+**src/test/kotlin/MockedTest.kt:**
+```kotlin
+class MockNative : NativeInterface {
+    override fun add(a: Int, b: Int) = a + b  // Pure Kotlin mock
+    override fun processData(data: ByteArray) = data
+}
+
+class BusinessLogicTest {
+    @Test
+    fun testWithMock() {
+        val mockNative: NativeInterface = MockNative()
+        val result = mockNative.add(2, 3)
+        assertEquals(5, result)
+    }
+}
+```
+
+### Performance Benchmarking
+
+**C++ Benchmarking with Google Benchmark:**
+```cpp
+#include <benchmark/benchmark.h>
+#include "mylib.h"
+
+static void BM_ProcessImage(benchmark::State& state) {
+    // Setup
+    std::vector<uint8_t> image(1920 * 1080 * 4);
+
+    for (auto _ : state) {
+        processImage(image.data(), 1920, 1080);
+    }
+
+    state.SetBytesProcessed(state.iterations() * image.size());
+}
+
+BENCHMARK(BM_ProcessImage);
+BENCHMARK_MAIN();
+```
+
+**Rust Benchmarking with Criterion:**
+```toml
+[dev-dependencies]
+criterion = "0.5"
+```
+
+```rust
+use criterion::{black_box, criterion_group, criterion_main, Criterion};
+
+fn process_benchmark(c: &mut Criterion) {
+    let data = vec![0u8; 1920 * 1080 * 4];
+
+    c.bench_function("process_image", |b| {
+        b.iter(|| process_image(black_box(&data)))
+    });
+}
+
+criterion_group!(benches, process_benchmark);
+criterion_main!(benches);
+```
+
+---
+
+## Troubleshooting
+
+### Common Errors
+
+#### 1. "Library not found: libmylib.so"
+
+**Cause**: Library not built or not included in APK.
+
+**Solution:**
+```bash
+# Check if library exists
+find build/app -name "*.so"
+
+# Check whitehall.toml
+[ffi]
+enabled = true  # Must be enabled!
+
+# Rebuild
+whitehall build --clean
+```
+
+#### 2. "UnsatisfiedLinkError: No implementation found"
+
+**Cause**: JNI function name mismatch.
+
+**Expected:**
+```cpp
+Java_com_example_myapp_ffi_MyClass_myFunction
+```
+
+**Check package name:**
+```kotlin
+// In MyClass.kt
+package com.example.myapp.ffi  // Must match C++ function name!
+```
+
+#### 3. "SIGSEGV (Segmentation fault)"
+
+**Cause**: Null pointer, buffer overflow, use-after-free.
+
+**Debug:**
+```bash
+# Use ndk-stack to symbolicate
+adb logcat | $ANDROID_NDK/ndk-stack -sym build/app/obj/local/arm64-v8a
+
+# Or use AddressSanitizer
+# Add to CMakeLists.txt:
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fsanitize=address")
+```
+
+#### 4. "cargo-ndk: command not found"
+
+**Solution:**
+```bash
+cargo install cargo-ndk
+
+# Add Android targets
+rustup target add aarch64-linux-android
+rustup target add armv7-linux-androideabi
+```
+
+#### 5. "CMake Error: NDK not found"
+
+**Solution:**
+```bash
+# Install NDK via Android Studio or:
+sdkmanager --install "ndk;26.0.10792818"
+
+# Set ANDROID_NDK_HOME
+export ANDROID_NDK_HOME=$ANDROID_HOME/ndk/26.0.10792818
+```
+
+#### 6. Slow Native Builds
+
+**Solutions:**
+- Use `ccache` for C++: `export CMAKE_CXX_COMPILER_LAUNCHER=ccache`
+- Use `sccache` for Rust: Add to `~/.cargo/config.toml`:
+  ```toml
+  [build]
+  rustc-wrapper = "sccache"
+  ```
+- Debug builds: Only compile for `arm64-v8a` (fastest)
+
+### Debugging Checklist
+
+When FFI isn't working:
+
+- [ ] FFI enabled in `whitehall.toml`?
+- [ ] CMakeLists.txt or Cargo.toml present?
+- [ ] JNI function names match package structure?
+- [ ] `System.loadLibrary()` called with correct name?
+- [ ] NDK and CMake installed?
+- [ ] Checked logcat for errors?
+- [ ] Tried clean build? (`whitehall build --clean`)
+
+---
+
+## Performance Optimization
+
+### When to Use FFI
+
+**Use FFI when:**
+- ✅ CPU-intensive loops (image processing, compression)
+- ✅ Existing C/C++ libraries to reuse
+- ✅ SIMD/GPU acceleration needed
+- ✅ Real-time performance critical (audio/video)
+
+**Don't use FFI when:**
+- ❌ Simple business logic
+- ❌ Kotlin performance is sufficient
+- ❌ JNI overhead dominates (many small calls)
+
+### JNI Call Overhead
+
+**Rule of thumb**: JNI calls take ~100-200ns. Only worth it if native work is >> 1µs.
+
+```kotlin
+// ❌ BAD: JNI overhead dominates
+fun processArray(data: IntArray) {
+    for (i in data.indices) {
+        data[i] = MyNative.add(data[i], 1)  // 1M calls = 100ms overhead!
+    }
+}
+
+// ✅ GOOD: Batch processing
+fun processArray(data: IntArray) {
+    MyNative.addToAll(data, 1)  // 1 call, native loops over array
+}
+```
+
+### Batch Operations
+
+```cpp
+// ✅ Process entire array in one call
+extern "C" JNIEXPORT void JNICALL
+Java_com_example_Native_addToAll(
+    JNIEnv* env,
+    jobject,
+    jintArray array,
+    jint value) {
+
+    jsize length = env->GetArrayLength(array);
+    jint* elements = env->GetIntArrayElements(array, nullptr);
+
+    // Fast native loop
+    for (jsize i = 0; i < length; i++) {
+        elements[i] += value;
+    }
+
+    env->ReleaseIntArrayElements(array, elements, 0);
+}
+```
+
+### SIMD Optimization
+
+```cpp
+#include <arm_neon.h>  // ARM NEON SIMD
+
+// ✅ SIMD: 4x faster on ARM
+void addToAllSIMD(int32_t* data, int32_t value, size_t length) {
+    int32x4_t valueVec = vdupq_n_s32(value);
+
+    size_t i = 0;
+    for (; i + 4 <= length; i += 4) {
+        int32x4_t dataVec = vld1q_s32(&data[i]);
+        dataVec = vaddq_s32(dataVec, valueVec);
+        vst1q_s32(&data[i], dataVec);
+    }
+
+    // Handle remainder
+    for (; i < length; i++) {
+        data[i] += value;
+    }
+}
+```
+
+### Parallel Processing
+
+**C++ with OpenMP:**
+```cpp
+#include <omp.h>
+
+void processParallel(float* data, size_t length) {
+    #pragma omp parallel for
+    for (size_t i = 0; i < length; i++) {
+        data[i] = expensiveComputation(data[i]);
+    }
+}
+```
+
+**Rust with Rayon:**
+```toml
+[dependencies]
+rayon = "1.7"
+```
+
+```rust
+use rayon::prelude::*;
+
+pub fn process_parallel(data: &mut [f32]) {
+    data.par_iter_mut().for_each(|x| {
+        *x = expensive_computation(*x);
+    });
+}
+```
+
+### Build Optimizations
+
+**CMakeLists.txt:**
+```cmake
+# Release optimizations
+set(CMAKE_CXX_FLAGS_RELEASE "-O3 -DNDEBUG -flto")
+
+# Enable link-time optimization
+set(CMAKE_INTERPROCEDURAL_OPTIMIZATION TRUE)
+
+# Architecture-specific optimizations
+if(ANDROID_ABI STREQUAL "arm64-v8a")
+    add_compile_options(-march=armv8-a+crypto)
+endif()
+```
+
+**Cargo.toml:**
+```toml
+[profile.release]
+opt-level = 3
+lto = true  # Link-time optimization
+codegen-units = 1  # Better optimization, slower compile
+```
+
+---
+
+## Migration Path
+
+### From Simple to Mixed FFI
+
+**Scenario**: You started with C++ in `src/ffi/`, now want to add Rust.
+
+**Step 1: Create subdirectories**
+```bash
+mkdir -p src/ffi/cpp src/ffi/rust
+mv src/ffi/*.cpp src/ffi/*.h src/ffi/CMakeLists.txt src/ffi/cpp/
+```
+
+**Step 2: Initialize Rust**
+```bash
+cd src/ffi/rust
+cargo init --lib
+# Configure Cargo.toml for cdylib
+cd ../../..
+```
+
+**Step 3: Update imports in .wh files**
+```whitehall
+// Before (worked with simple structure)
+import $ffi.VideoDecoder
+
+// After (explicit paths required)
+import $ffi.cpp.VideoDecoder
+import $ffi.rust.ImageProcessor
+```
+
+**Step 4: Rebuild**
+```bash
+whitehall build
+```
 
 ---
 
