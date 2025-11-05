@@ -1,0 +1,11 @@
+#!/usr/bin/env whitehall
+/// [app]
+/// name = "Hello World"
+/// package = "com.example.helloworld"
+/// min_sdk = 24
+/// target_sdk = 34
+
+<Column padding={16} spacing={16} horizontalAlignment="Center" verticalAlignment="Center">
+  <Text fontSize={32} fontWeight="Bold">Hello, World!</Text>
+  <Text fontSize={18} color="#666666">Welcome to Whitehall</Text>
+</Column>
