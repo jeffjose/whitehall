@@ -486,8 +486,10 @@ impl Parser {
         let name = self.parse_identifier()?;
         self.skip_whitespace();
 
-        // Parse optional constructor
-        let constructor = if self.peek_word() == Some("constructor") || self.peek_char() == Some('(') {
+        // Parse optional constructor (can start with @inject, constructor, or direct params)
+        let constructor = if self.peek_word() == Some("constructor")
+            || self.peek_char() == Some('(')
+            || self.peek_char() == Some('@') {
             Some(self.parse_constructor()?)
         } else {
             None
@@ -549,11 +551,17 @@ impl Parser {
             let annotation = self.parse_identifier()?;
             annotations.push(annotation);
             self.skip_whitespace();
-        }
 
-        // Optional "constructor" keyword
-        self.consume_word("constructor");
-        self.skip_whitespace();
+            // If we have an annotation, "constructor" keyword is required
+            if !self.consume_word("constructor") {
+                return Err(self.error_at_pos("Expected 'constructor' keyword after @Inject"));
+            }
+            self.skip_whitespace();
+        } else {
+            // Optional "constructor" keyword for unannotated constructors
+            self.consume_word("constructor");
+            self.skip_whitespace();
+        }
 
         // Parse parameters
         self.expect_char('(')?;
@@ -1476,8 +1484,8 @@ impl Parser {
         let remaining = &self.input[self.pos..];
         if remaining.starts_with(word) {
             let next_pos = self.pos + word.len();
-            // For @prop and get, don't require whitespace after
-            if word == "@prop" || word == "get" {
+            // For @prop, get, and constructor, don't require whitespace after
+            if word == "@prop" || word == "get" || word == "constructor" {
                 self.pos = next_pos;
                 return true;
             }

@@ -272,12 +272,16 @@ impl Analyzer {
                 continue;
             }
 
-            // Check for @HiltViewModel annotation
-            let has_hilt = class.annotations.iter().any(|a| a == "HiltViewModel");
+            // Check for @hilt annotation (case-insensitive: @hilt or @HiltViewModel)
+            let has_hilt = class.annotations.iter().any(|a| {
+                a.eq_ignore_ascii_case("hilt") || a == "HiltViewModel"
+            });
 
-            // Check for @Inject constructor
+            // Check for @inject constructor (case-insensitive: @inject or @Inject)
             let has_inject = class.constructor.as_ref()
-                .map(|c| c.annotations.iter().any(|a| a == "Inject"))
+                .map(|c| c.annotations.iter().any(|a| {
+                    a.eq_ignore_ascii_case("inject")
+                }))
                 .unwrap_or(false);
 
             // Register the store

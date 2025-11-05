@@ -438,7 +438,7 @@ class UserProfile : ViewModel() {
 
 ### Phase 5: Dependency Injection (Hilt) ⏸️ PENDING
 
-**Hybrid Auto-Detection:** Hilt is automatically enabled when EITHER `@HiltViewModel` OR `@Inject` is present.
+**Hybrid Auto-Detection:** Hilt is automatically enabled when EITHER `@hilt` OR `@inject`/`@Inject` is present.
 
 #### Approach A: Using `@Inject` (Recommended - Less Boilerplate)
 
@@ -481,12 +481,12 @@ class UserProfile @Inject constructor(
 val profile = hiltViewModel<UserProfile>()  // ← Auto-selected!
 ```
 
-#### Approach B: Using `@HiltViewModel` (Explicit)
+#### Approach B: Using `@hilt` (Explicit)
 
 **Input:**
 ```whitehall
 @store
-@HiltViewModel
+@hilt
 class UserProfile @Inject constructor(
   private val repository: ProfileRepository,
   private val analytics: Analytics
@@ -495,14 +495,14 @@ class UserProfile @Inject constructor(
 }
 ```
 
-**Output:** Same as Approach A - both annotations work
+**Output:** Same as Approach A - both annotations work (`@hilt` → `@HiltViewModel`)
 
 #### No Hilt - Simple Constructor Params
 
 **Input:**
 ```whitehall
 @store
-class Counter(initialValue: Int) {  // No @Inject, no @HiltViewModel
+class Counter(initialValue: Int) {  // No @inject/@Inject, no @hilt
   var count = initialValue
 }
 ```
@@ -520,16 +520,18 @@ val counter = viewModel<Counter>()  // Regular viewModel, not hiltViewModel
 ```
 
 **Implementation:**
-1. Check for EITHER `@HiltViewModel` on class OR `@Inject` on constructor
+1. Check for EITHER `@hilt` on class OR `@inject`/`@Inject` on constructor (case-insensitive)
 2. If either is present:
-   - Add `@HiltViewModel` to generated class (if not already present)
-   - Preserve `@Inject constructor()` as-is
+   - Add `@HiltViewModel` to generated class
+   - Preserve `@Inject constructor()` as-is (normalized to capital)
    - Track `has_hilt: true` in store registry
 3. When generating usage:
    - Check if class has `has_hilt` in registry
    - Yes → Generate `hiltViewModel<T>()`
    - No → Generate `viewModel<T>()`
 4. No annotation needed at usage site - fully automatic!
+
+**Note:** Both lowercase (`@inject`, `@hilt`) and capital (`@Inject`) versions are supported.
 
 ---
 
@@ -1404,7 +1406,7 @@ class MyApplication : Application()
 10. **Auto-wrap suspend functions** - `suspend fun` automatically wrapped in `viewModelScope.launch { }`
 
 ### Decided - Pending Implementation ⏸️
-1. **Auto-detect Hilt** - Phase 5 (Hybrid: detect `@Inject` OR `@HiltViewModel` → auto-generate `@HiltViewModel` + use `hiltViewModel<T>()`)
+1. **Auto-detect Hilt** - Phase 5 (Hybrid: detect `@inject`/`@Inject` OR `@hilt` → auto-generate `@HiltViewModel` + use `hiltViewModel<T>()`)
 2. **Callable references** (`profile::save`) - Works in Kotlin, needs testing
 3. **Lifecycle hooks** (`onMount`, `onDispose`) - Not started
 4. **Global stores** - Design decided, not implemented

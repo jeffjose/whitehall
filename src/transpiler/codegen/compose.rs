@@ -358,12 +358,14 @@ impl ComposeBackend {
             if let Some(store_info) = self.detect_store_instantiation(&transformed_value) {
                 // Track store usage for imports
                 self.uses_viewmodel = true;
-                if store_info.has_hilt {
+                // Use hiltViewModel if either @hilt or @inject is present
+                let needs_hilt = store_info.has_hilt || store_info.has_inject;
+                if needs_hilt {
                     self.uses_hilt_viewmodel = true;
                 }
 
                 // Generate viewModel or hiltViewModel based on annotations
-                let view_model_call = if store_info.has_hilt {
+                let view_model_call = if needs_hilt {
                     format!("hiltViewModel<{}>()", store_info.class_name)
                 } else {
                     format!("viewModel<{}>()", store_info.class_name)
@@ -2556,9 +2558,17 @@ impl ComposeBackend {
         output.push_str("import kotlinx.coroutines.flow.update\n");
         output.push_str("import kotlinx.coroutines.launch\n");
 
+        // Check if Hilt is needed (either @hilt annotation or @inject constructor)
+        let has_hilt_annotation = class.annotations.iter().any(|a| {
+            a.eq_ignore_ascii_case("hilt") || a == "HiltViewModel"
+        });
+        let has_inject_constructor = class.constructor.as_ref()
+            .map(|c| c.annotations.iter().any(|a| a.eq_ignore_ascii_case("inject")))
+            .unwrap_or(false);
+        let needs_hilt = has_hilt_annotation || has_inject_constructor;
+
         // Add Hilt imports if needed
-        let has_hilt = class.annotations.iter().any(|a| a == "HiltViewModel");
-        if has_hilt {
+        if needs_hilt {
             output.push_str("import dagger.hilt.android.lifecycle.HiltViewModel\n");
             output.push_str("import javax.inject.Inject\n");
         }
@@ -2566,7 +2576,7 @@ impl ComposeBackend {
         output.push('\n');
 
         // Class annotations
-        if has_hilt {
+        if needs_hilt {
             output.push_str("@HiltViewModel\n");
         }
 

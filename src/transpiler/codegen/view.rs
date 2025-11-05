@@ -509,6 +509,7 @@ mod tests {
             functions: vec![],
             lifecycle_hooks: vec![],
             imports: vec![],
+            classes: vec![],
             markup: Markup::Component(Component {
                 name: "Text".to_string(),
                 props: vec![],
@@ -587,6 +588,7 @@ mod tests {
             functions: vec![],
             lifecycle_hooks: vec![],
             imports: vec![],
+            classes: vec![],
             markup: Markup::Component(Component {
                 name: "Text".to_string(),
                 props: vec![],

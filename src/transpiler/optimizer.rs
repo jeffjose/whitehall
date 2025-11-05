@@ -107,7 +107,7 @@ impl Optimizer {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::transpiler::analyzer::{MutabilityInfo, SymbolTable};
+    use crate::transpiler::analyzer::{MutabilityInfo, StoreRegistry, SymbolTable};
 
     #[test]
     fn test_optimizer_returns_empty_optimizations() {
@@ -116,6 +116,7 @@ mod tests {
             symbol_table: SymbolTable::new(),
             mutability_info: MutabilityInfo::new(),
             optimization_hints: Vec::new(),
+            store_registry: StoreRegistry::new(),
         };
 
         let optimized_ast = Optimizer::optimize(ast, semantic_info);
@@ -131,6 +132,7 @@ mod tests {
             symbol_table: SymbolTable::new(),
             mutability_info: MutabilityInfo::new(),
             optimization_hints: Vec::new(),
+            store_registry: StoreRegistry::new(),
         };
 
         let optimized_ast = Optimizer::optimize(ast.clone(), semantic_info);
@@ -152,6 +154,7 @@ mod tests {
                 name: "items".to_string(),
                 confidence: 100,
             }],
+            store_registry: StoreRegistry::new(),
         };
 
         let optimized_ast = Optimizer::optimize(ast, semantic_info);
@@ -180,6 +183,7 @@ mod tests {
                 name: "items".to_string(),
                 confidence: 80,
             }],
+            store_registry: StoreRegistry::new(),
         };
 
         let optimized_ast = Optimizer::optimize(ast, semantic_info);
@@ -208,6 +212,7 @@ mod tests {
                 name: "items".to_string(),
                 confidence: 60, // var collection: 0+30+20+10
             }],
+            store_registry: StoreRegistry::new(),
         };
 
         let optimized_ast = Optimizer::optimize(ast, semantic_info);
@@ -226,6 +231,7 @@ mod tests {
                 name: "items".to_string(),
                 confidence: 50, // var with handlers: 0+30+20+0
             }],
+            store_registry: StoreRegistry::new(),
         };
 
         let optimized_ast = Optimizer::optimize(ast, semantic_info);
@@ -254,6 +260,7 @@ mod tests {
                     confidence: 90,
                 },
             ],
+            store_registry: StoreRegistry::new(),
         };
 
         let optimized_ast = Optimizer::optimize(ast, semantic_info);
@@ -287,6 +294,7 @@ mod tests {
                 name: "items".to_string(),
                 confidence: 79, // Just below threshold
             }],
+            store_registry: StoreRegistry::new(),
         };
 
         let optimized_ast = Optimizer::optimize(ast, semantic_info);
