@@ -216,7 +216,7 @@ src/
 | Phase 1 | ✅ **COMPLETE** | Basic @store generation (ViewModel + StateFlow) |
 | Phase 2 | ✅ **COMPLETE** | Auto-detection at usage sites (viewModel<T>()) |
 | Phase 3 | ✅ **COMPLETE** | Derived properties with getters |
-| Phase 4 | ⏸️ **PENDING** | Auto-wrap suspend functions in viewModelScope |
+| Phase 4 | ✅ **COMPLETE** | Auto-wrap suspend functions in viewModelScope |
 | Phase 5 | ⏸️ **PENDING** | Hilt integration (@HiltViewModel support) |
 
 **Working Example:** See `examples/counter-store/` for a complete working example.
@@ -401,7 +401,7 @@ class UserProfile : ViewModel() {
 
 ---
 
-### Phase 4: Suspend Functions ⏸️ PENDING
+### Phase 4: Suspend Functions ✅ COMPLETE
 
 **Input:**
 ```whitehall
@@ -1357,14 +1357,14 @@ class MyApplication : Application()
 7. **stores/** directory support - Proper package resolution
 8. **Script tag support** - `<script>` for imports in main.wh
 9. **Multiple store instances** - Auto-keyed by variable name (ready, untested)
+10. **Auto-wrap suspend functions** - `suspend fun` automatically wrapped in `viewModelScope.launch { }`
 
 ### Decided - Pending Implementation ⏸️
-1. **Auto-wrap suspend functions** - Phase 4 (viewModelScope.launch)
-2. **Auto-detect Hilt** - Phase 5 (@HiltViewModel → hiltViewModel<T>())
-3. **Callable references** (`profile::save`) - Works in Kotlin, needs testing
-4. **Lifecycle hooks** (`onMount`, `onDispose`) - Not started
-5. **Global stores** - Design decided, not implemented
-6. **Persistence** - Manual (no special syntax needed)
+1. **Auto-detect Hilt** - Phase 5 (@HiltViewModel → hiltViewModel<T>())
+2. **Callable references** (`profile::save`) - Works in Kotlin, needs testing
+3. **Lifecycle hooks** (`onMount`, `onDispose`) - Not started
+4. **Global stores** - Design decided, not implemented
+5. **Persistence** - Manual (no special syntax needed)
 
 ### Open Questions Needing Decisions
 1. **Lifecycle hook naming:** `onDestroy` vs `onDispose` (recommendation: `onDispose`)
@@ -1373,12 +1373,11 @@ class MyApplication : Application()
 ---
 
 **Next Steps:**
-1. ✅ ~~Phase 0-3: Basic @store implementation~~ **COMPLETE**
-2. Implement Phase 4: Auto-wrap suspend functions in viewModelScope.launch
-3. Implement Phase 5: Hilt integration (@HiltViewModel detection)
-4. Implement lifecycle hooks (`onMount`, `onDispose`)
-5. Decide & implement: Global store pattern (Option A or B)
-6. Test: Callable references (`profile::save`)
-7. Test: Multiple store instances with auto-keying
+1. ✅ ~~Phase 0-4: Core @store implementation~~ **COMPLETE**
+2. Implement Phase 5: Hilt integration (@HiltViewModel detection)
+3. Implement lifecycle hooks (`onMount`, `onDispose`)
+4. Decide & implement: Global store pattern (Option A or B)
+5. Test: Callable references (`profile::save`)
+6. Test: Multiple store instances with auto-keying
 
 **Try it now:** `whitehall run examples/counter-store/`

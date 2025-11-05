@@ -2634,7 +2634,13 @@ impl ComposeBackend {
             // Wrap suspend functions in viewModelScope.launch
             if func.is_suspend {
                 output.push_str("        viewModelScope.launch {\n");
-                output.push_str(&format!("            {}\n", func.body.trim()));
+                // Indent each line of the function body properly
+                for line in func.body.lines() {
+                    let trimmed = line.trim();
+                    if !trimmed.is_empty() {
+                        output.push_str(&format!("            {}\n", trimmed));
+                    }
+                }
                 output.push_str("        }\n");
             } else {
                 output.push_str(&format!("        {}\n", func.body.trim()));
