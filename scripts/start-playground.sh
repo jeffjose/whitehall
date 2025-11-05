@@ -40,28 +40,49 @@ cleanup() {
     echo ""
     echo -e "${BLUE}Shutting down...${NC}"
 
-    # Kill all child processes of this script
-    pkill -P $$ 2>/dev/null || true
+    # Kill background jobs and their children
+    # Kill the saved PIDs (subshells) and their process groups
+    if [ ! -z "$BACKEND_PID" ]; then
+        kill -TERM -$BACKEND_PID 2>/dev/null || true
+    fi
+    if [ ! -z "$FRONTEND_PID" ]; then
+        kill -TERM -$FRONTEND_PID 2>/dev/null || true
+    fi
+
+    # Give processes a moment to clean up
+    sleep 0.5
+
+    # Force kill if still running
+    if [ ! -z "$BACKEND_PID" ]; then
+        kill -9 -$BACKEND_PID 2>/dev/null || true
+    fi
+    if [ ! -z "$FRONTEND_PID" ]; then
+        kill -9 -$FRONTEND_PID 2>/dev/null || true
+    fi
 
     exit 0
 }
 trap cleanup INT TERM
 
 # Start backend with cargo-watch for auto-reload on file changes
+# Use setsid to create a new process group
 (
     cd "$BACKEND_DIR"
-    cargo watch -x run 2>&1 | while IFS= read -r line; do
+    setsid cargo watch -x run 2>&1 | while IFS= read -r line; do
         echo -e "${GREEN}[BACKEND]${NC} $line"
     done
 ) &
+BACKEND_PID=$!
 
 # Start frontend in background, prefix output with [FRONTEND]
+# Use setsid to create a new process group
 (
     cd "$FRONTEND_DIR"
-    uv run -- python -m http.server 8080 2>&1 | while IFS= read -r line; do
+    setsid uv run -- python -m http.server 8080 2>&1 | while IFS= read -r line; do
         echo -e "${BLUE}[FRONTEND]${NC} $line"
     done
 ) &
+FRONTEND_PID=$!
 
 # Wait for both processes
 wait

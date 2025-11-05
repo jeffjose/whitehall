@@ -99,9 +99,16 @@ async fn main() {
         .route("/api/compile", post(compile))
         .layer(CorsLayer::permissive());
 
-    let listener = tokio::net::TcpListener::bind("0.0.0.0:3000")
-        .await
-        .unwrap();
+    let listener = match tokio::net::TcpListener::bind("0.0.0.0:3000").await {
+        Ok(listener) => listener,
+        Err(e) => {
+            eprintln!("Error: Failed to bind to port 3000: {}", e);
+            eprintln!("Hint: Port 3000 may already be in use. Try:");
+            eprintln!("  - Kill existing process: lsof -ti:3000 | xargs kill");
+            eprintln!("  - Or use a different port");
+            std::process::exit(1);
+        }
+    };
 
     println!("🚀 Whitehall Playground backend running on http://localhost:3000");
     println!("   API endpoint: POST /api/compile");
