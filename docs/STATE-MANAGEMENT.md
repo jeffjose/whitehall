@@ -13,7 +13,7 @@
 | Two-way binding | ✅ Supported | `bind:value={email}` |
 | Derived values | ✅ Supported | `val doubled = count * 2` |
 | Hoisted state | ✅ Supported | Local state + props |
-| **Stores (screen-level)** | **✅ DECIDED - Not Implemented** | `@store class UserProfile {...}` + `val profile = UserProfile()` (auto-detected) |
+| **Stores (screen-level)** | **✅ Partially Implemented** | `@store class UserProfile {...}` + `val profile = UserProfile()` (auto-detected) |
 | StateFlow (manual) | ⚠️ Works today | Use Kotlin files directly |
 | Effects | ⚠️ Works today | Use `LaunchedEffect` directly |
 | CompositionLocal | ⚠️ Works today | Use Kotlin directly |
@@ -23,7 +23,7 @@
 
 **Legend:**
 - ✅ **Supported** - Works today with clean syntax
-- **✅ DECIDED** - Decision made, needs implementation
+- ✅ **Partially Implemented** - Core features working, some advanced features pending
 - ⚠️ **Works today** - No special syntax, use Kotlin/Compose directly
 - 🤔 **Under consideration** - Options available, decision needed
 
@@ -208,7 +208,22 @@ src/
 
 ## Implementation Plan
 
-### Phase 0: Extend Semantic Analyzer (FOUNDATION)
+### Implementation Status
+
+| Phase | Status | Description |
+|-------|--------|-------------|
+| Phase 0 | ✅ **COMPLETE** | Store registry with cross-file detection |
+| Phase 1 | ✅ **COMPLETE** | Basic @store generation (ViewModel + StateFlow) |
+| Phase 2 | ✅ **COMPLETE** | Auto-detection at usage sites (viewModel<T>()) |
+| Phase 3 | ✅ **COMPLETE** | Derived properties with getters |
+| Phase 4 | ⏸️ **PENDING** | Auto-wrap suspend functions in viewModelScope |
+| Phase 5 | ⏸️ **PENDING** | Hilt integration (@HiltViewModel support) |
+
+**Working Example:** See `examples/counter-store/` for a complete working example.
+
+---
+
+### Phase 0: Extend Semantic Analyzer (FOUNDATION) ✅ COMPLETE
 
 **Goal:** Build a store registry during semantic analysis to enable auto-detection of `@store` classes.
 
@@ -255,7 +270,7 @@ pub fn transpile(...) -> Result<String, String> {
 
 ---
 
-### Phase 1: Basic Store Generation
+### Phase 1: Basic Store Generation ✅ COMPLETE
 
 **Goal:** Generate ViewModel boilerplate from `@store` classes.
 
@@ -306,7 +321,7 @@ class UserProfile : ViewModel() {
 
 ---
 
-### Phase 2: Store Usage in Screens
+### Phase 2: Store Usage in Screens ✅ COMPLETE
 
 **Input:** `screens/ProfileScreen.wh`
 ```whitehall
@@ -353,7 +368,7 @@ fun ProfileScreen() {
 
 ---
 
-### Phase 3: Derived Properties
+### Phase 3: Derived Properties ✅ COMPLETE
 
 **Input:**
 ```whitehall
@@ -386,7 +401,7 @@ class UserProfile : ViewModel() {
 
 ---
 
-### Phase 4: Suspend Functions
+### Phase 4: Suspend Functions ⏸️ PENDING
 
 **Input:**
 ```whitehall
@@ -421,7 +436,7 @@ class UserProfile : ViewModel() {
 
 ---
 
-### Phase 5: Dependency Injection (Hilt)
+### Phase 5: Dependency Injection (Hilt) ⏸️ PENDING
 
 **Input:**
 ```whitehall
@@ -807,7 +822,7 @@ fun ProfileScreen() {
 }
 ```
 
-**Whitehall:** ✅ DECIDED (not implemented)
+**Whitehall:** ✅ Implemented
 ```whitehall
 <!-- stores/UserProfile.wh -->
 @store
@@ -1332,17 +1347,24 @@ class MyApplication : Application()
 - ✅ Manual ViewModels (Kotlin files)
 - ✅ Effects: `LaunchedEffect`, `DisposableEffect`
 
-### Decided - Needs Implementation
-1. **@store annotation** for screen-level reactive state (class definition only)
+### Implemented ✅
+1. **@store annotation** for screen-level reactive state (class definition)
 2. **Auto-detection** - `val profile = UserProfile()` automatically uses `viewModel<T>()` when `UserProfile` has `@store`
-3. **Optional explicit annotation** - `@store val profile = ...` for clarity (same behavior)
-4. **Auto-detect Hilt** - Classes with `@HiltViewModel` automatically use `hiltViewModel<T>()`
-5. **stores/** directory convention (recommended, not required)
-6. **Callable references** (`profile::save`)
-7. **Lifecycle hooks** (`onMount`, `onDispose`)
-8. **Multiple store instances** (auto-keyed by variable name)
-9. **All @annotations lowercase** (`@store`, `@prop`, not `@Store`)
-10. **Persistence** - Manual (no special syntax)
+3. **Project-wide store registry** - Cross-file detection of @store classes
+4. **StateFlow generation** - Automatic UiState, _uiState, uiState.collectAsState()
+5. **Property accessors** - get/set with `.update { it.copy(...) }`
+6. **Derived properties** - `val isPositive get() = count > 0`
+7. **stores/** directory support - Proper package resolution
+8. **Script tag support** - `<script>` for imports in main.wh
+9. **Multiple store instances** - Auto-keyed by variable name (ready, untested)
+
+### Decided - Pending Implementation ⏸️
+1. **Auto-wrap suspend functions** - Phase 4 (viewModelScope.launch)
+2. **Auto-detect Hilt** - Phase 5 (@HiltViewModel → hiltViewModel<T>())
+3. **Callable references** (`profile::save`) - Works in Kotlin, needs testing
+4. **Lifecycle hooks** (`onMount`, `onDispose`) - Not started
+5. **Global stores** - Design decided, not implemented
+6. **Persistence** - Manual (no special syntax needed)
 
 ### Open Questions Needing Decisions
 1. **Lifecycle hook naming:** `onDestroy` vs `onDispose` (recommendation: `onDispose`)
@@ -1351,6 +1373,12 @@ class MyApplication : Application()
 ---
 
 **Next Steps:**
-1. Implement Phase 1 (basic @store generation) from Implementation Plan
-2. Decide: `onDestroy` vs `onDispose`
-3. Decide: Global store pattern (Option A or B)
+1. ✅ ~~Phase 0-3: Basic @store implementation~~ **COMPLETE**
+2. Implement Phase 4: Auto-wrap suspend functions in viewModelScope.launch
+3. Implement Phase 5: Hilt integration (@HiltViewModel detection)
+4. Implement lifecycle hooks (`onMount`, `onDispose`)
+5. Decide & implement: Global store pattern (Option A or B)
+6. Test: Callable references (`profile::save`)
+7. Test: Multiple store instances with auto-keying
+
+**Try it now:** `whitehall run examples/counter-store/`
