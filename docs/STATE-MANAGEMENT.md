@@ -248,7 +248,7 @@ object AppSettings {
    - Scan `<script>` blocks for local `var` declarations (exclude `@prop var`)
    - If found, auto-generate ViewModel for the component
    - Generate UiState data class from all `var` declarations
-   - Auto-wrap suspend functions in `viewModelScope.launch` (?)
+   - Auto-wrap suspend functions in `viewModelScope.launch` (✅ see [SUSPEND-FUNCTIONS.md](SUSPEND-FUNCTIONS.md))
    - Generate proper `collectAsState()` and reference rewriting
 
 2. **Auto-ViewModel for imported classes with `var`:**
@@ -264,10 +264,13 @@ object AppSettings {
    - No `viewModel()` call, direct property access
    - Lives for app lifetime
 
-4. **Suspend function handling (OPEN QUESTION):**
-   - When to use `viewModelScope.launch` vs `LaunchedEffect` vs `rememberCoroutineScope()`?
-   - How to handle suspend functions in different contexts?
-   - Need to clarify scoping rules
+4. **Suspend function handling (✅ DECIDED - See [SUSPEND-FUNCTIONS.md](SUSPEND-FUNCTIONS.md)):**
+   - **Decision:** Auto-infer scope with clean override syntax (Option C)
+   - **Level 1:** Auto-wrap in appropriate scope (90% case)
+   - **Level 2:** Dispatcher control with `io { }`, `cpu { }`, `main { }` syntax
+   - **Level 3:** Custom scopes with `val myScope = scope()` syntax
+   - ViewModels: Auto-wrap in `viewModelScope.launch`
+   - Singletons: Keep as `suspend`, caller provides scope
 
 5. **Update existing examples/tests**
 

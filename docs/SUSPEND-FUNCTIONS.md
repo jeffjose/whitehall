@@ -1,26 +1,27 @@
 # Suspend Functions and Coroutine Scopes
 
-**Status:** 🤔 Open Question - Decision Needed
+**Status:** ✅ Decided - Option C (Auto-Infer + Override)
 
 ---
 
-## The Core Question
+## Decision: Auto-Infer Scope with Clean Override Syntax
 
-When users write `suspend fun` in their Whitehall code, should we:
-- **Option A:** Keep them as `suspend` functions (explicit scope management)
-- **Option B:** Auto-wrap them in coroutine scopes (hide complexity)
+**Chosen Approach:** Auto-infer the appropriate scope from context (90% case), but allow explicit override with clean syntax (10% advanced cases).
 
-This decision affects:
-- Call site ergonomics (how easy it is to call these functions)
-- Control over coroutine context (threading, cancellation)
-- Kotlin-native feel vs. Whitehall magic
-- Different contexts (ViewModels, singletons, components)
+**Rationale:**
+- Scope is usually obvious from context (component, ViewModel, effect)
+- Clean syntax for common case (like Svelte's `async`)
+- Power users can override for thread control or custom scopes
+- Whitehall compiler can provide better names than Kotlin's verbose APIs
 
 ---
 
-## Option A: Keep Functions as `suspend` (Explicit Scopes)
+## Implementation Plan: Three Levels of Control
 
-### You Write:
+### Level 1: Auto-Infer (Default - 90% of cases)
+
+**No scope thinking required - just works!**
+
 ```whitehall
 <script>
   var isLoading = false
@@ -35,68 +36,11 @@ This decision affects:
 <Button onClick={save}>Save</Button>
 ```
 
-### Generated Code:
+**Transpiles to:**
 ```kotlin
 class MyScreenViewModel : ViewModel() {
-    // ... state ...
-
-    suspend fun save() {  // ← Still suspend
-        isLoading = true
-        api.save()
-        isLoading = false
-    }
-}
-
-@Composable
-fun MyScreen() {
-    val vm = viewModel<MyScreenViewModel>()
-    val scope = rememberCoroutineScope()  // ← Need to auto-generate this
-
-    Button(onClick = {
-        scope.launch { vm.save() }  // ← Explicit launch needed
-    })
-}
-```
-
-### Pros:
-- ✅ You control when/how coroutines launch
-- ✅ More Kotlin-native (suspend functions are standard)
-- ✅ Clear that async work is happening
-- ✅ Can customize scope/context at call site: `scope.launch(Dispatchers.IO) { save() }`
-- ✅ No magic/surprises
-
-### Cons:
-- ❌ More verbose at call site: `onClick={() => scope.launch { save() }}`
-- ❌ Need to auto-generate `rememberCoroutineScope()` in components
-- ❌ Easy to forget the scope and get compile errors
-- ❌ Less beginner-friendly
-
----
-
-## Option B: Auto-Wrap in Coroutine Scope (Hide Complexity)
-
-### You Write:
-```whitehall
-<script>
-  var isLoading = false
-
-  suspend fun save() {  // ← You write suspend
-    isLoading = true
-    api.save()
-    isLoading = false
-  }
-</script>
-
-<Button onClick={save}>Save</Button>  // ← Direct call, simple!
-```
-
-### Generated Code:
-```kotlin
-class MyScreenViewModel : ViewModel() {
-    // ... state ...
-
-    fun save() {  // ← NOT suspend anymore
-        viewModelScope.launch {  // ← Auto-wrapped
+    fun save() {
+        viewModelScope.launch {  // ← Auto-inferred
             isLoading = true
             api.save()
             isLoading = false
@@ -107,384 +51,389 @@ class MyScreenViewModel : ViewModel() {
 @Composable
 fun MyScreen() {
     val vm = viewModel<MyScreenViewModel>()
-
-    Button(onClick = { vm.save() })  // ← Simple call, no scope needed
+    Button(onClick = { vm.save() })  // ← Simple call
 }
 ```
 
-### Pros:
-- ✅ Clean call sites: `onClick={save}`
-- ✅ Less boilerplate
-- ✅ Beginner-friendly
-- ✅ Matches what most Android developers do anyway
-- ✅ Works seamlessly with event handlers
-
-### Cons:
-- ❌ Less control (can't customize scope or context)
-- ❌ Less "Kotlin-native"
-- ❌ Hides that async work is happening (could be surprising)
-- ❌ Always runs on Main dispatcher (viewModelScope default)
+**Auto-inference rules:**
+- Component with `var` → Uses `viewModelScope.launch`
+- Inside `onMount` → Already in `LaunchedEffect` scope
+- Component without `var` → Uses `rememberCoroutineScope()`
+- Singleton (`@store object`) → Keep as `suspend`, caller provides scope
 
 ---
 
-## Different Contexts Matter
+### Level 2: Thread Control (Dispatchers)
 
-### Context 1: From `onClick` (Event Handlers)
+**For when you need to control which thread the work runs on.**
 
-**Option A (suspend):**
+#### The Three Dispatchers
+
+| Dispatcher | Whitehall Syntax | When to Use | Kotlin Equivalent |
+|------------|------------------|-------------|-------------------|
+| **Main** | `main { }` | UI updates (auto default) | `Dispatchers.Main` |
+| **IO** | `io { }` | Network, disk, database | `Dispatchers.IO` |
+| **CPU** | `cpu { }` | Heavy computation | `Dispatchers.Default` |
+
+#### Examples:
+
 ```whitehall
 <script>
-  // Need to auto-generate this in every component with suspend calls
-  val scope = rememberCoroutineScope()
+  var data = []
+  var processedData = []
 
-  suspend fun save() { ... }
+  suspend fun loadData() {
+    data = api.fetch()  // Network call
+  }
+
+  suspend fun processData() {
+    processedData = heavyComputation(data)  // CPU-intensive
+  }
 </script>
 
-<Button onClick={() => scope.launch { save() }}>Save</Button>
-```
-**Problem:** Where does `scope` come from? We'd need to:
-- Detect that component calls suspend functions
-- Auto-generate `val scope = rememberCoroutineScope()`
-- Rewrite onClick to wrap in `scope.launch { }`
-
-**Option B (auto-wrap):**
-```whitehall
-<script>
-  suspend fun save() { ... }  // Auto-wrapped to non-suspend
-</script>
-
+<!-- Auto (main thread via viewModelScope) -->
 <Button onClick={save}>Save</Button>
-```
-Clean and simple!
 
----
+<!-- Explicit IO thread (network/disk operations) -->
+<Button onClick={() => io { loadData() }}>Load Data</Button>
 
-### Context 2: From `onMount` (Lifecycle Hooks)
+<!-- Explicit CPU thread (heavy computation) -->
+<Button onClick={() => cpu { processData() }}>Process</Button>
 
-**Option A (suspend):**
-```whitehall
-onMount {
-  loadData()  // ✅ Works! LaunchedEffect provides scope
-}
+<!-- Force main thread (rare, usually automatic) -->
+<Button onClick={() => main { updateUI() }}>Update UI</Button>
 ```
 
-**Option B (auto-wrap):**
-```whitehall
-onMount {
-  loadData()  // ✅ Also works! Function is non-suspend
-}
-```
-
-Both work fine here.
-
----
-
-### Context 3: Calling Other Suspend Functions
-
-**Option A (suspend):**
-```whitehall
-suspend fun save() {
-  repository.save(name)  // ✅ Can call suspend functions directly
-  analytics.track()       // ✅ If this is suspend too
-}
-```
-
-**Option B (auto-wrap):**
-```whitehall
-suspend fun save() {
-  repository.save(name)  // ✅ Still works (inside viewModelScope.launch)
-  analytics.track()       // ✅ Also works
-}
-```
-
-Both work fine - the body is still in a suspend context.
-
----
-
-### Context 4: Advanced Use Cases
-
-**Scenario:** Need to run on IO thread for heavy computation
-
-**Option A (suspend):**
+**Transpiles to:**
 ```kotlin
-// User can do this at call site:
-scope.launch(Dispatchers.IO) { save() }
-```
-
-**Option B (auto-wrap):**
-```kotlin
-// Can't customize - always uses viewModelScope (Main dispatcher)
-// User would need to wrap internals:
-suspend fun save() {
-  withContext(Dispatchers.IO) {
-    // Heavy work here
-  }
-}
-```
-
-Option A is more flexible, Option B requires `withContext` internally.
-
----
-
-## Singletons: A Special Case
-
-```whitehall
-@store
-object AppSettings {
-  var darkMode = false
-
-  suspend fun loadFromDisk() {
-    darkMode = dataStore.read()
-  }
-}
-```
-
-### Problem: Singletons Don't Have `viewModelScope`
-
-**Option A (suspend):**
-```kotlin
-object AppSettings {
-    // ... StateFlow ...
-
-    suspend fun loadFromDisk() {  // ← Stays suspend
-        darkMode = dataStore.read()
+// io { }
+Button(onClick = {
+    viewModelScope.launch(Dispatchers.IO) {
+        vm.loadData()
     }
-}
+})
 
-// Call sites:
-// From onMount:
-onMount {
-  AppSettings.loadFromDisk()  // ✅ Works (LaunchedEffect scope)
-}
-
-// From onClick:
-<Button onClick={() => scope.launch { AppSettings.loadFromDisk() }}>
-```
-
-Caller provides the scope.
-
-**Option B (auto-wrap):**
-```kotlin
-object AppSettings {
-    // Need to create a global scope - risky!
-    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
-
-    fun loadFromDisk() {  // Non-suspend
-        scope.launch {
-            darkMode = dataStore.read()
-        }
+// cpu { }
+Button(onClick = {
+    viewModelScope.launch(Dispatchers.Default) {
+        vm.processData()
     }
-}
-```
+})
 
-**Problems with auto-wrap for singletons:**
-- ❌ Global scope lives forever (potential memory leaks)
-- ❌ No lifecycle - when to cancel?
-- ❌ Who owns the scope?
-- ❌ Hard to test (can't inject scope)
+// main { }
+Button(onClick = {
+    viewModelScope.launch(Dispatchers.Main) {
+        vm.updateUI()
+    }
+})
+```
 
 ---
 
-## Components Without ViewModel (No `var`)
+### Level 3: Custom Scopes (Advanced - Rare)
+
+**For independent lifecycle management (e.g., cancellable operations).**
 
 ```whitehall
 <script>
-  // No var, so no ViewModel generated
+  var isUploading = false
 
+  val uploadScope = scope()  // Custom scope
+
+  suspend fun uploadLargeFile() {
+    isUploading = true
+    api.upload(largeFile)
+    isUploading = false
+  }
+
+  fun cancelUpload() {
+    uploadScope.cancel()
+  }
+</script>
+
+<!-- Launch in custom scope -->
+<Button onClick={() => uploadScope.launch { uploadLargeFile() }}>
+  Upload File
+</Button>
+
+<Button onClick={cancelUpload} disabled={!isUploading}>
+  Cancel Upload
+</Button>
+```
+
+**Transpiles to:**
+```kotlin
+@Composable
+fun MyScreen() {
+    val vm = viewModel<MyScreenViewModel>()
+    val uploadScope = rememberCoroutineScope()  // ← Hidden verbose name
+
+    Button(onClick = {
+        uploadScope.launch {
+            vm.uploadLargeFile()
+        }
+    })
+
+    Button(
+        onClick = { vm.cancelUpload() },
+        enabled = !vm.isUploading
+    )
+}
+```
+
+**Note:** `scope()` in Whitehall hides Kotlin's verbose `rememberCoroutineScope()` name.
+
+---
+
+## Complete Example: All Three Levels
+
+```whitehall
+<script>
+  var data = []
+  var isUploading = false
+
+  val uploadScope = scope()
+
+  // Level 1: Auto (uses viewModelScope, main thread)
+  suspend fun saveSimple() {
+    api.save(data)
+  }
+
+  // Level 1: Auto (but we know it's IO work)
+  suspend fun loadData() {
+    data = api.fetch()
+  }
+
+  // Level 1: Auto (but we know it's CPU work)
+  suspend fun processData() {
+    data = processLargeDataset(data)
+  }
+
+  // Level 3: Custom scope for cancellation
+  suspend fun uploadFile() {
+    isUploading = true
+    api.upload(largeFile)
+    isUploading = false
+  }
+
+  fun cancelUpload() {
+    uploadScope.cancel()
+  }
+</script>
+
+<!-- Level 1: Auto (simple) -->
+<Button onClick={saveSimple}>Save</Button>
+
+<!-- Level 2: Explicit IO thread -->
+<Button onClick={() => io { loadData() }}>Load Data</Button>
+
+<!-- Level 2: Explicit CPU thread -->
+<Button onClick={() => cpu { processData() }}>Process Data</Button>
+
+<!-- Level 3: Custom scope -->
+<Button onClick={() => uploadScope.launch { uploadFile() }}>Upload</Button>
+<Button onClick={cancelUpload}>Cancel</Button>
+```
+
+---
+
+## Dispatcher Details
+
+### Main Dispatcher (Default)
+**Purpose:** UI thread
+**Thread pool:** Single thread
+**Default for:** ViewModels, components with `var`
+**When to use explicitly:** Rarely (it's the default)
+
+```whitehall
+main { updateUI() }  // Force main thread (rarely needed)
+```
+
+### IO Dispatcher
+**Purpose:** I/O operations (waiting for external resources)
+**Thread pool:** Large pool (64+ threads) optimized for waiting
+**When to use:**
+- Network calls (API requests)
+- File system operations
+- Database queries/writes
+- Anything that **waits** for external I/O
+
+```whitehall
+io {
+  data = api.fetch()        // Network
+  file.write(data)          // Disk
+  db.insert(record)         // Database
+}
+```
+
+### CPU Dispatcher
+**Purpose:** CPU-intensive computation
+**Thread pool:** Sized to CPU cores (e.g., 8 threads on 8-core device)
+**When to use:**
+- Image/video processing
+- Data processing/parsing
+- Complex algorithms
+- Anything that **uses a lot of CPU**
+
+```whitehall
+cpu {
+  processImage()            // Image processing
+  parseHugeJSON()          // Heavy parsing
+  sortMassiveArray()       // Computation
+}
+```
+
+---
+
+## Context-Specific Behavior
+
+### Components with `var` (ViewModel Generated)
+
+```whitehall
+<script>
+  var count = 0
+
+  suspend fun increment() {
+    count++
+  }
+</script>
+
+<Button onClick={increment}>  <!-- Auto: viewModelScope.launch -->
+```
+
+**Auto-inference:** Uses `viewModelScope.launch`
+
+---
+
+### Components without `var` (No ViewModel)
+
+```whitehall
+<script>
   suspend fun logAnalytics() {
     analytics.log("screen_viewed")
   }
 
   onMount {
-    logAnalytics()
+    logAnalytics()  // Works in LaunchedEffect scope
   }
 </script>
 ```
 
-**Option A (suspend):**
-```kotlin
-@Composable
-fun MyComponent() {
-    LaunchedEffect(Unit) {
-        logAnalytics()  // ✅ Works
-    }
-}
-
-suspend fun logAnalytics() { ... }
-```
-
-**Option B (auto-wrap):**
-Problem! No ViewModel means no `viewModelScope`. We'd need `rememberCoroutineScope()`:
-```kotlin
-@Composable
-fun MyComponent() {
-    val scope = rememberCoroutineScope()
-
-    LaunchedEffect(Unit) {
-        logAnalytics()  // But logAnalytics() is non-suspend now...
-    }
-}
-
-fun logAnalytics() {
-    // What scope to use?
-}
-```
-
-Doesn't work well without ViewModel.
+**Auto-inference:**
+- In `onMount`: Already has `LaunchedEffect` scope
+- In `onClick`: Auto-generate `rememberCoroutineScope()`
 
 ---
 
-## Hybrid Approach (Recommendation)
+### Singletons (`@store object`)
 
-**Different contexts need different solutions:**
-
-### For ViewModels (Components with `var`)
-**Use Option B (auto-wrap):**
-```whitehall
-<script>
-  var isLoading = false
-
-  suspend fun save() { ... }  // → Auto-wrapped in viewModelScope.launch
-</script>
-
-<Button onClick={save}>Save</Button>  // Clean!
-```
-
-**Why:**
-- Most common case (screen state)
-- Clean call sites
-- Matches Android conventions
-- ViewModels have proper lifecycle
-
-### For Singletons (`@store object`)
-**Use Option A (keep suspend):**
 ```whitehall
 @store
 object AppSettings {
   var darkMode = false
 
-  suspend fun loadFromDisk() { ... }  // → Stays suspend
+  suspend fun loadFromDisk() {  // ← Stays suspend
+    darkMode = dataStore.read()
+  }
 }
 
-// Caller provides scope:
+// Usage:
 onMount {
-  AppSettings.loadFromDisk()
+  AppSettings.loadFromDisk()  // Caller provides scope
 }
+
+<Button onClick={() => io { AppSettings.loadFromDisk() }}>Load</Button>
 ```
 
-**Why:**
-- Singletons shouldn't own scope lifecycle
-- Safer (no global scope)
-- Caller provides context
-- Less common case, explicit is better
-
-### For Components Without ViewModel (no `var`)
-**Use Option A (keep suspend):**
-```whitehall
-<script>
-  suspend fun logAnalytics() { ... }  // → Stays suspend
-
-  onMount {
-    logAnalytics()  // Works in LaunchedEffect
-  }
-</script>
-```
-
-**Why:**
-- No ViewModel to provide scope
-- Rare case
-- Use LaunchedEffect naturally
+**Decision:** Singletons keep functions as `suspend` - no auto-wrap
+**Reason:** No lifecycle to tie scope to, caller provides context
 
 ---
 
-## Summary Table
+## Implementation Tasks
 
-| Context | Option A (suspend) | Option B (auto-wrap) | Hybrid |
-|---------|-------------------|---------------------|--------|
-| **ViewModel + onClick** | Need `rememberCoroutineScope()` 😐 | Clean: `onClick={save}` ✅ | Auto-wrap ✅ |
-| **ViewModel + onMount** | Clean ✅ | Clean ✅ | Auto-wrap ✅ |
-| **Singleton + onClick** | Need scope at call site 😐 | Need global scope ❌ | Keep suspend ✅ |
-| **Singleton + onMount** | Clean ✅ | Clean but risky scope ⚠️ | Keep suspend ✅ |
-| **No ViewModel + onClick** | Need `rememberCoroutineScope()` 😐 | Doesn't work ❌ | Keep suspend ✅ |
-| **No ViewModel + onMount** | Clean ✅ | Doesn't work ❌ | Keep suspend ✅ |
-| **Advanced scoping** | Flexible ✅ | Limited ❌ | Keep suspend ✅ |
-| **Learning curve** | Steeper 📚 | Easier 🎯 | Balanced |
+### 1. Auto-Wrap for ViewModels
+- Detect `suspend fun` in ViewModel-generating contexts (components with `var`)
+- Transform to non-suspend, wrap body in `viewModelScope.launch { }`
+- Default dispatcher: `Dispatchers.Main`
 
----
+### 2. Dispatcher Syntax
+- Parse `io { }`, `cpu { }`, `main { }` blocks
+- Transform to `viewModelScope.launch(Dispatchers.X) { }`
+- Map: `io` → `IO`, `cpu` → `Default`, `main` → `Main`
 
-## Open Questions
+### 3. Custom Scope Syntax
+- Parse `val myScope = scope()` declaration
+- Transform to `val myScope = rememberCoroutineScope()`
+- Parse `myScope.launch { }` blocks
+- Transform to Kotlin `myScope.launch { }`
 
-1. **Is the hybrid approach too complex?** Different rules for ViewModels vs singletons vs plain components.
+### 4. Context Detection
+- Components with `var`: Use `viewModelScope`
+- Components without `var`: Use `rememberCoroutineScope()` (if needed)
+- Inside `onMount`: Already in scope
+- Singletons: Keep as `suspend`
 
-2. **Should we support custom dispatchers?** If auto-wrapping, how does user specify `Dispatchers.IO`?
-
-3. **What about error handling?** Wrapped functions swallow exceptions into viewModelScope. Suspend functions bubble up.
-
-4. **Testing implications?** Auto-wrapped functions are harder to test (need to test coroutine behavior).
-
-5. **Documentation burden?** Need to clearly explain when wrapping happens vs when it doesn't.
-
----
-
-## Examples to Consider
-
-### Example 1: Sequential API Calls
-```whitehall
-suspend fun loadProfile() {
-  val user = api.getUser()      // First call
-  val posts = api.getPosts(user.id)  // Second call (depends on first)
-  // ...
-}
-```
-
-**Option A:** Natural suspend flow
-**Option B:** Still works (inside launch block)
-
-### Example 2: Parallel API Calls
-```whitehall
-suspend fun loadDashboard() {
-  val user = async { api.getUser() }
-  val posts = async { api.getPosts() }
-  // Wait for both
-}
-```
-
-**Option A:** User controls with `async`/`await`
-**Option B:** Still works, but wrapped in outer `launch`
-
-### Example 3: Cancellation
-```whitehall
-suspend fun search(query: String) {
-  delay(300)  // Debounce
-  api.search(query)
-}
-```
-
-**Option A:** Caller controls cancellation
-**Option B:** ViewModelScope cancels on ViewModel clear (automatic)
-
-### Example 4: Error Handling
-```whitehall
-suspend fun save() {
-  try {
-    api.save()
-  } catch (e: Exception) {
-    error = e.message
-  }
-}
-```
-
-**Option A:** Errors propagate to caller
-**Option B:** Errors stay in ViewModel (contained)
+### 5. Error Messages
+- Warn if using `io` for pure computation (suggest `cpu`)
+- Warn if using `cpu` for network calls (suggest `io`)
+- Clear errors for scope misuse
 
 ---
 
-## Decision Needed
+## Alternative Syntax Considered
 
-**Questions to answer:**
-1. Do we use Option A, B, or Hybrid?
-2. If Hybrid, is the complexity worth it?
-3. How do we document this clearly?
-4. What's the migration path from current implementation?
+### For Dispatchers:
+- ✅ `io { }` - Chosen (clean, standard term)
+- ❌ `background { }` - Less specific (IO or CPU?)
+- ❌ `launch(on: IO) { }` - More verbose
 
-**Next steps:** Review these tradeoffs and make a decision before implementing the new `var`-based auto-ViewModel system.
+### For Custom Scopes:
+- ✅ `scope()` - Chosen (clean, minimal)
+- ❌ `Scope()` - Constructor style (less clear)
+- ❌ `@scope val myScope` - Annotation style (overkill)
+
+### For Thread Names:
+- ✅ `io`, `cpu`, `main` - Chosen (clear purpose)
+- ❌ `io`, `default`, `main` - "default" is unclear
+- ❌ `network`, `compute`, `ui` - More words, not standard
+
+---
+
+## Comparison to Original Options
+
+This approach combines the best of both:
+
+| Aspect | Option A (suspend) | Option B (auto-wrap) | **Option C (chosen)** |
+|--------|-------------------|---------------------|---------------------|
+| Common case | Verbose | Clean ✅ | Clean ✅ |
+| Thread control | Flexible ✅ | Limited | Flexible ✅ |
+| Custom scopes | Supported ✅ | No | Supported ✅ |
+| Learning curve | Steeper | Easy ✅ | Balanced ✅ |
+| Kotlin-native | Yes ✅ | No | Hybrid ✅ |
+
+---
+
+## Migration from Current Implementation
+
+Current implementation (Phase 4) auto-wraps all `suspend fun` in ViewModels.
+
+**Changes needed:**
+1. Keep auto-wrap behavior (already correct)
+2. Add dispatcher syntax (`io { }`, `cpu { }`, `main { }`)
+3. Add custom scope syntax (`val myScope = scope()`)
+4. Add scope inference for components without ViewModels
+5. Update singleton handling (keep as suspend)
+
+**Breaking changes:** None - current auto-wrap behavior is preserved as default.
+
+---
+
+## Next Steps
+
+1. ✅ Decision made: Option C (auto-infer + override)
+2. 📋 Implement dispatcher syntax (`io`, `cpu`, `main`)
+3. 📋 Implement custom scope syntax (`scope()`)
+4. 📋 Update context detection rules
+5. 📋 Add helpful error messages
+6. 📋 Document in user-facing guides
