@@ -6,34 +6,17 @@ use crate::toolchain::Toolchain;
 
 /// Install toolchains required by the current project
 pub fn execute_install(manifest_path: &str) -> Result<()> {
-    println!("{} toolchains for current project...", "Installing".green().bold());
-
     // Load project config to get toolchain requirements
     let config = config::load_config(manifest_path)?;
-
-    println!("Project: {} v{}", config.project.name, config.project.version);
-    println!("Toolchain requirements:");
-    println!("  - Java {}", config.toolchain.java);
-    println!("  - Gradle {}", config.toolchain.gradle);
-    println!("  - AGP {}", config.toolchain.agp);
-    println!("  - Kotlin {}", config.toolchain.kotlin);
-    println!();
 
     // Initialize toolchain manager
     let toolchain = Toolchain::new()?;
 
     // Download all toolchains in parallel for faster installation
-    let (java_home, gradle_bin, android_home) = toolchain.ensure_all_parallel(
+    toolchain.ensure_all_parallel(
         &config.toolchain.java,
         &config.toolchain.gradle
     )?;
-
-    println!();
-    println!("{} All toolchains ready!", "Success:".green().bold());
-    println!("  Java: {}", java_home.display());
-    println!("  Gradle: {}", gradle_bin.display());
-    println!("  Android SDK: {}", android_home.display());
-    println!("  Location: {}", toolchain.root().display());
 
     Ok(())
 }

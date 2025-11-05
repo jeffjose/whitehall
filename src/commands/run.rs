@@ -62,6 +62,9 @@ fn execute_single_file(file_path: &str) -> Result<()> {
     // Initialize toolchain manager
     let toolchain = Toolchain::new()?;
 
+    // Ensure all toolchains are ready (download in parallel if needed)
+    toolchain.ensure_all_parallel(&config.toolchain.java, &config.toolchain.gradle)?;
+
     // Continue with device check, gradle, install, and launch
     check_device_connected(&toolchain)?;
     build_with_gradle(&toolchain, &config, &result.output_dir)?;
@@ -127,6 +130,9 @@ fn execute_project(manifest_path: &str) -> Result<()> {
     // Initialize toolchain manager
     let toolchain = Toolchain::new()?;
 
+    // 3.5. Ensure all toolchains are ready (download in parallel if needed)
+    toolchain.ensure_all_parallel(&config.toolchain.java, &config.toolchain.gradle)?;
+
     // 4. Check if device/emulator is connected
     check_device_connected(&toolchain)?;
 
@@ -180,7 +186,7 @@ fn build_with_gradle(toolchain: &Toolchain, config: &crate::config::Config, outp
 
     let status = gradle
         .current_dir(output_dir)
-        .args(&["assembleDebug"])
+        .args(&["assembleDebug", "--console=plain", "--quiet"])
         .status()
         .context("Failed to run Gradle")?;
 

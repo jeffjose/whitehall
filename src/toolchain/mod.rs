@@ -8,9 +8,9 @@ pub use platform::Platform;
 pub use validator::validate_compatibility;
 
 use anyhow::{Context, Result};
-use colored::Colorize;
 use std::path::{Path, PathBuf};
 use std::process::Command;
+use std::sync::Arc;
 
 /// Core toolchain manager for Whitehall
 ///
@@ -105,7 +105,6 @@ impl Toolchain {
         // Clean up archive
         std::fs::remove_file(&archive_path)?;
 
-        println!("✓ Java {} installed", version);
         Ok(())
     }
 
@@ -159,7 +158,6 @@ impl Toolchain {
         // Clean up archive
         std::fs::remove_file(&archive_path)?;
 
-        println!("✓ Gradle {} installed", version);
         Ok(())
     }
 
@@ -214,12 +212,9 @@ impl Toolchain {
         // Clean up archive
         std::fs::remove_file(&archive_path)?;
 
-        println!("✓ Android cmdline-tools installed");
-
         // Now use sdkmanager to install essential components
         self.install_sdk_components()?;
 
-        println!("✓ Android SDK installed");
         Ok(())
     }
 
@@ -233,11 +228,10 @@ impl Toolchain {
         }
 
         // Accept licenses first using yes command to auto-accept
-        println!("Accepting Android SDK licenses...");
         let status = Command::new("sh")
             .arg("-c")
             .arg(format!(
-                "yes | {} --sdk_root={} --licenses",
+                "yes | {} --sdk_root={} --licenses 2>&1 > /dev/null",
                 sdkmanager.display(),
                 sdk_root.display()
             ))
@@ -249,8 +243,6 @@ impl Toolchain {
             anyhow::bail!("Failed to accept SDK licenses");
         }
 
-        println!("Installing Android SDK components...");
-
         // Install essential components
         let components = vec![
             "platform-tools",        // adb, fastboot
@@ -259,13 +251,12 @@ impl Toolchain {
         ];
 
         for component in components {
-            println!("  Installing {}...", component);
             let output = Command::new(&sdkmanager)
                 .arg(format!("--sdk_root={}", sdk_root.display()))
                 .arg(component)
                 .env("ANDROID_HOME", &sdk_root)
-                .stdout(std::process::Stdio::inherit())
-                .stderr(std::process::Stdio::inherit())
+                .stdout(std::process::Stdio::null())
+                .stderr(std::process::Stdio::null())
                 .output()
                 .with_context(|| format!("Failed to run sdkmanager for {}", component))?;
 
@@ -274,7 +265,6 @@ impl Toolchain {
             }
         }
 
-        println!("✓ SDK components installed");
         Ok(())
     }
 
@@ -335,7 +325,8 @@ impl Toolchain {
     /// * `java_version` - Java version to ensure
     /// * `gradle_version` - Gradle version to ensure
     pub fn ensure_all_parallel(&self, java_version: &str, gradle_version: &str) -> Result<(PathBuf, PathBuf, PathBuf)> {
-        use std::sync::{Arc, Mutex};
+        use indicatif::MultiProgress;
+        use std::sync::{mpsc, Arc, Mutex};
         use std::thread;
 
         let root = self.root.clone();
@@ -345,8 +336,54 @@ impl Toolchain {
         // Shared results wrapped in Arc<Mutex>
         let results: Arc<Mutex<Vec<Result<String>>>> = Arc::new(Mutex::new(Vec::new()));
 
-        println!("{} toolchains in parallel...", "Downloading".cyan().bold());
-        println!();
+        // Create MultiProgress for coordinated display
+        let multi = Arc::new(MultiProgress::new());
+
+        // Create all 3 progress bars upfront so they all show immediately
+        use colored::Colorize;
+        use indicatif::{ProgressBar, ProgressStyle};
+
+        let pb_java = multi.add(ProgressBar::new(100));
+        pb_java.set_style(
+            ProgressStyle::default_bar()
+                .template(&format!("{{msg:20}} {}{{bar:40.dim}}{} \x1b[2m{{bytes:>10}}/{{total_bytes:>10}}\x1b[0m", "[".dimmed(), "]".dimmed()))
+                .unwrap()
+                .progress_chars("=> "),
+        );
+        pb_java.set_message(format!("{}", format!("java-{}", java_ver).dimmed()));
+
+        let pb_gradle = multi.add(ProgressBar::new(100));
+        pb_gradle.set_style(
+            ProgressStyle::default_bar()
+                .template(&format!("{{msg:20}} {}{{bar:40.dim}}{} \x1b[2m{{bytes:>10}}/{{total_bytes:>10}}\x1b[0m", "[".dimmed(), "]".dimmed()))
+                .unwrap()
+                .progress_chars("=> "),
+        );
+        pb_gradle.set_message(format!("{}", format!("gradle-{}", gradle_ver).dimmed()));
+
+        let pb_android = multi.add(ProgressBar::new(100));
+        pb_android.set_style(
+            ProgressStyle::default_bar()
+                .template(&format!("{{msg:20}} {}{{bar:40.dim}}{} \x1b[2m{{bytes:>10}}/{{total_bytes:>10}}\x1b[0m", "[".dimmed(), "]".dimmed()))
+                .unwrap()
+                .progress_chars("=> "),
+        );
+        pb_android.set_message(format!("{}", "android-sdk".dimmed()));
+
+        // Wrap progress bars in Arc for sharing
+        let pb_java = Arc::new(pb_java);
+        let pb_gradle = Arc::new(pb_gradle);
+        let pb_android = Arc::new(pb_android);
+
+        // Create a semaphore-like channel with 2 slots (2 concurrent downloads max)
+        let (permit_tx, permit_rx) = mpsc::sync_channel::<()>(2);
+
+        // Fill the semaphore with 2 permits
+        permit_tx.send(()).unwrap();
+        permit_tx.send(()).unwrap();
+
+        // Wrap receiver in Arc<Mutex> for sharing across threads
+        let permit_rx = Arc::new(Mutex::new(permit_rx));
 
         let mut handles = vec![];
 
@@ -355,11 +392,17 @@ impl Toolchain {
             let java_ver = java_ver.clone();
             let root = root.clone();
             let results = Arc::clone(&results);
+            let pb = Arc::clone(&pb_java);
+            let permit_rx = Arc::clone(&permit_rx);
+            let permit_tx = permit_tx.clone();
 
             let handle = thread::spawn(move || {
-                let result = Self::download_java_static(&root, &java_ver);
+                let _permit = permit_rx.lock().unwrap().recv().unwrap(); // Acquire permit
+                let result = Self::download_java_with_pb(&root, &java_ver, pb);
                 let mut res_lock = results.lock().unwrap();
-                res_lock.push(result.map(|_| format!("Java {}", java_ver)));
+                res_lock.push(result.map(|_| format!("java-{}", java_ver)));
+                drop(res_lock);
+                permit_tx.send(()).unwrap(); // Release permit
             });
             handles.push(handle);
         }
@@ -369,11 +412,17 @@ impl Toolchain {
             let gradle_ver = gradle_ver.clone();
             let root = root.clone();
             let results = Arc::clone(&results);
+            let pb = Arc::clone(&pb_gradle);
+            let permit_rx = Arc::clone(&permit_rx);
+            let permit_tx = permit_tx.clone();
 
             let handle = thread::spawn(move || {
-                let result = Self::download_gradle_static(&root, &gradle_ver);
+                let _permit = permit_rx.lock().unwrap().recv().unwrap(); // Acquire permit
+                let result = Self::download_gradle_with_pb(&root, &gradle_ver, pb);
                 let mut res_lock = results.lock().unwrap();
-                res_lock.push(result.map(|_| format!("Gradle {}", gradle_ver)));
+                res_lock.push(result.map(|_| format!("gradle-{}", gradle_ver)));
+                drop(res_lock);
+                permit_tx.send(()).unwrap(); // Release permit
             });
             handles.push(handle);
         }
@@ -382,11 +431,17 @@ impl Toolchain {
         {
             let root = root.clone();
             let results = Arc::clone(&results);
+            let pb = Arc::clone(&pb_android);
+            let permit_rx = Arc::clone(&permit_rx);
+            let permit_tx = permit_tx.clone();
 
             let handle = thread::spawn(move || {
-                let result = Self::download_android_sdk_static(&root);
+                let _permit = permit_rx.lock().unwrap().recv().unwrap(); // Acquire permit (will wait for slot)
+                let result = Self::download_android_sdk_with_pb(&root, pb);
                 let mut res_lock = results.lock().unwrap();
-                res_lock.push(result.map(|_| "Android SDK".to_string()));
+                res_lock.push(result.map(|_| "android-sdk".to_string()));
+                drop(res_lock);
+                permit_tx.send(()).unwrap(); // Release permit
             });
             handles.push(handle);
         }
@@ -396,18 +451,16 @@ impl Toolchain {
             handle.join().expect("Thread panicked");
         }
 
+        // Clear the MultiProgress display
+        multi.clear().ok();
+
         // Check results
         let results_vec = results.lock().unwrap();
         let mut errors = Vec::new();
 
-        println!();
         for result in results_vec.iter() {
-            match result {
-                Ok(component) => println!("✓ {} installed", component.green()),
-                Err(e) => {
-                    errors.push(format!("{}", e));
-                    println!("✗ Download failed: {}", e.to_string().red());
-                }
+            if let Err(e) = result {
+                errors.push(format!("{}", e));
             }
         }
 
@@ -423,9 +476,220 @@ impl Toolchain {
         ))
     }
 
-    // Static helper functions for parallel downloads
+    // Static helper functions for parallel downloads with pre-created progress bars
 
-    fn download_java_static(root: &Path, version: &str) -> Result<()> {
+    fn download_java_with_pb(root: &Path, version: &str, pb: Arc<indicatif::ProgressBar>) -> Result<()> {
+        use colored::Colorize;
+        use indicatif::ProgressStyle;
+
+        let java_home = root.join(format!("java/{}", version));
+
+        if java_home.exists() {
+            pb.finish_and_clear();
+            return Ok(()); // Already installed
+        }
+
+        let platform = Platform::detect()?;
+        let url = downloader::get_java_download_url(version, platform)?;
+
+        let java_dir = root.join("java");
+        std::fs::create_dir_all(&java_dir)?;
+
+        let archive_path = java_dir.join(format!("java-{}.tar.gz", version));
+
+        // Phase 1: Download (0-100% of file size)
+        downloader::download_with_retry_and_bar(&url, &archive_path, Some(&pb))?;
+
+        // Phase 2: Extract (reset bar, show "extracting")
+        pb.set_style(
+            ProgressStyle::default_bar()
+                .template(&format!("{{msg:20}} {}{{bar:40.dim}}{} \x1b[2mextracting\x1b[0m", "[".dimmed(), "]".dimmed()))
+                .unwrap()
+                .progress_chars("=> "),
+        );
+        pb.set_length(100);
+        pb.set_position(0);
+
+        downloader::extract_tar_gz(&archive_path, &java_dir)?;
+        pb.set_position(100);
+
+        // Rename extracted directory
+        let extracted_dirs: Vec<_> = std::fs::read_dir(&java_dir)?
+            .filter_map(|e| e.ok())
+            .filter(|e| e.path().is_dir())
+            .filter(|e| e.file_name().to_str().unwrap().starts_with("jdk-"))
+            .collect();
+
+        if let Some(extracted_dir) = extracted_dirs.first() {
+            let target = java_dir.join(version);
+            std::fs::rename(extracted_dir.path(), &target)?;
+        }
+
+        // Clean up archive
+        std::fs::remove_file(&archive_path)?;
+
+        pb.finish_and_clear();
+        Ok(())
+    }
+
+    fn download_gradle_with_pb(root: &Path, version: &str, pb: Arc<indicatif::ProgressBar>) -> Result<()> {
+        use colored::Colorize;
+        use indicatif::ProgressStyle;
+
+        let gradle_home = root.join(format!("gradle/{}", version));
+
+        if gradle_home.exists() {
+            pb.finish_and_clear();
+            return Ok(()); // Already installed
+        }
+
+        let url = downloader::get_gradle_download_url(version);
+
+        let gradle_dir = root.join("gradle");
+        std::fs::create_dir_all(&gradle_dir)?;
+
+        let archive_path = gradle_dir.join(format!("gradle-{}.zip", version));
+
+        // Phase 1: Download (0-100% of file size)
+        downloader::download_with_retry_and_bar(&url, &archive_path, Some(&pb))?;
+
+        // Phase 2: Extract (reset bar, show "extracting")
+        pb.set_style(
+            ProgressStyle::default_bar()
+                .template(&format!("{{msg:20}} {}{{bar:40.dim}}{} \x1b[2mextracting\x1b[0m", "[".dimmed(), "]".dimmed()))
+                .unwrap()
+                .progress_chars("=> "),
+        );
+        pb.set_length(100);
+        pb.set_position(0);
+
+        downloader::extract_zip(&archive_path, &gradle_dir)?;
+        pb.set_position(100);
+
+        // Rename extracted directory
+        let extracted = gradle_dir.join(format!("gradle-{}", version));
+        let target = gradle_dir.join(version);
+        if extracted.exists() {
+            std::fs::rename(&extracted, &target)?;
+        }
+
+        // Clean up archive
+        std::fs::remove_file(&archive_path)?;
+
+        pb.finish_and_clear();
+        Ok(())
+    }
+
+    fn download_android_sdk_with_pb(root: &Path, pb: Arc<indicatif::ProgressBar>) -> Result<()> {
+        use colored::Colorize;
+        use indicatif::ProgressStyle;
+
+        let sdk_root = root.join("android");
+
+        if sdk_root.join("platform-tools/adb").exists() {
+            pb.finish_and_clear();
+            return Ok(()); // Already installed
+        }
+
+        let platform = Platform::detect()?;
+        let url = downloader::get_android_cmdline_tools_url(platform)?;
+
+        std::fs::create_dir_all(&sdk_root)?;
+
+        let archive_path = sdk_root.join("cmdline-tools.zip");
+
+        // Phase 1: Download cmdline-tools (0-100% of file size)
+        downloader::download_with_retry_and_bar(&url, &archive_path, Some(&pb))?;
+
+        // Phase 2: Extract (reset bar to 0-100%)
+        pb.set_style(
+            ProgressStyle::default_bar()
+                .template(&format!("{{msg:20}} {}{{bar:40.dim}}{} extracting", "[".dimmed(), "]".dimmed()))
+                .unwrap()
+                .progress_chars("=> "),
+        );
+        pb.set_length(100);
+        pb.set_position(0);
+
+        let cmdline_tools_dir = sdk_root.join("cmdline-tools");
+        std::fs::create_dir_all(&cmdline_tools_dir)?;
+
+        downloader::extract_zip(&archive_path, &cmdline_tools_dir)?;
+
+        // Rename to latest
+        let extracted = cmdline_tools_dir.join("cmdline-tools");
+        let latest = cmdline_tools_dir.join("latest");
+        if extracted.exists() {
+            std::fs::rename(&extracted, &latest)?;
+        }
+
+        std::fs::remove_file(&archive_path)?;
+        pb.set_position(100);
+
+        // Phase 3: Install SDK components (reset bar to 0-100%)
+        pb.set_style(
+            ProgressStyle::default_bar()
+                .template(&format!("{{msg:20}} {}{{bar:40.dim}}{} \x1b[2minstalling\x1b[0m", "[".dimmed(), "]".dimmed()))
+                .unwrap()
+                .progress_chars("=> "),
+        );
+        pb.set_length(100);
+        pb.set_position(0);
+
+        // Accept licenses
+        use std::process::Command;
+        let sdkmanager = sdk_root.join("cmdline-tools/latest/bin/sdkmanager");
+        let status = Command::new("sh")
+            .arg("-c")
+            .arg(format!(
+                "yes | {} --sdk_root={} --licenses 2>&1 > /dev/null",
+                sdkmanager.display(),
+                sdk_root.display()
+            ))
+            .env("ANDROID_HOME", &sdk_root)
+            .status()
+            .context("Failed to accept SDK licenses")?;
+
+        if !status.success() {
+            anyhow::bail!("Failed to accept SDK licenses");
+        }
+
+        pb.set_position(10); // License acceptance done
+
+        // Install essential components
+        let components = vec![
+            "platform-tools",
+            "build-tools;34.0.0",
+            "platforms;android-34",
+        ];
+
+        for (i, component) in components.iter().enumerate() {
+            let output = Command::new(&sdkmanager)
+                .arg(format!("--sdk_root={}", sdk_root.display()))
+                .arg(component)
+                .env("ANDROID_HOME", &sdk_root)
+                .stdout(std::process::Stdio::null())
+                .stderr(std::process::Stdio::null())
+                .output()
+                .with_context(|| format!("Failed to install {}", component))?;
+
+            if !output.status.success() {
+                anyhow::bail!("Failed to install {}", component);
+            }
+
+            // Update progress: 10% + (component_num * 30%) = 40%, 70%, 100%
+            pb.set_position(10 + ((i + 1) * 30) as u64);
+        }
+
+        pb.finish_and_clear();
+        Ok(())
+    }
+
+    #[allow(dead_code)]
+    fn download_java_static(root: &Path, version: &str, multi: Option<Arc<indicatif::MultiProgress>>) -> Result<()> {
+        use colored::Colorize;
+        use indicatif::{ProgressBar, ProgressStyle};
+
         let java_home = root.join(format!("java/{}", version));
 
         if java_home.exists() {
@@ -439,8 +703,40 @@ impl Toolchain {
         std::fs::create_dir_all(&java_dir)?;
 
         let archive_path = java_dir.join(format!("java-{}.tar.gz", version));
-        downloader::download_with_retry(&url, &archive_path)?;
-        downloader::extract_tar_gz(&archive_path, &java_dir)?;
+
+        if let Some(ref m) = multi {
+            // Create ONE progress bar that resets between phases
+            let pb = m.add(ProgressBar::new(100));
+            pb.set_style(
+                ProgressStyle::default_bar()
+                    .template("{msg:20} [{bar:40.dim}] {bytes:>10}/{total_bytes:>10}")
+                    .unwrap()
+                    .progress_chars("=> "),
+            );
+            pb.set_message(format!("{}", format!("java-{}", version).dimmed()));
+
+            // Phase 1: Download (0-100% of file size)
+            downloader::download_with_retry_and_bar(&url, &archive_path, Some(&pb))?;
+
+            // Phase 2: Extract (reset bar, show "extracting")
+            pb.set_style(
+                ProgressStyle::default_bar()
+                    .template("{msg:20} [{bar:40.dim}] extracting")
+                    .unwrap()
+                    .progress_chars("=> "),
+            );
+            pb.set_length(100);
+            pb.set_position(0);
+            pb.set_message(format!("{}", format!("java-{}", version).dimmed()));
+
+            downloader::extract_tar_gz(&archive_path, &java_dir)?;
+            pb.set_position(100);
+
+            pb.finish_and_clear();
+        } else {
+            downloader::download_with_retry(&url, &archive_path)?;
+            downloader::extract_tar_gz(&archive_path, &java_dir)?;
+        }
 
         // Rename extracted directory
         let extracted_dirs: Vec<_> = std::fs::read_dir(&java_dir)?
@@ -459,7 +755,11 @@ impl Toolchain {
         Ok(())
     }
 
-    fn download_gradle_static(root: &Path, version: &str) -> Result<()> {
+    #[allow(dead_code)]
+    fn download_gradle_static(root: &Path, version: &str, multi: Option<Arc<indicatif::MultiProgress>>) -> Result<()> {
+        use colored::Colorize;
+        use indicatif::{ProgressBar, ProgressStyle};
+
         let gradle_home = root.join(format!("gradle/{}", version));
 
         if gradle_home.exists() {
@@ -472,8 +772,40 @@ impl Toolchain {
         std::fs::create_dir_all(&gradle_dir)?;
 
         let archive_path = gradle_dir.join(format!("gradle-{}.zip", version));
-        downloader::download_with_retry(&url, &archive_path)?;
-        downloader::extract_zip(&archive_path, &gradle_dir)?;
+
+        if let Some(ref m) = multi {
+            // Create ONE progress bar that resets between phases
+            let pb = m.add(ProgressBar::new(100));
+            pb.set_style(
+                ProgressStyle::default_bar()
+                    .template("{msg:20} [{bar:40.dim}] {bytes:>10}/{total_bytes:>10}")
+                    .unwrap()
+                    .progress_chars("=> "),
+            );
+            pb.set_message(format!("{}", format!("gradle-{}", version).dimmed()));
+
+            // Phase 1: Download (0-100% of file size)
+            downloader::download_with_retry_and_bar(&url, &archive_path, Some(&pb))?;
+
+            // Phase 2: Extract (reset bar, show "extracting")
+            pb.set_style(
+                ProgressStyle::default_bar()
+                    .template("{msg:20} [{bar:40.dim}] extracting")
+                    .unwrap()
+                    .progress_chars("=> "),
+            );
+            pb.set_length(100);
+            pb.set_position(0);
+            pb.set_message(format!("{}", format!("gradle-{}", version).dimmed()));
+
+            downloader::extract_zip(&archive_path, &gradle_dir)?;
+            pb.set_position(100);
+
+            pb.finish_and_clear();
+        } else {
+            downloader::download_with_retry(&url, &archive_path)?;
+            downloader::extract_zip(&archive_path, &gradle_dir)?;
+        }
 
         // Rename extracted directory
         let extracted = gradle_dir.join(format!("gradle-{}", version));
@@ -487,7 +819,11 @@ impl Toolchain {
         Ok(())
     }
 
-    fn download_android_sdk_static(root: &Path) -> Result<()> {
+    #[allow(dead_code)]
+    fn download_android_sdk_static(root: &Path, multi: Option<Arc<indicatif::MultiProgress>>) -> Result<()> {
+        use colored::Colorize;
+        use indicatif::{ProgressBar, ProgressStyle};
+
         let sdk_root = root.join("android");
 
         if sdk_root.join("platform-tools/adb").exists() {
@@ -500,61 +836,159 @@ impl Toolchain {
         std::fs::create_dir_all(&sdk_root)?;
 
         let archive_path = sdk_root.join("cmdline-tools.zip");
-        downloader::download_with_retry(&url, &archive_path)?;
 
-        let cmdline_tools_dir = sdk_root.join("cmdline-tools");
-        std::fs::create_dir_all(&cmdline_tools_dir)?;
+        if let Some(ref m) = multi {
+            // Create ONE progress bar that resets between phases
+            let pb = m.add(ProgressBar::new(100));
+            pb.set_style(
+                ProgressStyle::default_bar()
+                    .template("{msg:20} [{bar:40.dim}] {bytes:>10}/{total_bytes:>10}")
+                    .unwrap()
+                    .progress_chars("=> "),
+            );
+            pb.set_message(format!("{}", "android-sdk".dimmed()));
 
-        downloader::extract_zip(&archive_path, &cmdline_tools_dir)?;
+            // Phase 1: Download cmdline-tools (0-100% of file size)
+            downloader::download_with_retry_and_bar(&url, &archive_path, Some(&pb))?;
 
-        // Rename to latest
-        let extracted = cmdline_tools_dir.join("cmdline-tools");
-        let latest = cmdline_tools_dir.join("latest");
-        if extracted.exists() {
-            std::fs::rename(&extracted, &latest)?;
-        }
+            // Phase 2: Extract (reset bar to 0-100%)
+            pb.set_style(
+                ProgressStyle::default_bar()
+                    .template("{msg:20} [{bar:40.dim}] extracting")
+                    .unwrap()
+                    .progress_chars("=> "),
+            );
+            pb.set_length(100);
+            pb.set_position(0);
 
-        std::fs::remove_file(&archive_path)?;
+            let cmdline_tools_dir = sdk_root.join("cmdline-tools");
+            std::fs::create_dir_all(&cmdline_tools_dir)?;
 
-        // Install SDK components using sdkmanager
-        let sdkmanager = sdk_root.join("cmdline-tools/latest/bin/sdkmanager");
+            downloader::extract_zip(&archive_path, &cmdline_tools_dir)?;
 
-        // Accept licenses
-        use std::process::Command;
-        let status = Command::new("sh")
-            .arg("-c")
-            .arg(format!(
-                "yes | {} --sdk_root={} --licenses 2>&1 > /dev/null",
-                sdkmanager.display(),
-                sdk_root.display()
-            ))
-            .env("ANDROID_HOME", &sdk_root)
-            .status()
-            .context("Failed to accept SDK licenses")?;
+            // Rename to latest
+            let extracted = cmdline_tools_dir.join("cmdline-tools");
+            let latest = cmdline_tools_dir.join("latest");
+            if extracted.exists() {
+                std::fs::rename(&extracted, &latest)?;
+            }
 
-        if !status.success() {
-            anyhow::bail!("Failed to accept SDK licenses");
-        }
+            std::fs::remove_file(&archive_path)?;
+            pb.set_position(100);
 
-        // Install essential components
-        let components = vec![
-            "platform-tools",
-            "build-tools;34.0.0",
-            "platforms;android-34",
-        ];
+            // Phase 3: Install SDK components (reset bar to 0-100%)
+            pb.set_style(
+                ProgressStyle::default_bar()
+                    .template("{msg:20} [{bar:40.dim}] installing")
+                    .unwrap()
+                    .progress_chars("=> "),
+            );
+            pb.set_length(100);
+            pb.set_position(0);
 
-        for component in components {
-            let output = Command::new(&sdkmanager)
-                .arg(format!("--sdk_root={}", sdk_root.display()))
-                .arg(component)
+            // Accept licenses
+            use std::process::Command;
+            let sdkmanager = sdk_root.join("cmdline-tools/latest/bin/sdkmanager");
+            let status = Command::new("sh")
+                .arg("-c")
+                .arg(format!(
+                    "yes | {} --sdk_root={} --licenses 2>&1 > /dev/null",
+                    sdkmanager.display(),
+                    sdk_root.display()
+                ))
                 .env("ANDROID_HOME", &sdk_root)
-                .stdout(std::process::Stdio::null())
-                .stderr(std::process::Stdio::null())
-                .output()
-                .with_context(|| format!("Failed to install {}", component))?;
+                .status()
+                .context("Failed to accept SDK licenses")?;
 
-            if !output.status.success() {
-                anyhow::bail!("Failed to install {}", component);
+            if !status.success() {
+                anyhow::bail!("Failed to accept SDK licenses");
+            }
+
+            pb.set_position(10); // License acceptance done
+
+            // Install essential components
+            let components = vec![
+                "platform-tools",
+                "build-tools;34.0.0",
+                "platforms;android-34",
+            ];
+
+            for (i, component) in components.iter().enumerate() {
+                let output = Command::new(&sdkmanager)
+                    .arg(format!("--sdk_root={}", sdk_root.display()))
+                    .arg(component)
+                    .env("ANDROID_HOME", &sdk_root)
+                    .stdout(std::process::Stdio::null())
+                    .stderr(std::process::Stdio::null())
+                    .output()
+                    .with_context(|| format!("Failed to install {}", component))?;
+
+                if !output.status.success() {
+                    anyhow::bail!("Failed to install {}", component);
+                }
+
+                // Update progress: 10% + (component_num * 30%) = 40%, 70%, 100%
+                pb.set_position(10 + ((i + 1) * 30) as u64);
+            }
+
+            pb.finish_and_clear();
+        } else {
+            downloader::download_with_retry(&url, &archive_path)?;
+
+            let cmdline_tools_dir = sdk_root.join("cmdline-tools");
+            std::fs::create_dir_all(&cmdline_tools_dir)?;
+
+            downloader::extract_zip(&archive_path, &cmdline_tools_dir)?;
+
+            // Rename to latest
+            let extracted = cmdline_tools_dir.join("cmdline-tools");
+            let latest = cmdline_tools_dir.join("latest");
+            if extracted.exists() {
+                std::fs::rename(&extracted, &latest)?;
+            }
+
+            std::fs::remove_file(&archive_path)?;
+
+            // Install SDK components using sdkmanager
+            let sdkmanager = sdk_root.join("cmdline-tools/latest/bin/sdkmanager");
+
+            // Accept licenses
+            use std::process::Command;
+            let status = Command::new("sh")
+                .arg("-c")
+                .arg(format!(
+                    "yes | {} --sdk_root={} --licenses 2>&1 > /dev/null",
+                    sdkmanager.display(),
+                    sdk_root.display()
+                ))
+                .env("ANDROID_HOME", &sdk_root)
+                .status()
+                .context("Failed to accept SDK licenses")?;
+
+            if !status.success() {
+                anyhow::bail!("Failed to accept SDK licenses");
+            }
+
+            // Install essential components
+            let components = vec![
+                "platform-tools",
+                "build-tools;34.0.0",
+                "platforms;android-34",
+            ];
+
+            for component in components {
+                let output = Command::new(&sdkmanager)
+                    .arg(format!("--sdk_root={}", sdk_root.display()))
+                    .arg(component)
+                    .env("ANDROID_HOME", &sdk_root)
+                    .stdout(std::process::Stdio::null())
+                    .stderr(std::process::Stdio::null())
+                    .output()
+                    .with_context(|| format!("Failed to install {}", component))?;
+
+                if !output.status.success() {
+                    anyhow::bail!("Failed to install {}", component);
+                }
             }
         }
 
