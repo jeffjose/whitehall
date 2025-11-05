@@ -5,11 +5,16 @@ use axum::{
     Router,
 };
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use tower_http::cors::CorsLayer;
 
 #[derive(Deserialize)]
-struct CompileRequest {
-    code: String,
+#[serde(untagged)]
+enum CompileRequest {
+    // Single file (legacy format for backward compatibility)
+    Single { code: String },
+    // Multiple files (new format)
+    Multi { files: HashMap<String, String> },
 }
 
 #[derive(Serialize)]
@@ -23,7 +28,7 @@ struct CompileError {
 }
 
 #[derive(Serialize)]
-struct CompileResponse {
+struct FileCompileResult {
     success: bool,
     output: String,
     errors: Vec<CompileError>,
@@ -31,27 +36,81 @@ struct CompileResponse {
     ast: Option<String>,
 }
 
+#[derive(Serialize)]
+#[serde(untagged)]
+enum CompileResponse {
+    // Single file response (legacy format for backward compatibility)
+    Single {
+        success: bool,
+        output: String,
+        errors: Vec<CompileError>,
+        warnings: Vec<CompileError>,
+        ast: Option<String>,
+    },
+    // Multiple files response (new format)
+    Multi {
+        success: bool,
+        results: HashMap<String, FileCompileResult>,
+    },
+}
+
 async fn compile(Json(req): Json<CompileRequest>) -> JsonResponse<CompileResponse> {
-    // For now, use a simple component name and package
-    // TODO: Parse these from frontmatter if present
-    let component_name = "PlaygroundComponent";
+    match req {
+        // Handle single file (legacy format)
+        CompileRequest::Single { code } => {
+            let result = compile_single_file(&code, "PlaygroundComponent");
+            JsonResponse(CompileResponse::Single {
+                success: result.success,
+                output: result.output,
+                errors: result.errors,
+                warnings: result.warnings,
+                ast: result.ast,
+            })
+        }
+        // Handle multiple files (new format)
+        CompileRequest::Multi { files } => {
+            let mut results = HashMap::new();
+            let mut overall_success = true;
+
+            for (filename, code) in files {
+                // Extract component name from filename (remove .wh extension)
+                let component_name = filename
+                    .strip_suffix(".wh")
+                    .unwrap_or(&filename)
+                    .replace("/", "_")
+                    .replace("-", "_");
+
+                let result = compile_single_file(&code, &component_name);
+                if !result.success {
+                    overall_success = false;
+                }
+                results.insert(filename, result);
+            }
+
+            JsonResponse(CompileResponse::Multi {
+                success: overall_success,
+                results,
+            })
+        }
+    }
+}
+
+fn compile_single_file(code: &str, component_name: &str) -> FileCompileResult {
     let package = "com.example.playground";
 
-    match whitehall::transpiler::transpile(&req.code, package, component_name, None) {
-        Ok(kotlin_code) => {
-            JsonResponse(CompileResponse {
-                success: true,
-                output: kotlin_code,
-                errors: vec![],
-                warnings: vec![],
-                ast: None,
-            })
+    match whitehall::transpiler::transpile(code, package, component_name, None) {
+        Ok(kotlin_code) => FileCompileResult {
+            success: true,
+            output: kotlin_code,
+            errors: vec![],
+            warnings: vec![],
+            ast: None,
         },
         Err(e) => {
             // Try to parse error message format: [Line X:Y] message
             let (line, column, message) = parse_error_position(&e);
 
-            JsonResponse(CompileResponse {
+            FileCompileResult {
                 success: false,
                 output: String::new(),
                 errors: vec![CompileError {
@@ -64,8 +123,8 @@ async fn compile(Json(req): Json<CompileRequest>) -> JsonResponse<CompileRespons
                 }],
                 warnings: vec![],
                 ast: None,
-            })
-        },
+            }
+        }
     }
 }
 

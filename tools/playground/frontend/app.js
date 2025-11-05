@@ -7,8 +7,20 @@ let editor;
 let compileTimeout;
 let decorations = [];
 let currentTab = 'kotlin';
-let lastCompileResult = null;
 let shikiCodeToHtml = null;
+
+// Multi-file state
+let files = {
+    'Main.wh': `// The simplest Whitehall app - just render text!
+<Text>Hello, Whitehall!</Text>`
+};
+let activeFile = 'Main.wh';
+let compileResults = {}; // Store results per file
+let activeOutputFile = 'Main.wh'; // Which output file is currently being viewed
+
+// Sidebar collapse state
+let fileSidebarCollapsed = false;
+let outputSidebarCollapsed = false;
 
 // Dynamically import Shiki
 (async () => {
@@ -20,12 +32,272 @@ let shikiCodeToHtml = null;
     }
 })();
 
+// File management functions
+function renderFileTree() {
+    console.log('renderFileTree called, files:', files);
+    const fileTree = document.getElementById('file-tree');
+    if (!fileTree) {
+        console.error('file-tree element not found');
+        return;
+    }
+    fileTree.innerHTML = Object.keys(files)
+        .sort()
+        .map(filename => `
+            <div class="file-item ${filename === activeFile ? 'active' : ''}" data-filename="${filename}">
+                <span class="file-item-icon">▹</span>
+                <span class="file-item-name">${filename}</span>
+                <div class="file-item-actions">
+                    <button class="file-item-action-btn rename-btn" data-filename="${filename}" title="Rename">↻</button>
+                </div>
+            </div>
+        `).join('');
+
+    // Add click handlers for file items
+    fileTree.querySelectorAll('.file-item').forEach(item => {
+        item.addEventListener('click', (e) => {
+            if (!e.target.closest('.file-item-actions')) {
+                const filename = item.dataset.filename;
+                switchToFile(filename);
+            }
+        });
+    });
+
+    // Add click handlers for rename buttons
+    fileTree.querySelectorAll('.rename-btn').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const filename = btn.dataset.filename;
+            renameFile(filename);
+        });
+    });
+}
+
+function switchToFile(filename) {
+    if (!files[filename]) return;
+
+    // Save current file content before switching
+    if (activeFile && editor) {
+        files[activeFile] = editor.getValue();
+    }
+
+    activeFile = filename;
+
+    // Update editor content
+    if (editor) {
+        editor.setValue(files[filename]);
+    }
+
+    // Update UI
+    document.getElementById('active-file-label').textContent = filename;
+    renderFileTree();
+
+    // Also switch output view to this file
+    activeOutputFile = filename;
+
+    // Update output to show this file's result
+    updateOutputForActiveFile();
+    renderOutputFileTree();
+}
+
+function addNewFile() {
+    const filename = prompt('Enter filename (e.g., Components.wh):', 'NewFile.wh');
+    if (!filename) return;
+
+    // Validate filename
+    if (!filename.endsWith('.wh')) {
+        alert('Filename must end with .wh');
+        return;
+    }
+
+    if (files[filename]) {
+        alert('File already exists');
+        return;
+    }
+
+    // Add new file with template content
+    files[filename] = `// ${filename}\n\n<Text>New component</Text>`;
+
+    // Switch to new file
+    switchToFile(filename);
+    renderFileTree();
+    compile();
+}
+
+function deleteFile() {
+    if (Object.keys(files).length === 1) {
+        alert('Cannot delete the last file');
+        return;
+    }
+
+    if (!confirm(`Delete ${activeFile}?`)) {
+        return;
+    }
+
+    delete files[activeFile];
+    delete compileResults[activeFile];
+
+    // Switch to first available file
+    activeFile = Object.keys(files)[0];
+    switchToFile(activeFile);
+    renderFileTree();
+    compile();
+}
+
+function renameFile(oldFilename) {
+    const newFilename = prompt('Rename file:', oldFilename);
+    if (!newFilename || newFilename === oldFilename) return;
+
+    // Validate filename
+    if (!newFilename.endsWith('.wh')) {
+        alert('Filename must end with .wh');
+        return;
+    }
+
+    if (files[newFilename]) {
+        alert('File already exists');
+        return;
+    }
+
+    // Rename file
+    files[newFilename] = files[oldFilename];
+    delete files[oldFilename];
+
+    // Update compile results
+    if (compileResults[oldFilename]) {
+        compileResults[newFilename] = compileResults[oldFilename];
+        delete compileResults[oldFilename];
+    }
+
+    // Update active file if needed
+    if (activeFile === oldFilename) {
+        activeFile = newFilename;
+        document.getElementById('active-file-label').textContent = newFilename;
+    }
+
+    renderFileTree();
+}
+
+function updateOutputForActiveFile() {
+    const result = compileResults[activeFile];
+    if (!result) return;
+
+    if (result.success) {
+        renderKotlinOutput(result.output);
+        updateEditorErrors([]);
+        renderErrorPanel([]);
+    } else {
+        updateEditorErrors(result.errors);
+        renderErrorPanel(result.errors);
+    }
+}
+
+// Output file tree management
+function renderOutputFileTree() {
+    const outputFileTree = document.getElementById('output-file-tree');
+    const fileNames = Object.keys(compileResults).sort();
+
+    if (fileNames.length === 0) {
+        outputFileTree.innerHTML = '<div class="p-4 text-gray-500 text-sm text-center">No output yet</div>';
+        return;
+    }
+
+    outputFileTree.innerHTML = fileNames.map(filename => {
+        const result = compileResults[filename];
+        const hasError = !result.success;
+        const icon = hasError ? '✗' : '✓';
+        const statusClass = hasError ? 'file-error' : 'file-success';
+
+        // Convert .wh to .kt for display
+        const displayName = filename.replace(/\.wh$/, '.kt');
+
+        return `
+            <div class="file-item ${filename === activeOutputFile ? 'active' : ''} ${statusClass}" data-output-filename="${filename}">
+                <span class="file-item-icon">${icon}</span>
+                <span class="file-item-name">${displayName}</span>
+            </div>
+        `;
+    }).join('');
+
+    // Add click handlers
+    outputFileTree.querySelectorAll('.file-item').forEach(item => {
+        item.addEventListener('click', () => {
+            const filename = item.dataset.outputFilename;
+            switchToOutputFile(filename);
+        });
+    });
+}
+
+function switchToOutputFile(filename) {
+    if (!compileResults[filename]) return;
+
+    activeOutputFile = filename;
+    renderOutputFileTree();
+
+    const result = compileResults[filename];
+
+    // Update the displayed output
+    if (currentTab === 'kotlin') {
+        renderKotlinOutput(result.output);
+    } else if (currentTab === 'ast' && result.ast) {
+        document.getElementById('ast-output').textContent =
+            JSON.stringify(JSON.parse(result.ast), null, 2);
+    }
+}
+
+function updateOutputFileTreeVisibility() {
+    const container = document.getElementById('output-file-tree-container');
+    // Show output tree only on kotlin and ast tabs, hide on errors tab
+    if (currentTab === 'kotlin' || currentTab === 'ast') {
+        container.classList.remove('hidden');
+    } else {
+        container.classList.add('hidden');
+    }
+}
+
+// Sidebar toggle functions
+function toggleFileSidebar() {
+    console.log('toggleFileSidebar called');
+    fileSidebarCollapsed = !fileSidebarCollapsed;
+    const sidebar = document.getElementById('file-sidebar');
+    const toggleBtn = document.getElementById('toggle-file-sidebar-btn');
+    console.log('sidebar:', sidebar, 'toggleBtn:', toggleBtn);
+
+    if (fileSidebarCollapsed) {
+        sidebar.classList.add('collapsed');
+        toggleBtn.textContent = '▶';
+        toggleBtn.title = 'Expand sidebar';
+    } else {
+        sidebar.classList.remove('collapsed');
+        toggleBtn.textContent = '◀';
+        toggleBtn.title = 'Collapse sidebar';
+    }
+}
+
+function toggleOutputSidebar() {
+    outputSidebarCollapsed = !outputSidebarCollapsed;
+    const container = document.getElementById('output-file-tree-container');
+    const toggleBtn = document.getElementById('toggle-output-sidebar-btn');
+
+    if (outputSidebarCollapsed) {
+        container.classList.add('collapsed');
+        toggleBtn.textContent = '▶';
+        toggleBtn.title = 'Expand sidebar';
+    } else {
+        container.classList.remove('collapsed');
+        toggleBtn.textContent = '◀';
+        toggleBtn.title = 'Collapse sidebar';
+    }
+}
+
 // Example snippets (ordered by increasing complexity)
+// Each example can have multiple files
 const examples = {
     'hello': {
         name: '01. Hello World',
-        code: `// The simplest Whitehall app - just render text!
+        files: {
+            'Main.wh': `// The simplest Whitehall app - just render text!
 <Text>Hello, Whitehall!</Text>`
+        }
     },
     'styling': {
         name: '02. Text Styling',
@@ -429,48 +701,157 @@ val total = cart.sumOf { it["price"] as Int * it["qty"] as Int }
   </Card>
 </Column>`
     },
-    'tabs': {
-        name: '17. Navigation',
-        code: `// Simple tab navigation with conditional rendering
-var activeTab = "home"
+    'navigation': {
+        name: '17. File-Based Routing',
+        files: {
+            'App.wh': `// App.wh - Main entry point with NavHost
+// File-based routing: routes/[name]/+screen.wh
 
-<Column padding={16} spacing={12}>
-  <Text fontSize={24} fontWeight="bold">Multi-Tab App</Text>
+// Back stack for navigation
+var backStack = ["home"]
+var userId = ""
 
-  // Tab buttons update state
+// Current route from back stack
+val currentRoute = backStack[backStack.size - 1]
+
+// Navigation helpers
+fun navigateTo(route: String) {
+  backStack = backStack + route
+}
+
+fun navigateBack() {
+  if (backStack.size > 1) {
+    backStack = backStack.dropLast(1)
+  }
+}
+
+// NavHost: loads screen from routes/[name]/+screen.wh
+<Column padding={16} spacing={16}>
+  <Text>Route: /{currentRoute}</Text>
+  <Text>Stack: {backStack.joinToString(" → ")}</Text>
+
+  // Render current route's screen
+  @if (currentRoute == "home") {
+    // Would import: routes/home/+screen.wh
+    <HomeScreen />
+  } else if (currentRoute == "profile") {
+    // Would import: routes/profile/+screen.wh
+    <ProfileScreen />
+  } else if (currentRoute == "detail") {
+    // Would import: routes/detail/+screen.wh
+    <DetailScreen userId={userId} />
+  } else {
+    // Would import: routes/settings/+screen.wh
+    <SettingsScreen />
+  }
+</Column>`,
+            'routes/home/+screen.wh': `// routes/home/+screen.wh
+// Home route screen
+
+<Column spacing={8}>
+  <Text fontSize={24}>Home Screen</Text>
+  <Text>Path: /home</Text>
+
+  <Button onClick={() => navigateTo("profile")}>
+    Go to Profile →
+  </Button>
+
+  <Button onClick={() => navigateTo("settings")}>
+    Go to Settings →
+  </Button>
+</Column>`,
+            'routes/profile/+screen.wh': `// routes/profile/+screen.wh
+// Profile route screen
+
+<Column spacing={8}>
+  <Text fontSize={24}>Profile Screen</Text>
+  <Text>Path: /profile</Text>
+
+  <Button onClick={() => navigateBack()}>
+    ← Back
+  </Button>
+
+  <Text>User: John Doe</Text>
+  <Text>Email: john@example.com</Text>
+
+  <Button onClick={() => {
+    userId = "123"
+    navigateTo("detail")
+  }}>
+    View Details →
+  </Button>
+</Column>`,
+            'routes/detail/+screen.wh': `// routes/detail/+screen.wh
+// Detail route screen with parameter
+
+@prop val userId: String
+
+<Column spacing={8}>
+  <Text fontSize={24}>Detail Screen</Text>
+  <Text>Path: /detail</Text>
+
+  <Button onClick={() => navigateBack()}>
+    ← Back
+  </Button>
+
+  <Text>User ID: {userId}</Text>
+  <Text>Name: John Doe</Text>
+  <Text>Role: Developer</Text>
+</Column>`,
+            'routes/settings/+screen.wh': `// routes/settings/+screen.wh
+// Settings route screen
+
+var notifications = true
+
+<Column spacing={8}>
+  <Text fontSize={24}>Settings Screen</Text>
+  <Text>Path: /settings</Text>
+
+  <Button onClick={() => navigateBack()}>
+    ← Back
+  </Button>
+
   <Row spacing={8}>
-    <Button onClick={() => activeTab = "home"}>
-      Home
-    </Button>
-    <Button onClick={() => activeTab = "profile"}>
-      Profile
-    </Button>
-    <Button onClick={() => activeTab = "settings"}>
-      Settings
-    </Button>
+    <Checkbox bind:checked={notifications} />
+    <Text>Enable notifications</Text>
   </Row>
 
-  // Render different content based on active tab
-  <Card padding={16} modifier={Modifier.fillMaxWidth()}>
-    @if (activeTab == "home") {
-      <Column spacing={8}>
-        <Text fontSize={20} fontWeight="bold">Home</Text>
-        <Text>Welcome to the home page!</Text>
-      </Column>
-    } else if (activeTab == "profile") {
-      <Column spacing={8}>
-        <Text fontSize={20} fontWeight="bold">Profile</Text>
-        <Text>Name: John Doe</Text>
-        <Text>Email: john@example.com</Text>
-      </Column>
-    } else {
-      <Column spacing={8}>
-        <Text fontSize={20} fontWeight="bold">Settings</Text>
-        <Text>App version: 1.0.0</Text>
-      </Column>
-    }
-  </Card>
+  <Text>Version: 1.0.0</Text>
 </Column>`
+        }
+    },
+    'multifile': {
+        name: '18. Multi-File Project',
+        files: {
+            'Main.wh': `// Multi-file example: Main screen uses components from other files
+// Note: Import functionality is coming soon!
+
+var count = 0
+var name = ""
+
+<Column padding={16} spacing={12}>
+  <Text fontSize={24} fontWeight="bold">Multi-File Demo</Text>
+
+  <Text>Count: {count}</Text>
+  <Button onClick={() => count++}>
+    Increment
+  </Button>
+
+  <TextField bind:value={name} label="Your name" />
+  <Text>Hello, {name}!</Text>
+</Column>`,
+            'Components.wh': `// Reusable components
+// This file would contain shared components
+
+<Column padding={12}>
+  <Text fontWeight="bold">Custom Component</Text>
+  <Text>This demonstrates multi-file structure</Text>
+</Column>`,
+            'Utils.wh': `// Utility functions and helpers
+// This file would contain helper functions
+
+<Text>Utility helpers would go here</Text>`
+        }
     }
 };
 
@@ -505,6 +886,9 @@ require(['vs/editor/editor.main'], function() {
         updateURL(); // Update URL hash with code
     });
 
+    // Initialize file tree
+    renderFileTree();
+
     // Initial compilation
     compile();
 
@@ -518,17 +902,38 @@ function getInitialCode() {
     const hash = window.location.hash.slice(1);
     if (hash) {
         try {
-            return decodeURIComponent(atob(hash));
+            const decoded = decodeURIComponent(atob(hash));
+            // Try to parse as JSON (multi-file format)
+            try {
+                const parsed = JSON.parse(decoded);
+                if (parsed.files) {
+                    // Multi-file format: { files: {...}, activeFile: "..." }
+                    files = parsed.files;
+                    activeFile = parsed.activeFile || Object.keys(files)[0];
+                    return files[activeFile];
+                }
+            } catch (e) {
+                // Not JSON, treat as single file
+                files = { 'Main.wh': decoded };
+                activeFile = 'Main.wh';
+                return decoded;
+            }
         } catch (e) {
             console.error('Invalid URL hash');
         }
     }
-    return examples.button.code;  // Start with button/state example
+    // Default example
+    files = { 'Main.wh': examples.button.code };
+    activeFile = 'Main.wh';
+    return examples.button.code;
 }
 
-// Compile Whitehall code
+// Compile Whitehall code (multi-file support)
 async function compile() {
-    const code = editor.getValue();
+    // Save current editor content before compiling
+    if (activeFile && editor) {
+        files[activeFile] = editor.getValue();
+    }
 
     // Update status
     setStatus('compiling');
@@ -537,40 +942,84 @@ async function compile() {
         const response = await fetch(`${BACKEND_URL}/api/compile`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ code }),
+            body: JSON.stringify({ files }),
         });
 
         const result = await response.json();
-        lastCompileResult = result;
 
-        if (result.success) {
-            // Success - render with syntax highlighting
-            await renderKotlinOutput(result.output);
+        // Handle multi-file response
+        if (result.results) {
+            // Multi-file response
+            compileResults = result.results;
 
-            document.getElementById('ast-output').textContent =
-                result.ast ? JSON.stringify(JSON.parse(result.ast), null, 2) : 'AST view not available';
+            // Count total errors across all files
+            let totalErrors = 0;
+            for (const fileResult of Object.values(result.results)) {
+                if (fileResult.errors) {
+                    totalErrors += fileResult.errors.length;
+                }
+            }
 
-            updateEditorErrors([]);
-            setStatus('success');
+            // Update UI based on active file's result
+            const activeResult = compileResults[activeFile];
+            if (activeResult) {
+                if (activeResult.success) {
+                    await renderKotlinOutput(activeResult.output);
+                    updateEditorErrors([]);
+                    renderErrorPanel([]);
 
-            // Hide error count badge
-            document.getElementById('error-count').classList.add('hidden');
+                    // Show AST if available
+                    document.getElementById('ast-output').textContent =
+                        activeResult.ast ? JSON.stringify(JSON.parse(activeResult.ast), null, 2) : 'AST view not available';
+                } else {
+                    updateEditorErrors(activeResult.errors);
+                    renderErrorPanel(activeResult.errors);
+                }
+            }
 
-            // Clear error panel when successful
-            renderErrorPanel([]);
+            // Update status and error count
+            if (result.success && totalErrors === 0) {
+                setStatus('success');
+                document.getElementById('error-count').classList.add('hidden');
+            } else {
+                setStatus('error');
+                const errorCountEl = document.getElementById('error-count');
+                errorCountEl.textContent = totalErrors;
+                errorCountEl.classList.remove('hidden');
+
+                // Auto-switch to Errors tab
+                if (totalErrors > 0 && !activeResult.success) {
+                    switchTab('errors');
+                }
+            }
+
+            // Update output file tree
+            renderOutputFileTree();
+            updateOutputFileTreeVisibility();
         } else {
-            // Errors - keep last valid output visible, show errors in panel
-            updateEditorErrors(result.errors);
-            renderErrorPanel(result.errors);
-            setStatus('error');
+            // Fallback: single file response (legacy)
+            compileResults[activeFile] = result;
 
-            // Show error count badge
-            const errorCountEl = document.getElementById('error-count');
-            errorCountEl.textContent = result.errors.length;
-            errorCountEl.classList.remove('hidden');
+            if (result.success) {
+                await renderKotlinOutput(result.output);
+                updateEditorErrors([]);
+                renderErrorPanel([]);
+                setStatus('success');
+                document.getElementById('error-count').classList.add('hidden');
+            } else {
+                updateEditorErrors(result.errors);
+                renderErrorPanel(result.errors);
+                setStatus('error');
 
-            // Auto-switch to Errors tab to show what went wrong
-            switchTab('errors');
+                const errorCountEl = document.getElementById('error-count');
+                errorCountEl.textContent = result.errors.length;
+                errorCountEl.classList.remove('hidden');
+                switchTab('errors');
+            }
+
+            // Update output file tree
+            renderOutputFileTree();
+            updateOutputFileTreeVisibility();
         }
     } catch (error) {
         console.error('Compilation error:', error);
@@ -725,6 +1174,9 @@ function switchTab(tab) {
     document.getElementById('kotlin-panel').classList.toggle('hidden', tab !== 'kotlin');
     document.getElementById('errors-panel').classList.toggle('hidden', tab !== 'errors');
     document.getElementById('ast-panel').classList.toggle('hidden', tab !== 'ast');
+
+    // Update output file tree visibility
+    updateOutputFileTreeVisibility();
 }
 
 // Format code (basic indentation)
@@ -737,11 +1189,14 @@ function formatCode() {
     showToast('Code formatted');
 }
 
-// Clear editor
+// Clear editor (clears current file only)
 function clearEditor() {
-    if (confirm('Clear all code?')) {
-        editor.setValue('');
-        compile();
+    if (confirm(`Clear ${activeFile}?`)) {
+        if (editor) {
+            editor.setValue('');
+            files[activeFile] = '';
+            compile();
+        }
     }
 }
 
@@ -769,10 +1224,19 @@ function shareCode() {
     });
 }
 
-// Update URL hash with code
+// Update URL hash with code (supports multi-file)
 function updateURL() {
-    const code = editor.getValue();
-    const encoded = btoa(encodeURIComponent(code));
+    // Save current editor content
+    if (activeFile && editor) {
+        files[activeFile] = editor.getValue();
+    }
+
+    // Encode all files as JSON
+    const state = {
+        files,
+        activeFile
+    };
+    const encoded = btoa(encodeURIComponent(JSON.stringify(state)));
     window.history.replaceState(null, '', '#' + encoded);
 }
 
@@ -781,8 +1245,26 @@ function loadExample(key) {
     if (!key) return;
     const example = examples[key];
     if (example) {
-        editor.setValue(example.code);
+        // Support both old format (code) and new format (files)
+        if (example.files) {
+            files = { ...example.files }; // Copy files object
+            activeFile = Object.keys(files)[0]; // First file
+        } else if (example.code) {
+            // Legacy format - convert to files
+            files = { 'Main.wh': example.code };
+            activeFile = 'Main.wh';
+        }
+
+        // Update editor
+        if (editor && files[activeFile]) {
+            editor.setValue(files[activeFile]);
+        }
+
+        // Update UI
+        document.getElementById('active-file-label').textContent = activeFile;
+        renderFileTree();
         compile();
+
         // Keep the dropdown showing the selected example
         document.getElementById('examples').value = key;
     }
@@ -808,6 +1290,8 @@ function escapeHtml(text) {
 
 // Event listeners
 document.addEventListener('DOMContentLoaded', () => {
+    console.log('DOMContentLoaded fired');
+
     // Tab buttons
     document.querySelectorAll('.tab-btn').forEach(btn => {
         btn.addEventListener('click', () => switchTab(btn.dataset.tab));
@@ -819,6 +1303,23 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('copy-btn').addEventListener('click', copyOutput);
     document.getElementById('share-btn').addEventListener('click', shareCode);
 
+    // File management buttons
+    const addFileBtn = document.getElementById('add-file-btn');
+    const deleteFileBtn = document.getElementById('delete-file-btn');
+    const toggleFileSidebarBtn = document.getElementById('toggle-file-sidebar-btn');
+    const toggleOutputSidebarBtn = document.getElementById('toggle-output-sidebar-btn');
+
+    console.log('Buttons found:', {addFileBtn, deleteFileBtn, toggleFileSidebarBtn, toggleOutputSidebarBtn});
+
+    if (addFileBtn) addFileBtn.addEventListener('click', addNewFile);
+    if (deleteFileBtn) deleteFileBtn.addEventListener('click', deleteFile);
+
+    // Sidebar toggle buttons
+    if (toggleFileSidebarBtn) toggleFileSidebarBtn.addEventListener('click', toggleFileSidebar);
+    if (toggleOutputSidebarBtn) toggleOutputSidebarBtn.addEventListener('click', toggleOutputSidebar);
+
     // Examples dropdown
     document.getElementById('examples').addEventListener('change', (e) => loadExample(e.target.value));
+
+    console.log('All event listeners attached');
 });
