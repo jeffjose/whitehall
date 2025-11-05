@@ -159,12 +159,31 @@ fn generate_main_activity(
 
     // If we transpiled main.wh, we need to wrap it in MainActivity
     let activity_content = if main_file.is_some() {
-        // Strip package declaration from main_content since we'll add it ourselves
-        let main_content_no_package = main_content
-            .lines()
-            .skip_while(|line| line.trim().is_empty() || line.starts_with("package "))
-            .collect::<Vec<_>>()
-            .join("\n");
+        // Extract imports and code from transpiled main content
+        let lines: Vec<&str> = main_content.lines().collect();
+        let mut app_imports = Vec::new();
+        let mut app_code_lines = Vec::new();
+        let mut in_header = true;
+
+        for line in lines {
+            let trimmed = line.trim();
+            if in_header && (trimmed.is_empty() || trimmed.starts_with("package ") || trimmed.starts_with("import ")) {
+                if trimmed.starts_with("import ") {
+                    app_imports.push(line.to_string());
+                }
+                // Skip package and empty lines in header
+            } else {
+                in_header = false;
+                app_code_lines.push(line);
+            }
+        }
+
+        let app_code = app_code_lines.join("\n");
+        let app_imports_str = if app_imports.is_empty() {
+            String::new()
+        } else {
+            format!("\n{}", app_imports.join("\n"))
+        };
 
         format!(
             r#"package {}
@@ -172,7 +191,7 @@ fn generate_main_activity(
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
-import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.MaterialTheme{}
 
 class MainActivity : ComponentActivity() {{
     override fun onCreate(savedInstanceState: Bundle?) {{
@@ -186,7 +205,7 @@ class MainActivity : ComponentActivity() {{
 }}
 
 {}"#,
-            config.android.package, main_content_no_package
+            config.android.package, app_imports_str, app_code
         )
     } else {
         main_content
