@@ -438,10 +438,13 @@ class UserProfile : ViewModel() {
 
 ### Phase 5: Dependency Injection (Hilt) ⏸️ PENDING
 
+**Hybrid Auto-Detection:** Hilt is automatically enabled when EITHER `@HiltViewModel` OR `@Inject` is present.
+
+#### Approach A: Using `@Inject` (Recommended - Less Boilerplate)
+
 **Input:**
 ```whitehall
 @store
-@HiltViewModel
 class UserProfile @Inject constructor(
   private val repository: ProfileRepository,
   private val analytics: Analytics
@@ -458,13 +461,13 @@ class UserProfile @Inject constructor(
 **Usage:**
 ```whitehall
 <script>
-  val profile = UserProfile()  // Auto-detects @HiltViewModel!
+  val profile = UserProfile()  // Auto-detects @Inject!
 </script>
 ```
 
 **Output (store):**
 ```kotlin
-@HiltViewModel
+@HiltViewModel  // ← Auto-added because of @Inject
 class UserProfile @Inject constructor(
     private val repository: ProfileRepository,
     private val analytics: Analytics
@@ -475,14 +478,55 @@ class UserProfile @Inject constructor(
 
 **Output (usage):**
 ```kotlin
-val profile = hiltViewModel<UserProfile>()  // Auto-generated!
+val profile = hiltViewModel<UserProfile>()  // ← Auto-selected!
+```
+
+#### Approach B: Using `@HiltViewModel` (Explicit)
+
+**Input:**
+```whitehall
+@store
+@HiltViewModel
+class UserProfile @Inject constructor(
+  private val repository: ProfileRepository,
+  private val analytics: Analytics
+) {
+  var name = ""
+}
+```
+
+**Output:** Same as Approach A - both annotations work
+
+#### No Hilt - Simple Constructor Params
+
+**Input:**
+```whitehall
+@store
+class Counter(initialValue: Int) {  // No @Inject, no @HiltViewModel
+  var count = initialValue
+}
+```
+
+**Output:**
+```kotlin
+class Counter(initialValue: Int) : ViewModel() {  // No @HiltViewModel
+    // ... regular ViewModel ...
+}
+```
+
+**Usage:**
+```kotlin
+val counter = viewModel<Counter>()  // Regular viewModel, not hiltViewModel
 ```
 
 **Implementation:**
-1. Preserve `@HiltViewModel` and `@Inject constructor()` on store class
-2. In store registry, track both `@store` and presence of `@HiltViewModel`
+1. Check for EITHER `@HiltViewModel` on class OR `@Inject` on constructor
+2. If either is present:
+   - Add `@HiltViewModel` to generated class (if not already present)
+   - Preserve `@Inject constructor()` as-is
+   - Track `has_hilt: true` in store registry
 3. When generating usage:
-   - Check if class has `@HiltViewModel` in registry
+   - Check if class has `has_hilt` in registry
    - Yes → Generate `hiltViewModel<T>()`
    - No → Generate `viewModel<T>()`
 4. No annotation needed at usage site - fully automatic!
@@ -1360,7 +1404,7 @@ class MyApplication : Application()
 10. **Auto-wrap suspend functions** - `suspend fun` automatically wrapped in `viewModelScope.launch { }`
 
 ### Decided - Pending Implementation ⏸️
-1. **Auto-detect Hilt** - Phase 5 (@HiltViewModel → hiltViewModel<T>())
+1. **Auto-detect Hilt** - Phase 5 (Hybrid: detect `@Inject` OR `@HiltViewModel` → auto-generate `@HiltViewModel` + use `hiltViewModel<T>()`)
 2. **Callable references** (`profile::save`) - Works in Kotlin, needs testing
 3. **Lifecycle hooks** (`onMount`, `onDispose`) - Not started
 4. **Global stores** - Design decided, not implemented
