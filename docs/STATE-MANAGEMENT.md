@@ -4,6 +4,29 @@
 
 ---
 
+## Quick Reference: Whitehall Support Status
+
+| **Pattern** | **Status** | **Whitehall Syntax** |
+|-------------|-----------|---------------------|
+| Local state | ✅ Supported | `var count = 0` |
+| Props | ✅ Supported | `@prop val name: String` |
+| Two-way binding | ✅ Supported | `bind:value={email}` |
+| Derived values | ✅ Supported | `val doubled = count * 2` |
+| Hoisted state | ✅ Supported | Same as local state + props |
+| StateFlow | ⚠️ Manual | Use Kotlin directly |
+| ViewModel | ⚠️ Manual | Use Kotlin directly |
+| Effects | ⚠️ Manual | Use `LaunchedEffect` directly |
+| CompositionLocal | ⚠️ Manual | Use Kotlin directly |
+| Lifecycle hooks | ❌ Not yet | Proposed: `onMount`, `onDispose` |
+| Store files | ❌ Not yet | Proposed: `.store.wh` files |
+
+**Legend:**
+- ✅ **Supported** - Works today with clean syntax
+- ⚠️ **Manual** - Works but requires Kotlin code
+- ❌ **Not yet** - Future feature
+
+---
+
 ## Table of Contents
 
 1. [Background: Android/Kotlin State Management](#background-androidkotlin-state-management)
@@ -36,11 +59,37 @@ fun Counter() {
 }
 ```
 
+**Whitehall syntax:** ✅ **Supported**
+
+```whitehall
+<!-- Counter.wh -->
+<script>
+  var count = 0
+</script>
+
+<Button onClick={() => count++}>
+  Count: {count}
+</Button>
+```
+
+**Transpiles to:**
+```kotlin
+@Composable
+fun Counter() {
+    var count by remember { mutableStateOf(0) }
+
+    Button(onClick = { count++ }) {
+        Text("Count: $count")
+    }
+}
+```
+
 **Key concepts:**
 - `remember`: Preserves value across recompositions
 - `mutableStateOf`: Creates observable state
 - `by` delegate: Allows `count` to act like a regular variable
 - When `count` changes, the composable automatically recomposes
+- **Whitehall auto-wraps** `var` declarations in `remember { mutableStateOf() }`
 
 **Lifecycle:**
 - ✅ Survives recomposition
@@ -97,6 +146,39 @@ fun InputField(
 fun DisplayText(text: String) {
     Text("You typed: $text")
 }
+```
+
+**Whitehall syntax:** ✅ **Supported**
+
+```whitehall
+<!-- Parent.wh -->
+<script>
+  var text = ""
+</script>
+
+<Column>
+  <InputField value={text} onValueChange={(newText) => text = newText} />
+  <DisplayText text={text} />
+</Column>
+```
+
+```whitehall
+<!-- InputField.wh -->
+<script>
+  @prop val value: String
+  @prop val onValueChange: (String) -> Unit
+</script>
+
+<TextField value={value} onValueChange={onValueChange} />
+```
+
+```whitehall
+<!-- DisplayText.wh -->
+<script>
+  @prop val text: String
+</script>
+
+<Text>You typed: {text}</Text>
 ```
 
 **Pattern:** Unidirectional data flow
@@ -166,6 +248,44 @@ fun ProfileScreen(repository: UserRepository) {
     }
 }
 ```
+
+**Whitehall syntax:** ⚠️ **Manual (Use Kotlin directly)**
+
+```kotlin
+// src/kotlin/repositories/UserRepository.kt (standard Kotlin file)
+object UserRepository {
+    private val _user = MutableStateFlow<User?>(null)
+    val user: StateFlow<User?> = _user.asStateFlow()
+
+    fun updateUser(user: User) {
+        _user.value = user
+    }
+
+    fun updateUserName(name: String) {
+        _user.update { it?.copy(name = name) }
+    }
+}
+```
+
+```whitehall
+<!-- ProfileScreen.wh -->
+<script>
+  import com.app.repositories.UserRepository
+
+  val user by UserRepository.user.collectAsState()
+
+  fun handleUpdate() {
+    UserRepository.updateUserName("New Name")
+  }
+</script>
+
+<Column>
+  <Text>Name: {user?.name}</Text>
+  <Button onClick={handleUpdate}>Update</Button>
+</Column>
+```
+
+**Note:** Repository/StateFlow code must be written in Kotlin files. The `.wh` file can consume it using standard `collectAsState()`.
 
 **Key concepts:**
 - `MutableStateFlow`: Hot observable that always has a value
@@ -291,6 +411,78 @@ fun ProfileScreen(
 }
 ```
 
+**Whitehall syntax:** ⚠️ **Manual (Use Kotlin for ViewModel)**
+
+```kotlin
+// src/kotlin/viewmodels/ProfileViewModel.kt (standard Kotlin file)
+class ProfileViewModel : ViewModel() {
+    data class UiState(
+        val name: String = "",
+        val email: String = "",
+        val isLoading: Boolean = false,
+        val error: String? = null
+    )
+
+    private val _uiState = MutableStateFlow(UiState())
+    val uiState: StateFlow<UiState> = _uiState.asStateFlow()
+
+    fun updateName(name: String) {
+        _uiState.update { it.copy(name = name) }
+    }
+
+    fun saveProfile() {
+        viewModelScope.launch {
+            _uiState.update { it.copy(isLoading = true) }
+            try {
+                repository.saveProfile(_uiState.value.name, _uiState.value.email)
+                _uiState.update { it.copy(isLoading = false) }
+            } catch (e: Exception) {
+                _uiState.update { it.copy(isLoading = false, error = e.message) }
+            }
+        }
+    }
+}
+```
+
+```whitehall
+<!-- ProfileScreen.wh -->
+<script>
+  val viewModel: ProfileViewModel = viewModel()
+  val uiState by viewModel.uiState.collectAsState()
+</script>
+
+<Column>
+  <Input
+    value={uiState.name}
+    onValueChange={viewModel::updateName}
+    label="Name"
+  />
+
+  <Input
+    value={uiState.email}
+    onValueChange={viewModel::updateEmail}
+    label="Email"
+  />
+
+  @if (uiState.isLoading) {
+    <CircularProgressIndicator />
+  }
+
+  @if (uiState.error != null) {
+    <Text color={Color.Red}>{uiState.error}</Text>
+  }
+
+  <Button
+    onClick={viewModel::saveProfile}
+    disabled={uiState.isLoading}
+  >
+    Save
+  </Button>
+</Column>
+```
+
+**Note:** ViewModels are written in standard Kotlin files, then consumed in `.wh` files using `viewModel()` and `collectAsState()`.
+
 **Lifecycle:**
 - ✅ Survives configuration changes (rotation)
 - ✅ Scoped to navigation destination
@@ -378,6 +570,42 @@ fun DeepNestedComponent() {
 }
 ```
 
+**Whitehall syntax:** ⚠️ **Manual (Use Kotlin directly)**
+
+```kotlin
+// src/kotlin/AppTheme.kt
+data class AppTheme(
+    val primary: Color,
+    val background: Color
+)
+
+val LocalTheme = compositionLocalOf { AppTheme(Color.Blue, Color.White) }
+```
+
+```whitehall
+<!-- App.wh -->
+<script>
+  val theme = AppTheme(Color.Red, Color.Black)
+</script>
+
+<CompositionLocalProvider values={arrayOf(LocalTheme provides theme)}>
+  <Screen1 />
+</CompositionLocalProvider>
+```
+
+```whitehall
+<!-- DeepNestedComponent.wh -->
+<script>
+  val theme = LocalTheme.current
+</script>
+
+<Box backgroundColor={theme.background}>
+  <Text color={theme.primary}>Hello</Text>
+</Box>
+```
+
+**Note:** CompositionLocal definitions are in Kotlin files, usage in `.wh` files is the same as Compose.
+
 **Common use cases:**
 - Theme/styling
 - Locale/language
@@ -439,6 +667,56 @@ fun ShoppingCart() {
     }
 }
 ```
+
+**Whitehall syntax:** ✅ **Supported (automatic)**
+
+```whitehall
+<!-- ShoppingCart.wh -->
+<script>
+  var items: List<Item> = listOf()
+
+  // Derived values - automatically recompute when items changes
+  val total = items.sumOf { it.price }
+  val itemCount = items.size
+  val hasItems = items.isNotEmpty()
+</script>
+
+<Column>
+  <Text>Items: {itemCount}</Text>
+  <Text>Total: ${total}</Text>
+
+  @if (hasItems) {
+    <Button onClick={/* checkout */}>
+      Checkout
+    </Button>
+  }
+</Column>
+```
+
+**Transpiles to:**
+```kotlin
+@Composable
+fun ShoppingCart() {
+    var items by remember { mutableStateOf(listOf<Item>()) }
+
+    val total = items.sumOf { it.price }
+    val itemCount = items.size
+    val hasItems = items.isNotEmpty()
+
+    Column {
+        Text("Items: $itemCount")
+        Text("Total: $$total")
+
+        if (hasItems) {
+            Button(onClick = { /* checkout */ }) {
+                Text("Checkout")
+            }
+        }
+    }
+}
+```
+
+**Note:** Compose automatically tracks dependencies and recomputes derived values. No special syntax needed!
 
 **With StateFlow:**
 ```kotlin
@@ -513,6 +791,83 @@ fun UserProfile(userId: String) {
     }
 }
 ```
+
+**Whitehall syntax:** ⚠️ **Manual (Use Compose directly)**
+
+```whitehall
+<!-- UserProfile.wh -->
+<script>
+  @prop val userId: String
+
+  var user: User? = null
+
+  // Runs once when component mounts
+  LaunchedEffect(Unit) {
+    println("Component mounted")
+  }
+
+  // Runs when userId changes
+  LaunchedEffect(userId) {
+    user = repository.loadUser(userId)
+  }
+
+  // Cleanup when component unmounts
+  DisposableEffect(Unit) {
+    val subscription = eventBus.subscribe()
+    onDispose {
+      subscription.cancel()
+    }
+  }
+
+  // Runs every recomposition (use sparingly)
+  SideEffect {
+    analytics.trackScreenView("profile")
+  }
+</script>
+
+<Column>
+  @if (user != null) {
+    <Text>{user.name}</Text>
+    <Text>{user.email}</Text>
+  }
+</Column>
+```
+
+**Transpiles to:**
+```kotlin
+@Composable
+fun UserProfile(userId: String) {
+    var user by remember { mutableStateOf<User?>(null) }
+
+    LaunchedEffect(Unit) {
+        println("Component mounted")
+    }
+
+    LaunchedEffect(userId) {
+        user = repository.loadUser(userId)
+    }
+
+    DisposableEffect(Unit) {
+        val subscription = eventBus.subscribe()
+        onDispose {
+            subscription.cancel()
+        }
+    }
+
+    SideEffect {
+        analytics.trackScreenView("profile")
+    }
+
+    Column {
+        if (user != null) {
+            Text(user!!.name)
+            Text(user!!.email)
+        }
+    }
+}
+```
+
+**Note:** Currently use Compose effects directly. Future consideration: Add syntax sugar like `onMount`, `onDispose`, etc.
 
 **Svelte equivalent:**
 ```svelte
