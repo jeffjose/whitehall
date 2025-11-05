@@ -13,7 +13,7 @@
 | Two-way binding | ✅ Supported | `bind:value={email}` |
 | Derived values | ✅ Supported | `val doubled = count * 2` |
 | Hoisted state | ✅ Supported | Local state + props |
-| **Stores (screen-level)** | **✅ Partially Implemented** | `@store class UserProfile {...}` + `val profile = UserProfile()` (auto-detected) |
+| **Stores (screen-level)** | **✅ Supported** | `@store class UserProfile {...}` + `val profile = UserProfile()` (auto-detected, Hilt ready) |
 | StateFlow (manual) | ⚠️ Works today | Use Kotlin files directly |
 | Effects | ⚠️ Works today | Use `LaunchedEffect` directly |
 | CompositionLocal | ⚠️ Works today | Use Kotlin directly |
@@ -23,7 +23,6 @@
 
 **Legend:**
 - ✅ **Supported** - Works today with clean syntax
-- ✅ **Partially Implemented** - Core features working, some advanced features pending
 - ⚠️ **Works today** - No special syntax, use Kotlin/Compose directly
 - 🤔 **Under consideration** - Options available, decision needed
 
@@ -217,7 +216,7 @@ src/
 | Phase 2 | ✅ **COMPLETE** | Auto-detection at usage sites (viewModel<T>()) |
 | Phase 3 | ✅ **COMPLETE** | Derived properties with getters |
 | Phase 4 | ✅ **COMPLETE** | Auto-wrap suspend functions in viewModelScope |
-| Phase 5 | ⏸️ **PENDING** | Hilt integration (@HiltViewModel support) |
+| Phase 5 | ✅ **COMPLETE** | Hilt integration (hybrid auto-detection) |
 
 **Working Example:** See `examples/counter-store/` for a complete working example.
 
@@ -436,7 +435,7 @@ class UserProfile : ViewModel() {
 
 ---
 
-### Phase 5: Dependency Injection (Hilt) ⏸️ PENDING
+### Phase 5: Dependency Injection (Hilt) ✅ COMPLETE
 
 **Hybrid Auto-Detection:** Hilt is automatically enabled when EITHER `@hilt` OR `@inject`/`@Inject` is present.
 
@@ -980,7 +979,7 @@ fun ProfileScreen() {
 ```whitehall
 <!-- stores/UserProfile.wh -->
 @store
-@HiltViewModel
+@hilt
 class UserProfile @Inject constructor(
   private val repository: ProfileRepository,
   private val analytics: Analytics
@@ -994,7 +993,7 @@ class UserProfile @Inject constructor(
 
 <!-- screens/ProfileScreen.wh -->
 <script>
-  val profile = UserProfile()  // Auto-detects @HiltViewModel!
+  val profile = UserProfile()  // Auto-detects Hilt from @hilt or @Inject!
 </script>
 ```
 
@@ -1316,7 +1315,7 @@ fun ProfileScreen() {
 ```whitehall
 <!-- stores/UserProfile.wh -->
 @store
-@HiltViewModel
+@hilt
 class UserProfile @Inject constructor(
   private val repository: ProfileRepository,
   private val analytics: Analytics
@@ -1350,7 +1349,7 @@ class UserProfile @Inject constructor(
 <script>
   import com.app.stores.UserProfile
 
-  val profile = UserProfile()  // Auto-detects @HiltViewModel!
+  val profile = UserProfile()  // Auto-detects Hilt from @hilt or @Inject!
 </script>
 
 <Column>
@@ -1404,13 +1403,14 @@ class MyApplication : Application()
 8. **Script tag support** - `<script>` for imports in main.wh
 9. **Multiple store instances** - Auto-keyed by variable name (ready, untested)
 10. **Auto-wrap suspend functions** - `suspend fun` automatically wrapped in `viewModelScope.launch { }`
+11. **Type inference** - Automatically infer types from literal values (Boolean, Int, String, Double)
+12. **Hilt integration** - Hybrid auto-detection: detect `@inject`/`@Inject` OR `@hilt` → auto-generate `@HiltViewModel` + use `hiltViewModel<T>()`
 
 ### Decided - Pending Implementation ⏸️
-1. **Auto-detect Hilt** - Phase 5 (Hybrid: detect `@inject`/`@Inject` OR `@hilt` → auto-generate `@HiltViewModel` + use `hiltViewModel<T>()`)
-2. **Callable references** (`profile::save`) - Works in Kotlin, needs testing
-3. **Lifecycle hooks** (`onMount`, `onDispose`) - Not started
-4. **Global stores** - Design decided, not implemented
-5. **Persistence** - Manual (no special syntax needed)
+1. **Callable references** (`profile::save`) - Works in Kotlin, needs testing
+2. **Lifecycle hooks** (`onMount`, `onDispose`) - Not started
+3. **Global stores** - Design decided, not implemented
+4. **Persistence** - Manual (no special syntax needed)
 
 ### Open Questions Needing Decisions
 1. **Lifecycle hook naming:** `onDestroy` vs `onDispose` (recommendation: `onDispose`)
@@ -1419,11 +1419,10 @@ class MyApplication : Application()
 ---
 
 **Next Steps:**
-1. ✅ ~~Phase 0-4: Core @store implementation~~ **COMPLETE**
-2. Implement Phase 5: Hilt integration (@HiltViewModel detection)
-3. Implement lifecycle hooks (`onMount`, `onDispose`)
-4. Decide & implement: Global store pattern (Option A or B)
-5. Test: Callable references (`profile::save`)
-6. Test: Multiple store instances with auto-keying
+1. ✅ ~~Phase 0-5: Core @store implementation~~ **COMPLETE**
+2. Implement lifecycle hooks (`onMount`, `onDispose`)
+3. Decide & implement: Global store pattern (Option A or B)
+4. Test: Callable references (`profile::save`)
+5. Test: Multiple store instances with auto-keying
 
 **Try it now:** `whitehall run examples/counter-store/`
