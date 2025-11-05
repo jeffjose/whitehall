@@ -36,7 +36,7 @@ class AppSettings @Inject constructor(
 ) : ViewModel() {
     data class UiState(
         val theme: String = "light",
-        val notifications: String = true
+        val notifications: Boolean = true
     )
 
     private val _uiState = MutableStateFlow(UiState())
@@ -46,7 +46,7 @@ class AppSettings @Inject constructor(
         get() = _uiState.value.theme
         set(value) { _uiState.update { it.copy(theme = value) } }
 
-    var notifications: String
+    var notifications: Boolean
         get() = _uiState.value.notifications
         set(value) { _uiState.update { it.copy(notifications = value) } }
 

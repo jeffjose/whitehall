@@ -6,8 +6,8 @@ Tests @store without Hilt - generates regular ViewModel with viewModel<T>().
 
 ```whitehall
 @store
-class Counter(initialValue: Int) {
-  var count = initialValue
+class Counter {
+  var count = 0
 
   fun increment() {
     count = count + 1
@@ -32,17 +32,15 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
-class Counter constructor(
-    initialValue: Int
-) : ViewModel() {
+class Counter : ViewModel() {
     data class UiState(
-        val count: String = initialValue
+        val count: Int = 0
     )
 
     private val _uiState = MutableStateFlow(UiState())
     val uiState: StateFlow<UiState> = _uiState.asStateFlow()
 
-    var count: String
+    var count: Int
         get() = _uiState.value.count
         set(value) { _uiState.update { it.copy(count = value) } }
 

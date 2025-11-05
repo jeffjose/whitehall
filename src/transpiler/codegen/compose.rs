@@ -2602,7 +2602,14 @@ impl ComposeBackend {
                 continue;
             }
 
-            let type_str = prop.type_annotation.as_deref().unwrap_or("String");
+            // Infer type from initial value if no type annotation
+            let type_str = if let Some(type_ann) = &prop.type_annotation {
+                type_ann.clone()
+            } else if let Some(init_val) = &prop.initial_value {
+                self.infer_type_from_value(init_val)
+            } else {
+                "String".to_string()
+            };
             let default_val = prop.initial_value.as_deref().unwrap_or("\"\"");
             output.push_str(&format!("        val {}: {} = {}", prop.name, type_str, default_val));
             if i < class.properties.len() - 1 {
@@ -2620,13 +2627,25 @@ impl ComposeBackend {
         for prop in &class.properties {
             if prop.getter.is_some() {
                 // Derived property with getter
-                let type_str = prop.type_annotation.as_deref().unwrap_or("String");
+                let type_str = if let Some(type_ann) = &prop.type_annotation {
+                    type_ann.clone()
+                } else if let Some(init_val) = &prop.initial_value {
+                    self.infer_type_from_value(init_val)
+                } else {
+                    "String".to_string()
+                };
                 let getter_expr = prop.getter.as_ref().unwrap();
                 output.push_str(&format!("    val {}: {}\n", prop.name, type_str));
                 output.push_str(&format!("        get() = {}\n\n", getter_expr));
             } else {
                 // Regular property with setter
-                let type_str = prop.type_annotation.as_deref().unwrap_or("String");
+                let type_str = if let Some(type_ann) = &prop.type_annotation {
+                    type_ann.clone()
+                } else if let Some(init_val) = &prop.initial_value {
+                    self.infer_type_from_value(init_val)
+                } else {
+                    "String".to_string()
+                };
                 output.push_str(&format!("    var {}: {}\n", prop.name, type_str));
                 output.push_str(&format!("        get() = _uiState.value.{}\n", prop.name));
                 output.push_str(&format!("        set(value) {{ _uiState.update {{ it.copy({} = value) }} }}\n\n", prop.name));
