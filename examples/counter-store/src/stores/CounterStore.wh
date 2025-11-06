@@ -20,4 +20,9 @@ class CounterStore {
     count = 0
     lastIncrement = null
   }
+
+  suspend fun saveToDatabase() {
+    // Simulate async operation
+    count = count + 1
+  }
 }

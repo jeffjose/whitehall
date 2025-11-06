@@ -2636,7 +2636,13 @@ impl ComposeBackend {
 
         // Functions (no viewModelScope for singletons - they must manage their own scope if needed)
         for func in &class.functions {
-            output.push_str(&format!("    fun {}() {{\n", func.name));
+            // Preserve suspend keyword for singleton functions
+            let suspend_keyword = if func.is_suspend { "suspend " } else { "" };
+            output.push_str(&format!("    {}fun {}({})", suspend_keyword, func.name, func.params));
+            if let Some(return_type) = &func.return_type {
+                output.push_str(&format!(": {}", return_type));
+            }
+            output.push_str(" {\n");
             output.push_str(&format!("        {}\n", func.body.trim()));
             output.push_str("    }\n\n");
         }
