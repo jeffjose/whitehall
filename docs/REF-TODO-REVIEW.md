@@ -12,17 +12,21 @@
 
 ### ✅ REF-STATE-MANAGEMENT.md - REVIEWED (2025-11-06)
 
-**Status:** Major corrections made
+**Status:** Systematic review complete - all issues fixed
 - ✅ Fixed @store vs ViewModels confusion
 - ✅ Verified class with var → ViewModel
 - ✅ Verified @store object → Singleton
 - ✅ Verified @Inject/@hilt → @HiltViewModel
+- ✅ Fixed Phase 1.1 status contradictions (line 11, line 105)
+- ✅ Updated StoreInfo struct documentation with missing fields
+- ✅ Removed misleading @store annotations from Hilt examples
 
 **Code verified:**
+- `src/transpiler/analyzer.rs:75-83` - StoreInfo struct definition
 - `src/transpiler/analyzer.rs:397-430` - collect_stores logic
 - `src/transpiler/codegen/compose.rs:3020-3120` - ViewModel vs Singleton generation
 - `tests/transpiler-examples/27-29.md` - Store test cases
-- `tests/transpiler-examples/30-32.md` - Component inline vars
+- `tests/transpiler-examples/30-32.md` - Component inline vars (all passing)
 
 ---
 
@@ -324,7 +328,16 @@ For each REF-* file:
 - **Reality:** class with var creates ViewModels (no @store needed)
 - **Issue:** Didn't document @store object for singletons
 - **Reality:** @store object → Singleton with StateFlow
-- **Fixed:** 2025-11-06 (commits 40d86d5, 0b9e066)
+- **Fixed:** 2025-11-06 (initial commits 40d86d5, 0b9e066)
+- **Issue:** Line 11 said "underway" but status header said "Phase 1.1 Complete"
+- **Reality:** Phase 1.1 is complete with 38/38 tests passing
+- **Issue:** Line 105 status showed "🔄 In Progress"
+- **Reality:** Should be "✅ Complete"
+- **Issue:** StoreInfo struct documentation missing 2 fields
+- **Reality:** Missing has_vars: bool and route_params: Vec<String>
+- **Issue:** Misleading @store annotations in Hilt examples
+- **Reality:** var triggers ViewModel, not @store; @store only for object singletons
+- **Fixed:** 2025-11-06 (commit 91a3bb5)
 
 ### REF-TRANSPILER.md
 - **Issue:** Doc claimed 37/38 tests (97.4%), test 05 failing
