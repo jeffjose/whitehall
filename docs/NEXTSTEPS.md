@@ -2,699 +2,200 @@
 
 **Last Updated**: 2025-11-06
 
-## Current Status
+> **Note:** For completed features and overall roadmap, see ROADMAP.md
 
-✅ **Transpiler Core: 100% Complete + Optimizations**
-- **31 test cases passing** (29 transpiler + 2 optimization examples)
-- Zero compiler warnings
-- Clean, production-ready codebase
-- Full feature parity with syntax design
-- **Phase 6 Optimizations Working**: Static list → RecyclerView
+---
 
-✅ **Phase 1.1: Component Inline Vars → ViewModel (NEW!) 🎉**
-- **Auto-ViewModel generation** for complex components with inline state
-- **Multi-file output** (ComponentViewModel.kt + Component.kt)
-- **Smart detection heuristic** (only complex components use ViewModels)
-- **Markup transformation** (var → uiState.var, func() → viewModel.func())
-- **Backward compatible** (simple components still use remember/mutableStateOf)
-- 8 commits, 700+ lines of thoughtful, production-ready code
-- See `docs/STORE.md` for complete documentation
+## Quick Context
 
-✅ **Routing System: 100% Complete**
-- File-based routing (`src/routes/**/+screen.wh`)
-- Automatic Routes.kt generation (sealed interface)
-- NavHost setup in MainActivity
-- Route parameter extraction from `[id]` folders
-- All 7 microblog screens working
+**Where we are:**
+- Transpiler: 38/38 tests passing (100%)
+- CLI: All 9 commands working
+- Toolchain: Zero-config auto-downloads
+- Playground: 18 examples, multi-file support
+- Phase 1.1: Auto-ViewModel generation complete
 
-✅ **Toolchain Management: 100% Complete (NEW!)** 🎉
-- **Zero-config setup** - No manual Java/Gradle/Android SDK installation required
-- **Automatic downloads** - First run downloads all required toolchains (~600MB)
-- **Parallel downloads** - 3x faster installation (Java + Gradle + SDK simultaneously)
-- **Retry logic** - Prompts user on download failure (max 3 attempts)
-- **`whitehall doctor`** - Comprehensive health check command
-- **Checksum verification** - Optional SHA256 integrity checks
-- **Project-specific versions** - Each project uses its own toolchain from `whitehall.toml`
-- See `docs/TOOLCHAIN.md` for complete details
+**What needs testing:**
+- Real Android device/emulator workflows
+- Multi-component production apps
+- RecyclerView optimizations in compiled code
 
-### What's Working
-- ✅ Component transpilation (.wh → .kt)
-- ✅ All control flow (@if, @for, @when)
-- ✅ Data binding (bind:value, bind:checked)
-- ✅ Lifecycle hooks (onMount, onDispose)
-- ✅ Routing and navigation
-- ✅ Import resolution
-- ✅ State management (mutableStateOf, derivedStateOf)
-- ✅ **Phase 1.1: Auto-ViewModel generation** for complex components
-  - Components with suspend functions, lifecycle hooks, or 3+ functions → ViewModels
-  - Multi-file output (ViewModel.kt + Component.kt)
-  - Automatic reference transformation (var → uiState.var, func() → viewModel.func())
-  - Simple forms remain unchanged (backward compatible)
-- ✅ Advanced patterns (LazyColumn, AsyncImage, modifiers)
-- ✅ Internationalization (string resources)
-- ✅ **Array literal syntax**: `[1,2,3]` → `listOf()` / `mutableListOf()`
-- ✅ **Multiline list support**: Parser handles newlines in `listOf()` and `[...]`
-- ✅ **RecyclerView optimization**: Static `val` collections auto-optimize to RecyclerView
+---
 
-### What's Implemented (CLI) - ALL 5 COMMANDS WORKING!
-- ✅ **`whitehall init`** - Creates project structure, whitehall.toml, sample files
-- ✅ **`whitehall compile`** - Transpile single .wh file to Kotlin (no project needed)
-  - `--package <name>` for custom package names
-  - `--no-package` to omit package declaration (for pasting into existing files)
-- ✅ **`whitehall build`** - Transpiles .wh → .kt + generates full Android scaffold
-  - Works with both projects (whitehall.toml) and single .wh files
-- ✅ **`whitehall watch`** - File watching with auto-rebuild on changes
-  - Works with both projects and single .wh files
-- ✅ **`whitehall run`** - Builds + installs APK + launches app on device
-  - Works with both projects and single .wh files
+## Immediate Next Steps
 
-### What's Implemented (Single-File Mode) - NEW! 🎯
-- ✅ **Frontmatter parsing** - `///` prefixed TOML config in .wh files
-- ✅ **Auto-package generation** - `name = "Counter"` → `package = "com.example.counter"`
-- ✅ **Content-based caching** - Stores temp projects in `~/.cache/whitehall/{hash}/`
-- ✅ **All commands support single files** - build, run, watch work with .wh files
-- ✅ **8 test cases passing** - Unit and integration tests for single-file mode
-
-### What's NOT Tested in Real Usage
-- ❓ Does `watch` work reliably with multiple file changes?
-- ❓ Does `run` work smoothly with real devices/emulators?
-- ❓ Does generated Android project actually compile with Gradle? (Toolchains now auto-download!)
-- ❓ Can we build a real multi-component app end-to-end?
-- ❓ Do optimizations (RecyclerView) work in compiled apps?
-- ✅ Does toolchain management work? (Yes! Fully tested with parallel downloads, retry logic)
-
-### What's Missing
-- ❌ End-to-end testing with real Android device/emulator
-- ❌ Error messages with line numbers
-- ❌ Source maps for debugging
-- ❌ Shebang support for single files (`#!/usr/bin/env whitehall`)
-
-## Next Step Options
-
-### Option 1: End-to-End Testing (RECOMMENDED)
+### Option 1: End-to-End Testing (RECOMMENDED) 🎯
 **Goal**: Verify the entire pipeline works by building a real app
+
+**Why this matters:**
+- Validates toolchain downloads work on clean machines
+- Tests `whitehall run` with real devices
+- Verifies generated Android projects compile with Gradle
+- Finds edge cases in real usage
+
+**Tasks**:
+1. Create a simple multi-component app (Counter + List + Form)
+2. Run `whitehall build` and verify Gradle compilation
+3. Run `whitehall run` on physical device/emulator
+4. Test `whitehall watch` with live file changes
+5. Verify RecyclerView optimization in APK
+6. Document any issues found
 
 **Estimated Effort**: 2-4 hours + bug fixes
 
-**Tasks**:
-1. Create a simple multi-component app
-   - Counter with state
-   - List rendering
-   - Navigation between screens
-   - Use array literal syntax
-
-2. Test the full workflow
-   - `whitehall init my-app`
-   - Write `.wh` files
-   - `whitehall build`
-   - `cd build && gradle wrapper && ./gradlew assembleDebug`
-   - Does it compile? Does APK work?
-
-3. Test watch mode
-   - `whitehall watch`
-   - Edit a `.wh` file
-   - Does it rebuild automatically?
-   - Are errors displayed clearly?
-
-4. Document any bugs found
-   - Create GitHub issues
-   - Add failing test cases
-   - Fix critical bugs
-
-**Why This First?**
-- CLI is already implemented (init, build, watch, run)
-- Need to verify it actually works end-to-end
-- Will discover real bugs and gaps
-- Creates example apps for documentation
-- Validates all design decisions
-
-**Starting Point**:
-```bash
-whitehall init todo-app
-cd todo-app
-# Create a simple todo app in src/
-whitehall build
-cd build && gradle wrapper
-./gradlew assembleDebug
-```
+---
 
 ### Option 2: Developer Experience Improvements
-**Goal**: Make transpiler errors helpful and debuggable
-
-**Estimated Effort**: 6-8 hours
+**Goal**: Make Whitehall more pleasant to use
 
 **Tasks**:
-1. Position tracking in parser
-   - Track line/column for every parsed element
-   - Include position in AST nodes
-   - Preserve position through transformations
-
-2. Error messages with context
-   - Show error location (file:line:col)
-   - Display relevant source code snippet
-   - Highlight problematic token/expression
-   - Suggest fixes when possible
-
-3. Source maps (optional)
-   - Generate .map files linking Kotlin back to .wh
-   - Enable debugging in Android Studio
-   - Show original .wh code in stack traces
-
-4. Watch mode with live reload
-   - Use `notify` crate for file watching
-   - Incremental compilation (only changed files)
-   - Show compilation time and status
-   - Color-coded output (errors in red, etc.)
-
-**Why This?**
-- Essential for good developer experience
-- Makes debugging much easier
-- Users will appreciate helpful error messages
-- Watch mode increases productivity significantly
-
-**Starting Point**:
-- Enhance `src/transpiler/parser.rs` with position tracking
-- Create `src/transpiler/error.rs` for formatted errors
-- Add `notify` dependency for file watching
-
-### Option 3: Real-World Testing
-**Goal**: Validate transpiler on actual applications
-
-**Estimated Effort**: 2-4 hours (testing) + bug fixes as needed
-
-**Tasks**:
-1. Create sample applications
-   - Todo app (state management, lists)
-   - Blog reader (API calls, routing, images)
-   - Settings screen (forms, persistence)
-
-2. Transpile and test
-   - Write apps in Whitehall syntax
-   - Transpile to Kotlin
-   - Build with Gradle
-   - Run on Android/Desktop
-   - Fix any discovered bugs
-
-3. Edge case discovery
-   - Complex component nesting
-   - Large files (500+ lines)
-   - Unusual prop combinations
-   - Performance edge cases
-
-4. Create integration tests
-   - Add new test cases for discovered issues
-   - Ensure bugs don't regress
-   - Document edge cases in tests
-
-**Why This?**
-- Discover bugs before users do
-- Build confidence in production readiness
-- Create example apps for documentation
-- Validate design decisions with real use cases
-
-**Starting Point**:
-- Create `examples/` directory
-- Build simple apps in .wh format
-- Test transpilation and compilation
-
-### Option 4: Single-File App Mode (EASIER THAN APK GENERATION!) ⭐
-**Goal**: Enable zero-config single-file apps (like `uv` for Python)
-
-**Estimated Effort**: 3-4 hours (vs 5-6 hours for APK generation)
-
-**Why Single-File Mode Is The Better Choice:**
-
-| Aspect | Single-File Mode ⭐ | APK in Build |
-|--------|---------------------|--------------|
-| **Implementation Time** | 3-4 hours | 5-6 hours |
-| **Complexity** | Low (mostly plumbing) | Medium-High |
-| **Code Reuse** | 100% reuse existing pipeline | Duplicates `whitehall run` logic |
-| **User Dependencies** | None new | Gradle wrapper handling |
-| **Innovation** | High - unique feature | Low - `run` already does this |
-| **Vision Alignment** | ✅ "Start small, scale up" | ⚠️ Just convenience |
-| **Binary Size** | No change | +2-3 MB if bundling wrapper |
-
-**Key Insight:** `whitehall run` already builds APKs! Users can get APKs at:
-```bash
-whitehall run
-# APK: build/app/build/outputs/apk/debug/app-debug.apk
-```
-
-Single-file mode is:
-- Faster to implement
-- More innovative (unique to Whitehall)
-- Better UX for beginners
-- Aligns with core vision
-
-**Implementation Steps:**
-
-**Step 1: Frontmatter Parser (1-2 hours)**
-```rust
-// src/single_file.rs
-use sha2::{Sha256, Digest};
-use toml;
-
-pub struct SingleFileConfig {
-    pub app_name: String,
-    pub package: String,
-    pub min_sdk: u32,
-    pub target_sdk: u32,
-}
-
-pub fn parse_frontmatter(content: &str) -> Result<(SingleFileConfig, String)> {
-    let mut frontmatter = String::new();
-    let mut code = String::new();
-    let mut in_frontmatter = true;
-
-    for line in content.lines() {
-        if line.starts_with("///") {
-            if in_frontmatter {
-                frontmatter.push_str(&line[3..]);
-                frontmatter.push('\n');
-            }
-        } else {
-            in_frontmatter = false;
-            code.push_str(line);
-            code.push('\n');
-        }
-    }
-
-    let config: SingleFileConfig = toml::from_str(&frontmatter)?;
-    Ok((config, code))
-}
-
-fn hash_content(content: &str) -> String {
-    let mut hasher = Sha256::new();
-    hasher.update(content.as_bytes());
-    format!("{:x}", hasher.finalize())
-}
-```
-
-**Step 2: Temp Project Generation (1 hour)**
-```rust
-pub fn generate_temp_project(
-    config: &SingleFileConfig,
-    code: &str,
-) -> Result<PathBuf> {
-    let hash = hash_content(code);
-    let temp_dir = PathBuf::from(format!(".whitehall/cache/{}", hash));
-
-    // Skip if already exists (cache hit!)
-    if temp_dir.exists() {
-        return Ok(temp_dir);
-    }
-
-    fs::create_dir_all(&temp_dir)?;
-
-    // Generate whitehall.toml
-    let toml = format!(r#"
-[project]
-name = "{}"
-version = "0.1.0"
-
-[android]
-package = "{}"
-minSdk = {}
-targetSdk = {}
-
-[build]
-output_dir = "build"
-"#, config.app_name, config.package, config.min_sdk, config.target_sdk);
-
-    fs::write(temp_dir.join("whitehall.toml"), toml)?;
-
-    // Write code to src/main.wh (without frontmatter)
-    fs::create_dir_all(temp_dir.join("src"))?;
-    fs::write(temp_dir.join("src/main.wh"), code)?;
-
-    Ok(temp_dir)
-}
-```
-
-**Step 3: Command Integration (30 minutes)**
-```rust
-// In src/main.rs
-match args.command {
-    Command::Run { path } => {
-        if path.ends_with(".wh") && !is_project_file(&path) {
-            // Single-file mode
-            let content = fs::read_to_string(&path)?;
-            let (config, code) = single_file::parse_frontmatter(&content)?;
-            let temp_dir = single_file::generate_temp_project(&config, &code)?;
-
-            println!("📦 Running single-file app: {}", config.app_name);
-            println!("   Cache: {}\n", temp_dir.display());
-
-            // Reuse existing build + run pipeline!
-            commands::run::execute(temp_dir.join("whitehall.toml").to_str().unwrap())?;
-        } else {
-            // Project mode
-            commands::run::execute(&path)?;
-        }
-    }
-}
-
-fn is_project_file(path: &str) -> bool {
-    // Check if we're in a project directory
-    Path::new(path).parent()
-        .and_then(|p| p.parent())
-        .map(|p| p.join("whitehall.toml").exists())
-        .unwrap_or(false)
-}
-```
-
-**Step 4: Testing (30 minutes)**
-```bash
-# Create test file
-cat > counter.wh << 'EOF'
-#!/usr/bin/env whitehall
-/// [app]
-/// name = "Counter"
-/// package = "com.example.counter"
-/// minSdk = 24
-/// targetSdk = 34
-
-var count = 0
-
-<Column padding={16} spacing={8}>
-  <Text fontSize={32}>{count}</Text>
-  <Button onClick={() => count++}>
-    <Text>Increment</Text>
-  </Button>
-</Column>
-EOF
-
-# Test it
-whitehall run counter.wh
-
-# Test caching (should be instant)
-whitehall run counter.wh
-```
-
-**Dependencies to Add:**
-```toml
-# Cargo.toml
-[dependencies]
-sha2 = "0.10"  # For content hashing
-toml = "0.8"   # Already have this!
-```
-
-**Total Effort Breakdown:**
-- Frontmatter parser: 1-2 hours
-- Temp project generation: 1 hour
-- Command routing: 30 minutes
-- Testing + bug fixes: 30 minutes
-- **Total: 3-4 hours**
-
-**Why This?**
-- ✅ Matches vision: "Start small, scale up"
-- ✅ Enables rapid prototyping (5-minute workflow)
-- ✅ Great for learning/tutorials
-- ✅ Zero boilerplate for simple apps
-- ✅ Inspired by `uv` and `rust-script`
-- ✅ **100% code reuse** - leverages existing build pipeline
-- ✅ **Unique feature** - no other Android framework has this
-
-**Starting Point**:
-1. Create `src/single_file.rs`
-2. Add `sha2` dependency
-3. Implement frontmatter parser (1-2 hours)
-4. Implement temp project generator (1 hour)
-5. Route commands (30 min)
-6. Test with counter.wh (30 min)
-
-See `docs/SINGLE-FILE-MODE.md` for complete design.
-
-### Option 5: Additional Test Coverage (If Needed)
-**Goal**: Add more test cases for edge cases and patterns
-
-**Estimated Effort**: 1-2 hours per test
-
-**Potential Tests**:
-- Event handlers (multiple types: onClick, onLongClick, etc.)
-- Animations and transitions
-- Gestures and modifiers
-- Custom components
-- Complex nested layouts
-- Performance edge cases
-- Error boundary patterns
-
-**Why This?**
-- Only if gaps are discovered during real-world testing
-- Depends on what patterns users actually need
-- Can add incrementally as needs arise
-
-**Starting Point**:
-- Add new .md files to tests/transpiler-examples/
-- Follow existing test format
-- Implement features to make tests pass
-
-## Recommendation
-
-**Priority Order:**
-
-### **~~0. Fix Lifecycle Hooks in ViewModels~~** ✅ COMPLETED
-**Status:** ✅ Fixed on 2025-11-06 (same day as discovery)
-- Lifecycle hooks now correctly moved to ViewModel's `init {}` block
-- Variable references in @for loops fixed (`posts` → `uiState.posts`)
-- All 38 tests passing with compilable output
-- See `docs/STORE.md` for implementation details
-
-### **1. End-to-End Testing (NOW) - CRITICAL** ⭐
-**Why:** Transpiler is feature-complete and all tests passing - time to validate with real Android
-- ✅ Single-file mode implemented (compile, build, run, watch all work)
-- ✅ 5 commands working (init, compile, build, watch, run)
-- ❌ Not tested with real Android device/emulator yet
-- Will discover real bugs in Gradle config, APK generation, etc.
-- **Estimated time:** 2-4 hours + bug fixes
-
-**What to test:**
-1. Single-file mode end-to-end (`whitehall run counter.wh` on real device)
-2. Project mode end-to-end (`whitehall init` → `whitehall run`)
-3. Watch mode with live editing
-4. Gradle compilation and APK generation
-
-### **2. Developer Experience (AFTER E2E TESTING)**
-Once core functionality is validated:
-- Better error messages with line numbers
-- Source maps for debugging
-- Shebang support (`#!/usr/bin/env whitehall`)
-- File size warnings for large single files
-
-### **3. Additional Features (FUTURE)**
-After core is stable and tested:
-- Custom dependencies in frontmatter
-- Hot reload / HMR
-- LSP for editor support
-
-**Current Status (Nov 6, 2025):**
-- ✅ Transpiler: 100% complete (38/38 tests passing)
-- ✅ **Phase 1.1: Component → ViewModel**: 100% complete - **ALL ISSUES FIXED!** 🎉
-  - Smart detection working ✅
-  - Multi-file output working ✅
-  - Markup transformation working ✅
-  - ✅ Lifecycle hooks in ViewModels FIXED (generated code now compiles)
-  - ✅ Variable references in @for loops FIXED (`posts` → `uiState.posts`)
-  - All 38 tests passing with compilable output
-- ✅ Routing: 100% complete
-- ✅ CLI: All 5 commands implemented
-- ✅ Single-file mode: Complete with caching, package customization
-- ✅ Toolchain Management: 100% complete (Phases 1-5 done!)
-- **Next:** End-to-End Testing with real Android device/emulator
-
-**Why Not APK Generation in Build?**
-- `whitehall run` already generates APKs (at `build/app/build/outputs/apk/debug/`)
-- Would duplicate existing logic (5-6 hours for marginal value)
-- Single-file mode is faster to build and more innovative
-
-## What's NOT Needed Yet
-
-These can wait until there's real demand:
-
-- 🔜 Package management (dependencies, versions)
-- 🔜 Plugin system for custom transformations
-- 🔜 Optimization passes (dead code elimination, etc.)
-- 🔜 Multi-platform targeting (iOS, Web)
-- 🔜 Hot reload / hot module replacement
-- 🔜 LSP (Language Server Protocol) for editor support
-- 🔜 Formatter and linter
-
-## How to Resume Work
-
-### Quick Start (End-to-End Testing)
-
-**Recommended Test App**: Todo List with Navigation and State Management
-
-```bash
-# 1. Create a new test project
-whitehall init todo-app
-cd todo-app
-
-# 2. Create Home.wh in src/
-# This will test array literals, state management, and list rendering
-cat > src/Home.wh << 'EOF'
-var todos = ["Buy milk", "Write code", "Test Whitehall"]
-var newTodo = ""
-
-fun addTodo() {
-  if (newTodo.isNotEmpty()) {
-    todos = todos + newTodo
-    newTodo = ""
-  }
-}
-
-<Column modifier={Modifier.fillMaxSize().padding(16.dp)}>
-  <Text text="Todo List" style={MaterialTheme.typography.headlineMedium} />
-
-  <Row modifier={Modifier.fillMaxWidth()}>
-    <TextField
-      value={newTodo}
-      bind:value={newTodo}
-      label={"New Todo"}
-      modifier={Modifier.weight(1f)}
-    />
-    <Button onClick={addTodo}>
-      <Text text="Add" />
-    </Button>
-  </Row>
-
-  <Spacer modifier={Modifier.height(16.dp)} />
-
-  @for (todo in todos) {
-    <Card modifier={Modifier.fillMaxWidth().padding(vertical = 8.dp)}>
-      <Text
-        text={todo}
-        modifier={Modifier.padding(16.dp)}
-      />
-    </Card>
-  }
-</Column>
-EOF
-
-# 3. Build the project
-whitehall build
-
-# 4. Use whitehall run for full end-to-end testing
-# Note: Java, Gradle, and Android SDK are downloaded automatically
-# No manual setup required!
-whitehall run
-
-# Alternative: Manual Gradle build (if needed for debugging)
-cd build
-# Gradle will be downloaded automatically on first run
-gradle assembleDebug
-
-# 5. If successful, test watch mode in another terminal
-cd ..
-whitehall watch
-
-# 6. Make changes to src/Home.wh and verify auto-rebuild
-```
-
-**What to Test**:
-1. ✅ Array literal syntax `["a", "b", "c"]`
-2. ✅ State management with `var`
-3. ✅ Data binding with `bind:value`
-4. ✅ Event handlers with `onClick`
-5. ✅ `@for` loops rendering lists
-6. ✅ Import generation (Column, Row, Text, TextField, Button, etc.)
-7. ✅ Modifier syntax with method chaining
-8. ✅ Watch mode auto-rebuilds on file changes
-9. ✅ Run command builds, installs, and launches APK
-
-**Expected Issues to Discover**:
-- Import statement ordering or missing imports
-- State initialization edge cases
-- Modifier syntax quirks
-- Build scaffold generation bugs
-- File path handling on different OS
-- Gradle configuration issues
-
-### Likely Bugs to Find During Testing
-
-**Import Generation**:
-- Missing imports for Material3 components (Card, Spacer)
-- Import ordering issues
-- Duplicate imports
-
-**State Management**:
-- Array literal state initialization edge cases
-- Binding syntax with complex expressions
-- State updates not triggering recomposition
-
-**Build Pipeline**:
-- Gradle configuration issues (SDK versions, dependencies) - mitigated by managed toolchains
-- File path handling on Windows vs Linux vs macOS
-- Generated MainActivity package naming
-- Toolchain download failures (handled by retry logic)
-
-**Watch Mode**:
-- Debouncing issues with rapid file changes
-- Not detecting changes in subdirectories
-- Terminal output clarity
-
-**Run Command**:
-- ADB device detection failures
-- APK installation errors
-- App launch failures (activity not found)
-
-## Success Criteria
-
-**End-to-End Testing Complete When**:
-- ✅ Can create a project with `whitehall init`
-- ✅ Can write a multi-component app in `.wh` syntax
-- ✅ `whitehall build` transpiles without errors
-- ✅ Generated Kotlin code compiles with `./gradlew assembleDebug`
-- ✅ APK installs and runs on device/emulator
-- ✅ `whitehall watch` detects file changes and rebuilds
-- ✅ `whitehall run` builds, installs, and launches app
-- ✅ All discovered bugs are documented or fixed
-
-**Developer Experience Complete When** (Future):
-- ⏳ Errors show file:line:col location
-- ⏳ Source snippets shown for errors
-- ⏳ Color-coded terminal output
-- ⏳ Compilation time displayed
-
-**Production Ready When** (Future):
-- ⏳ Real-world apps (100+ components) transpile successfully
-- ⏳ Performance acceptable (<1s for typical project)
-- ⏳ Error messages are helpful and actionable
-- ⏳ Documentation exists for all features
-- ⏳ Example apps demonstrate patterns
-- ⏳ Single-file mode implemented
-- ⏳ Testing framework available
+1. **Error messages with line numbers**
+   - Track parser position for every token
+   - Return structured errors with line/column
+   - Enable inline errors in playground Monaco editor
+   - **Effort**: 3-4 hours
+
+2. **Shebang support for single files**
+   ```bash
+   #!/usr/bin/env whitehall run
+   # counter.wh
+   var count = 0
+   <Button onClick={() => count++}>Count: {count}</Button>
+   ```
+   - Makes .wh files directly executable
+   - **Effort**: 1-2 hours
+
+3. **Source maps for debugging**
+   - Map generated Kotlin back to .wh source
+   - Better stack traces in Android Studio
+   - **Effort**: 4-6 hours
+
+**Estimated Effort**: 8-12 hours total
 
 ---
 
-## After End-to-End Testing
+### Option 3: Quality of Life Features
+**Goal**: Implement high-priority DX improvements from QOL.md
 
-Once the todo app builds and runs successfully, you'll have confidence in the system. Then prioritize based on what you discover:
+See `docs/QOL.md` for full list. Top priorities:
 
-### If Everything Works Smoothly
-1. **Create more example apps** (blog reader, settings screen)
-2. **Write documentation** (getting started guide, tutorials)
-3. **Implement single-file mode** (Option 4) for rapid prototyping
-4. **Add developer experience improvements** (Option 2) for better errors
+1. **Alignment shortcuts** - `align="center"` vs `horizontalAlignment="CenterHorizontally"`
+2. **onClick on any component** - Auto-wrap in clickable modifier
+3. **Boolean props** - `enabled` vs `enabled={true}`
+4. **Divider component** - Common UI element
 
-### If You Hit Critical Bugs
-1. **Document each bug** with minimal reproduction case
-2. **Add failing test cases** to prevent regression
-3. **Fix critical bugs** that block basic usage
-4. **Re-run end-to-end test** to verify fixes work
-
-### If Generated Code Doesn't Compile
-- Check import generation logic in `src/transpiler/codegen/compose.rs`
-- Verify Gradle scaffold in `src/commands/build_pipeline.rs`
-- Review MainActivity generation
-- Test with minimal example first, then add complexity
-
-### If Watch/Run Commands Fail
-- Check file watching logic in `src/commands/watch.rs`
-- Verify ADB detection in `src/commands/run.rs`
-- Test on different platforms (Linux, macOS, Windows)
-- Add better error messages and fallbacks
+**Estimated Effort**: 2-3 hours per feature
 
 ---
 
-**Current Status**: Transpiler core is complete (30/30 tests passing). CLI is implemented. Routing is complete (file-based routing with NavHost). **Toolchain management is production-ready (auto-downloads Java/Gradle/SDK)**. **Next: Verify it works end-to-end!** 🚀
+### Option 4: Web Playground Enhancements
+**Goal**: Improve playground developer experience
+
+**Tasks**:
+1. **Parser position tracking** (prerequisite for inline errors)
+   - Track line/column in parser
+   - Return structured error objects
+   - Enable red squiggly lines in Monaco
+   - **Effort**: 3-4 hours
+
+2. **Deploy to production**
+   - Backend: Fly.io (Rust-friendly)
+   - Frontend: Vercel (static hosting)
+   - Domain: play.whitehall.dev
+   - **Effort**: 2-3 hours
+
+3. **Visual preview (Phase 2)**
+   - AST to HTML converter
+   - Material3 CSS approximation
+   - Preview tab (non-interactive)
+   - **Effort**: 4-6 hours
+
+**Estimated Effort**: 9-13 hours total
+
+---
+
+### Option 5: Community Readiness
+**Goal**: Prepare for public release
+
+**Tasks**:
+1. **Documentation polish**
+   - Quick start guide
+   - Tutorial series (beginner → advanced)
+   - API reference
+   - Migration guide from Android Views/XML
+
+2. **Example projects**
+   - Counter (minimal)
+   - Todo list (state management)
+   - Blog reader (routing + API)
+   - E-commerce (complex app)
+
+3. **Template system**
+   - `whitehall create` with interactive prompts
+   - Built-in templates
+   - Community template registry
+
+4. **Website**
+   - Landing page (whitehall.dev)
+   - Documentation site
+   - Playground link
+   - GitHub integration
+
+**Estimated Effort**: 20-30 hours
+
+---
+
+## Decision Framework
+
+**If you want to:**
+- ✅ **Validate everything works** → Option 1 (End-to-End Testing)
+- 🎨 **Improve developer experience** → Option 2 (DX Improvements)
+- 🚀 **Add popular features quickly** → Option 3 (QOL Features)
+- 🌐 **Polish the playground** → Option 4 (Playground)
+- 📢 **Prepare for launch** → Option 5 (Community)
+
+**Recommended path:**
+1. Option 1 (verify it works) → 2-4 hours
+2. Option 2 or 3 (make it better) → 8-12 hours
+3. Option 4 (showcase it) → 9-13 hours
+4. Option 5 (go public) → 20-30 hours
+
+---
+
+## Known Gaps
+
+**Not critical but worth noting:**
+
+1. **Import system edge cases**
+   - Circular imports not detected
+   - Import path resolution could be more robust
+
+2. **Type inference limitations**
+   - Some complex expressions need manual type hints
+   - Derives types from usage, not always accurate
+
+3. **Compose compatibility**
+   - Targets Compose 1.5.x
+   - May need updates for Compose 2.0
+
+4. **Performance**
+   - Transpilation is fast (<100ms for small files)
+   - Large projects (100+ files) not tested
+
+5. **Windows support**
+   - Toolchain management only supports Linux/macOS
+   - Transpiler should work on Windows (untested)
+
+---
+
+## Future Phases (Long-term)
+
+See ROADMAP.md for detailed phase breakdown:
+- **Phase 2**: Advanced state management (@store enhancements)
+- **Phase 3**: Build system improvements (incremental compilation)
+- **Phase 4**: IDE integration (VS Code extension)
+- **Phase 5**: Community ecosystem (plugins, themes)
+
+---
+
+**Note:** This document focuses on immediate next steps (1-2 weeks of work). For long-term vision, see ROADMAP.md and VISION.md.

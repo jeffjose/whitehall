@@ -1,5 +1,65 @@
 # Roadmap
 
+**Last Updated**: 2025-11-06
+
+---
+
+## Current Status (2025-11-06)
+
+### ✅ Completed Features
+
+**Transpiler Core (100% Complete)**
+- 38/38 test cases passing (100% test coverage)
+- Zero compiler warnings
+- Full feature parity with syntax design
+- Optimizations: Static list → RecyclerView
+
+**Phase 1.1: Component Inline Vars → ViewModel**
+- Auto-ViewModel generation for complex components
+- Multi-file output (ComponentViewModel.kt + Component.kt)
+- Smart detection heuristic (suspend functions, lifecycle hooks, or 3+ functions)
+- Backward compatible with simple components
+
+**Routing System (100% Complete)**
+- File-based routing (`src/routes/**/+screen.wh`)
+- Automatic Routes.kt generation
+- NavHost setup in MainActivity
+- Route parameter extraction from `[id]` folders
+
+**Toolchain Management (100% Complete)**
+- Zero-config setup (no manual installs)
+- Automatic downloads (~600MB on first run)
+- Parallel downloads (3x faster)
+- `whitehall doctor` health checks
+- Project-specific versions from `whitehall.toml`
+
+**CLI Commands (All 9 Working)**
+- `whitehall init` - Project scaffolding
+- `whitehall compile` - Single file transpilation
+- `whitehall build` - Full transpilation + scaffold
+- `whitehall watch` - File watching with auto-rebuild
+- `whitehall run` - Build + install + launch
+- `whitehall toolchain` - Manage toolchains (install/list/clean)
+- `whitehall exec` - Run commands with project toolchain
+- `whitehall shell` - Interactive shell with toolchain
+- `whitehall doctor` - Health check
+
+**Web Playground (Phase 1 Complete)**
+- Monaco editor with real-time compilation
+- 18 example snippets
+- Multi-file support
+- URL hash state for sharing
+
+### 📋 What Needs Testing
+- End-to-end testing with real Android devices/emulators
+- Multi-component apps in production
+- RecyclerView optimizations in compiled apps
+
+### 🚀 Next Priorities
+See detailed next steps in NEXTSTEPS.md
+
+---
+
 ## Phase 0: Foundation (✓ Completed)
 **Goal: Prove the concept**
 
