@@ -2550,8 +2550,104 @@ impl ComposeBackend {
         Ok(output)
     }
 
-    /// Phase 1: Generate ViewModel code for @store class
+    /// Phase 1: Generate ViewModel or Singleton code for reactive class
     fn generate_store_class(&self, class: &ClassDeclaration) -> Result<String, String> {
+        // Check if this is a singleton (@store object)
+        let is_singleton = if let Some(registry) = &self.store_registry {
+            registry.get(&class.name)
+                .map(|info| info.is_singleton)
+                .unwrap_or(false)
+        } else {
+            false
+        };
+
+        if is_singleton {
+            // Generate singleton StateFlow code
+            self.generate_singleton_store(class)
+        } else {
+            // Generate ViewModel code
+            self.generate_view_model_store(class)
+        }
+    }
+
+    /// Generate singleton StateFlow code for @store object
+    fn generate_singleton_store(&self, class: &ClassDeclaration) -> Result<String, String> {
+        let mut output = String::new();
+
+        // Package declaration
+        output.push_str(&format!("package {}\n\n", self.package));
+
+        // Imports (no ViewModel, no viewModelScope)
+        output.push_str("import kotlinx.coroutines.flow.MutableStateFlow\n");
+        output.push_str("import kotlinx.coroutines.flow.StateFlow\n");
+        output.push_str("import kotlinx.coroutines.flow.asStateFlow\n");
+        output.push_str("import kotlinx.coroutines.flow.update\n");
+        output.push('\n');
+
+        // Object declaration (not class!)
+        output.push_str(&format!("object {} {{\n", class.name));
+
+        // Generate UiState data class (same as ViewModel)
+        let var_properties: Vec<_> = class.properties.iter().filter(|p| p.mutable).collect();
+
+        if !var_properties.is_empty() {
+            output.push_str("    data class State(\n");
+            for (i, prop) in var_properties.iter().enumerate() {
+                let type_annotation = prop.type_annotation.as_ref()
+                    .map(|t| format!(": {}", t))
+                    .unwrap_or_else(|| String::from(": Any"));
+                let initial_value = prop.initial_value.as_ref()
+                    .map(|v| format!(" = {}", v))
+                    .unwrap_or_default();
+
+                let comma = if i < var_properties.len() - 1 { "," } else { "" };
+                output.push_str(&format!("        val {}{}{}{}\n",
+                    prop.name, type_annotation, initial_value, comma));
+            }
+            output.push_str("    )\n\n");
+
+            // StateFlow setup (no viewModelScope - it's a singleton)
+            output.push_str("    private val _state = MutableStateFlow(State())\n");
+            output.push_str("    val state: StateFlow<State> = _state.asStateFlow()\n\n");
+
+            // Property accessors
+            for prop in &var_properties {
+                output.push_str(&format!("    var {}: {}\n",
+                    prop.name,
+                    prop.type_annotation.as_ref().unwrap_or(&"Any".to_string())));
+                output.push_str(&format!("        get() = _state.value.{}\n", prop.name));
+                output.push_str(&format!("        set(value) {{ _state.update {{ it.copy({} = value) }} }}\n\n",
+                    prop.name));
+            }
+        }
+
+        // Derived properties (val with getter)
+        for prop in &class.properties {
+            if !prop.mutable {
+                if let Some(getter) = &prop.getter {
+                    let type_annotation = prop.type_annotation.as_ref()
+                        .map(|t| format!(": {}", t))
+                        .unwrap_or_default();
+                    output.push_str(&format!("    val {}{}\n", prop.name, type_annotation));
+                    output.push_str(&format!("        get() = {}\n\n", getter));
+                }
+            }
+        }
+
+        // Functions (no viewModelScope for singletons - they must manage their own scope if needed)
+        for func in &class.functions {
+            output.push_str(&format!("    fun {}() {{\n", func.name));
+            output.push_str(&format!("        {}\n", func.body.trim()));
+            output.push_str("    }\n\n");
+        }
+
+        output.push_str("}\n");
+
+        Ok(output)
+    }
+
+    /// Generate ViewModel code for reactive class
+    fn generate_view_model_store(&self, class: &ClassDeclaration) -> Result<String, String> {
         let mut output = String::new();
 
         // Package declaration

@@ -1479,6 +1479,8 @@ impl Parser {
             Some("fun")
         } else if remaining.starts_with("class ") {
             Some("class")
+        } else if remaining.starts_with("object ") {
+            Some("object")
         } else if remaining.starts_with("suspend ") {
             Some("suspend")
         } else if remaining.starts_with("constructor") {

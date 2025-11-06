@@ -1,0 +1,12 @@
+@store
+object AppSettings {
+  var darkMode: Boolean = false
+  var language: String = "en"
+
+  val isEnglish: Boolean
+    get() = language == "en"
+
+  fun toggleDarkMode() {
+    darkMode = !darkMode
+  }
+}
