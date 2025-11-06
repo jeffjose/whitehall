@@ -24,7 +24,7 @@ Full-featured playground with Monaco editor, real-time compilation, and excellen
 - Monaco code editor with syntax highlighting
 - Real-time compilation with 500ms debounce
 - Multiple output tabs (Kotlin / Errors / AST)
-- 5 example snippets
+- 18 example snippets (hello world, counter, todo, forms, styling, etc.)
 - URL hash state for code sharing
 - Copy/format/clear buttons
 - Keyboard shortcuts
@@ -137,12 +137,14 @@ Compile Whitehall code to Kotlin.
 - Badge shows error count
 
 **✅ Example Snippets**
-Five working examples in dropdown:
+18 working examples in dropdown covering:
 1. **Hello World** - Minimal component
-2. **Counter** - State management with button
-3. **Todo List** - Array manipulation and @for loops
-4. **Form** - Text input with bind:value
-5. **Styling** - Modifiers and theming
+2. **Text Styling** - Font sizes, weights, colors
+3. **Counter** - State management with button
+4. **Todo List** - Array manipulation and @for loops
+5. **Form Validation** - Text input with bind:value
+6. **Layout Examples** - Column, Row, Box, modifiers
+7. And 12+ more advanced patterns (lazy lists, navigation, stores, etc.)
 
 **✅ URL Hash State**
 - Code encoded in URL hash
@@ -494,9 +496,9 @@ window.addEventListener('load', () => {
    - **Current:** URL hash (works, but limited by URL length)
    - **Future:** Save to DB for permanent sharing
 
-5. **Examples:** Are current 5 examples sufficient?
-   - **Current:** hello/counter/todo/form/styling
-   - **Potential additions:** routing, lifecycle, stores
+5. **Examples:** Are current 18 examples sufficient?
+   - **Current:** hello/counter/todo/form/styling/layout/navigation/stores and more
+   - **Coverage:** Good coverage of common patterns
 
 ---
 
@@ -574,10 +576,10 @@ window.addEventListener('load', () => {
 
 | File | Lines | Purpose |
 |------|-------|---------|
-| `tools/playground/backend/src/main.rs` | ~100 | Axum server with /api/compile endpoint |
-| `tools/playground/frontend/index.html` | ~150 | HTML structure and Monaco setup |
-| `tools/playground/frontend/style.css` | ~200 | Styles and layout |
-| `tools/playground/frontend/app.js` | ~300 | Monaco integration and API calls |
+| `tools/playground/backend/src/main.rs` | ~180 | Axum server with /api/compile endpoint |
+| `tools/playground/frontend/index.html` | ~140 | HTML structure and Monaco setup |
+| `tools/playground/frontend/style.css` | ~320 | Styles and layout |
+| `tools/playground/frontend/app.js` | ~1300 | Monaco integration, examples, and API calls |
 
 ---
 
