@@ -50,16 +50,16 @@ The ViewModel file (CounterViewModel.kt) is also generated but not checked by th
 package com.example.app.components
 
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
-import androidx.compose.ui.graphics.Color
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.material3.Button
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.foundation.layout.Column
-import androidx.compose.material3.Text
-import androidx.compose.foundation.layout.Row
-import androidx.compose.material3.Button
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 
 @Composable

@@ -19,10 +19,6 @@ import $models.User
     }
   }
 
-  fun handlePostClick(postId: String) {
-    navigate($routes.post.detail(id = postId))
-  }
-
 <Scaffold>
   @if (isLoading) {
     <LoadingSpinner />
@@ -43,18 +39,18 @@ import $models.User
 package com.example.app.screens
 
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
+import androidx.compose.foundation.layout.Column
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.app.lib.api.ApiClient
 import com.example.app.models.User
-import androidx.compose.material3.Scaffold
-import androidx.compose.foundation.layout.Column
-import androidx.compose.material3.Text
-import androidx.lifecycle.viewmodel.compose.viewModel
 
 @Composable
 fun ProfileScreen() {

@@ -3307,25 +3307,38 @@ impl ComposeBackend {
         }
 
         // Check if we have suspend functions or lifecycle hooks
+        // Collect all imports into a vector
+        let mut vm_imports = Vec::new();
+
         let has_suspend = file.functions.iter().any(|f| f.is_suspend);
         let has_lifecycle_hooks = !file.lifecycle_hooks.is_empty();
+
         if has_suspend || has_lifecycle_hooks {
-            output.push_str("import androidx.lifecycle.viewModelScope\n");
+            vm_imports.push("androidx.lifecycle.viewModelScope".to_string());
         }
 
-        output.push_str("import kotlinx.coroutines.flow.MutableStateFlow\n");
-        output.push_str("import kotlinx.coroutines.flow.StateFlow\n");
-        output.push_str("import kotlinx.coroutines.flow.asStateFlow\n");
-        output.push_str("import kotlinx.coroutines.flow.update\n");
+        vm_imports.push("kotlinx.coroutines.flow.MutableStateFlow".to_string());
+        vm_imports.push("kotlinx.coroutines.flow.StateFlow".to_string());
+        vm_imports.push("kotlinx.coroutines.flow.asStateFlow".to_string());
+        vm_imports.push("kotlinx.coroutines.flow.update".to_string());
 
         if has_suspend || has_lifecycle_hooks {
-            output.push_str("import kotlinx.coroutines.launch\n");
+            vm_imports.push("kotlinx.coroutines.launch".to_string());
         }
 
         // Add any user imports from the file
         for import in &file.imports {
             let import_path = self.resolve_import(&import.path);
-            output.push_str(&format!("import {}\n", import_path));
+            vm_imports.push(import_path);
+        }
+
+        // Sort imports alphabetically (standard Kotlin convention)
+        vm_imports.sort();
+        vm_imports.dedup();
+
+        // Write imports
+        for import in vm_imports {
+            output.push_str(&format!("import {}\n", import));
         }
 
         output.push('\n');
@@ -3487,8 +3500,12 @@ impl ComposeBackend {
         // Add component imports
         imports.extend(component_imports);
 
-        // Add ViewModel import last
+        // Add ViewModel import
         imports.push("androidx.lifecycle.viewmodel.compose.viewModel".to_string());
+
+        // Sort imports alphabetically (standard Kotlin convention)
+        imports.sort();
+        imports.dedup(); // Remove duplicates after sorting
 
         // Write imports
         for import in imports {

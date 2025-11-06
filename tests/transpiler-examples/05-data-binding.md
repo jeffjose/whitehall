@@ -39,8 +39,10 @@ package com.example.app.components
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.material3.Button
+import androidx.compose.material3.Text
 import androidx.compose.material3.TextField
 import androidx.compose.runtime.*
+import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 
 @Composable
@@ -64,7 +66,7 @@ fun LoginForm() {
             label = { Text("Password") },
             value = password,
             onValueChange = { password = it },
-            type = "password"
+            visualTransformation = PasswordVisualTransformation()
         )
         Button(onClick = { handleLogin() }) {
             Text("Login")

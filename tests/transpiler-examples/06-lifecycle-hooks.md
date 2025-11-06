@@ -42,14 +42,14 @@ import $models.Post
 ```kotlin
 package com.example.app.components
 
-import androidx.compose.runtime.key
+import androidx.compose.foundation.layout.Column
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
+import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.app.lib.api.ApiClient
 import com.example.app.models.Post
-import androidx.compose.foundation.layout.Column
-import androidx.lifecycle.viewmodel.compose.viewModel
 
 @Composable
 fun FeedView() {

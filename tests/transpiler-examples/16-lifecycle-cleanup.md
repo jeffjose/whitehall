@@ -37,15 +37,15 @@ import $lib.websocket.WebSocketClient
 package com.example.app.components
 
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.ui.unit.dp
-import androidx.compose.runtime.key
+import androidx.compose.foundation.layout.Column
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import com.example.app.lib.websocket.WebSocketClient
-import androidx.compose.foundation.layout.Column
-import androidx.compose.material3.Text
+import androidx.compose.runtime.key
+import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.example.app.lib.websocket.WebSocketClient
 
 @Composable
 fun MessageList() {
