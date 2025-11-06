@@ -127,6 +127,7 @@ fn transpile_with_optimizations(
     component_name: &str,
 ) -> Result<String, String> {
     whitehall::transpiler::transpile(input, package, component_name, None)
+        .map(|result| result.primary_content().to_string())
 }
 
 /// Normalize whitespace in Kotlin code for comparison

@@ -1492,29 +1492,30 @@ pub enum StoreSource {
 - Components/screens with `var` in state → StoreSource::ComponentInline
 - Registered in global registry with component name
 
-**3. Code Generation** 🔧 IN PROGRESS
+**3. TranspileResult API Migration** ✅ COMPLETED (Commits: b75a9d2, 497d06b)
 
-**Current Status:**
-- TranspileResult enum created in transpiler/mod.rs
-- Detection logic added to compose.rs (checks registry for ComponentInline)
-- Ready to implement: `generate_component_viewmodel()`
+**Completed Work:**
+- ✅ TranspileResult enum created in transpiler/mod.rs
+- ✅ Updated all transpiler function signatures to return `Result<TranspileResult, String>`
+- ✅ Updated build_pipeline.rs to handle multi-file output
+- ✅ Fixed tests to use `.primary_content()` for TranspileResult
+- ✅ Removed redundant auto-import logic for `rememberCoroutineScope` (covered by wildcard import)
+- ✅ All 35 transpiler examples passing
+- ✅ All 2 optimization examples passing
+
+**4. Component ViewModel Generation** ⏳ NOT STARTED
 
 **Next Tasks:**
 1. Implement `generate_component_viewmodel()` in compose.rs
-   - Generate ViewModel class (similar to existing ViewModel generation)
-   - Generate wrapper component that instantiates ViewModel
+   - Part 1: Generate ViewModel class (similar to existing ViewModel generation)
+   - Part 2: Generate wrapper component that instantiates ViewModel
    - Return `TranspileResult::Multiple`
 
-2. Update transpiler API signatures
-   - Change return type from `Result<String>` to `Result<TranspileResult>`
-   - Update all callers to handle new result type
+2. Wire up ComponentInline detection to call `generate_component_viewmodel()`
+   - Check registry for StoreSource::ComponentInline
+   - Route to new generation function instead of standard component generation
 
-3. Update build_pipeline.rs
-   - `transpile_file()` must handle multi-file results
-   - Write each file with appropriate suffix
-   - Example: Counter.wh → Counter.kt + CounterViewModel.kt
-
-4. Update dispatcher scope logic
+3. Update dispatcher scope logic
    - ComponentInline with vars → use `viewModelScope` (not dispatcherScope)
    - Enable Level 1 auto-infer from suspend functions
 
@@ -1577,13 +1578,19 @@ A: ComponentInline with vars uses `viewModelScope` (like Class source), not `dis
 5. Verify dispatcher syntax uses viewModelScope
 6. Verify suspend functions auto-wrapped
 
-#### Files to Modify
+#### Files Modified
 
-- ✅ `src/transpiler/analyzer.rs` - StoreSource enum
-- ✅ `src/transpiler/mod.rs` - TranspileResult enum, API signatures
-- ✅ `src/build_pipeline.rs` - Component var detection, multi-file writing
-- 🔧 `src/transpiler/codegen/compose.rs` - generate_component_viewmodel()
-- ⏳ Update all transpile() callers for new return type
+- ✅ `src/transpiler/analyzer.rs` - StoreSource enum (Commit: 862e915)
+- ✅ `src/transpiler/mod.rs` - TranspileResult enum, API signatures (Commits: b75a9d2, 497d06b)
+- ✅ `src/build_pipeline.rs` - Component var detection, multi-file writing (Commit: 862e915)
+- ✅ `src/transpiler/codegen/compose.rs` - TranspileResult return, ComponentInline detection (Commit: 497d06b)
+- ✅ `src/transpiler/codegen/mod.rs` - Updated to return TranspileResult (Commit: 497d06b)
+- ✅ `tests/transpiler_examples_test.rs` - Updated to use `.primary_content()` (Uncommitted)
+- ✅ `tests/optimization_examples_test.rs` - Updated to use `.primary_content()` (Uncommitted)
+
+#### Files Still To Modify
+
+- ⏳ `src/transpiler/codegen/compose.rs` - Implement `generate_component_viewmodel()` function
 
 ---
 

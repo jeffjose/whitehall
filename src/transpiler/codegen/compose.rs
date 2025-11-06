@@ -669,17 +669,6 @@ impl ComposeBackend {
             }
         }
 
-        // Check if rememberCoroutineScope was used
-        if output.contains("rememberCoroutineScope()") {
-            let scope_import = "import androidx.compose.runtime.rememberCoroutineScope\n";
-            if !output.contains(scope_import) {
-                if let Some(package_end) = output.find('\n') {
-                    let insert_pos = package_end + 1;
-                    output.insert_str(insert_pos, scope_import);
-                }
-            }
-        }
-
         // Check if CoroutineScope.launch was used (for custom scopes)
         if output.contains(".launch {") || output.contains(".launch(") {
             let launch_import = "import kotlinx.coroutines.launch\n";

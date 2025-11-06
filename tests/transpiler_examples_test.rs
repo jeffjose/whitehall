@@ -295,10 +295,13 @@ mod tests {
                 component_name,
                 test.metadata.type_hint.as_deref(),
             ) {
-                Ok(actual_output) => {
-                    if normalize_whitespace(&actual_output) != normalize_whitespace(&test.expected_output) {
+                Ok(result) => {
+                    // Extract primary content (for single file results)
+                    let actual_output = result.primary_content();
+
+                    if normalize_whitespace(actual_output) != normalize_whitespace(&test.expected_output) {
                         eprintln!("\n\x1b[1;31m✗ MISMATCH in {}\x1b[0m", filename);
-                        print_colored_diff(&test.expected_output, &actual_output);
+                        print_colored_diff(&test.expected_output, actual_output);
                         failures.push(filename.clone());
                     } else {
                         eprintln!("\x1b[32m✓\x1b[0m [PASS] {}", filename);
