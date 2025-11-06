@@ -79,6 +79,7 @@ pub struct StoreInfo {
     pub has_hilt: bool,         // Has @HiltViewModel annotation or @hilt/@Inject?
     pub has_inject: bool,       // Has @Inject constructor?
     pub package: String,        // Package name (will be filled during codegen)
+    pub route_params: Vec<String>, // Route parameters used in lifecycle hooks (e.g., ["id", "postId"])
 }
 
 /// Symbol table: tracks all declarations
@@ -332,6 +333,9 @@ impl Analyzer {
         // Only use ViewModel for complex components
         // Simple forms with 1-2 simple functions continue using remember/mutableStateOf
         if has_suspend || has_multiple_functions || has_lifecycle {
+            // Detect route parameters used in lifecycle hooks
+            let route_params = self.detect_route_params_in_lifecycle(&ast.lifecycle_hooks);
+
             // Register this component as ComponentInline in the store registry
             self.store_registry.insert(
                 component_name.to_string(),
@@ -342,8 +346,51 @@ impl Analyzer {
                     has_hilt: false,  // Component inline vars don't support Hilt
                     has_inject: false,
                     package: package.to_string(),
+                    route_params,
                 },
             );
+        }
+    }
+
+    /// Detect route parameters ($screen.params.xxx) used in lifecycle hooks
+    fn detect_route_params_in_lifecycle(&self, hooks: &[LifecycleHook]) -> Vec<String> {
+        let mut params = Vec::new();
+
+        for hook in hooks {
+            if let Some(mut captures) = self.extract_route_params(&hook.body) {
+                params.append(&mut captures);
+            }
+        }
+
+        // Remove duplicates and sort
+        params.sort();
+        params.dedup();
+        params
+    }
+
+    /// Extract route parameter names from code using regex
+    /// Finds patterns like $screen.params.id, $screen.params.postId
+    fn extract_route_params(&self, code: &str) -> Option<Vec<String>> {
+        use regex::Regex;
+
+        // Match $screen.params.xxx where xxx is the parameter name
+        let re = match Regex::new(r"\$screen\.params\.(\w+)") {
+            Ok(r) => r,
+            Err(_) => return None,
+        };
+
+        let mut params = Vec::new();
+
+        for cap in re.captures_iter(code) {
+            if let Some(param) = cap.get(1) {
+                params.push(param.as_str().to_string());
+            }
+        }
+
+        if params.is_empty() {
+            None
+        } else {
+            Some(params)
         }
     }
 
@@ -395,6 +442,7 @@ impl Analyzer {
                     has_hilt,
                     has_inject,
                     package: String::new(),  // Will be filled during codegen
+                    route_params: vec![],  // Only component inline vars have route params
                 },
             );
         }

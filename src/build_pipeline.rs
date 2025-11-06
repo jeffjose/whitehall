@@ -127,6 +127,7 @@ fn build_store_registry(files: &[WhitehallFile]) -> Result<transpiler::StoreRegi
                     has_hilt,
                     has_inject,
                     package: file.package_path.clone(),
+                    route_params: vec![],  // Only components have route params
                 };
                 registry.insert(class.name.clone(), store_info);
             }
@@ -147,6 +148,7 @@ fn build_store_registry(files: &[WhitehallFile]) -> Result<transpiler::StoreRegi
                         has_hilt: false,  // Component inline vars don't support Hilt (yet)
                         has_inject: false,
                         package: file.package_path.clone(),
+                        route_params: vec![],  // Will be filled during semantic analysis
                     };
                     registry.insert(component_name, store_info);
                 }

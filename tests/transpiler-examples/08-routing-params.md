@@ -69,11 +69,11 @@ fun ProfileScreen() {
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
                 Text(
-                    text = "${user.name}",
+                    text = "${uiState.user.name}",
                     fontSize = 24.sp
                 )
                 Text(
-                    text = "${user.email}",
+                    text = "${uiState.user.email}",
                     color = MaterialTheme.colorScheme.secondary
                 )
             }

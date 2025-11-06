@@ -1836,7 +1836,8 @@ impl ComposeBackend {
                 // Single interpolation - wrap in string template to ensure string conversion
                 Markup::Interpolation(expr) => {
                     let transformed = self.transform_string_resource(expr);
-                    let with_assertions = self.add_null_assertions(&transformed);
+                    let with_vm = self.transform_viewmodel_expression(&transformed);
+                    let with_assertions = self.add_null_assertions(&with_vm);
                     return Ok(format!("\"${{{}}}\"", with_assertions));
                 }
                 _ => {}
@@ -1853,7 +1854,8 @@ impl ComposeBackend {
                 }
                 Markup::Interpolation(expr) => {
                     let str_res_transformed = self.transform_string_resource(expr);
-                    let transformed = self.add_null_assertions(&str_res_transformed);
+                    let with_vm = self.transform_viewmodel_expression(&str_res_transformed);
+                    let transformed = self.add_null_assertions(&with_vm);
                     // Always use braces for safety - handles literals, keywords, and expressions
                     parts.push(format!("${{{}}}", transformed));
                 }
@@ -3060,11 +3062,28 @@ impl ComposeBackend {
         let mut output = String::new();
         let viewmodel_name = format!("{}ViewModel", self.component_name);
 
+        // Check if this component uses route parameters
+        let route_params = if let Some(registry) = &self.store_registry {
+            if let Some(store_info) = registry.get(&self.component_name) {
+                store_info.route_params.clone()
+            } else {
+                vec![]
+            }
+        } else {
+            vec![]
+        };
+        let has_route_params = !route_params.is_empty();
+
         // Package declaration
         output.push_str(&format!("package {}\n\n", self.package));
 
         // Imports
         output.push_str("import androidx.lifecycle.ViewModel\n");
+
+        // Add SavedStateHandle import if route params are used
+        if has_route_params {
+            output.push_str("import androidx.lifecycle.SavedStateHandle\n");
+        }
 
         // Check if we have suspend functions or lifecycle hooks
         let has_suspend = file.functions.iter().any(|f| f.is_suspend);
@@ -3090,8 +3109,14 @@ impl ComposeBackend {
 
         output.push('\n');
 
-        // Class declaration
-        output.push_str(&format!("class {} : ViewModel() {{\n", viewmodel_name));
+        // Class declaration with optional SavedStateHandle constructor
+        if has_route_params {
+            output.push_str(&format!("class {}(\n", viewmodel_name));
+            output.push_str("    private val savedStateHandle: SavedStateHandle\n");
+            output.push_str(") : ViewModel() {\n");
+        } else {
+            output.push_str(&format!("class {} : ViewModel() {{\n", viewmodel_name));
+        }
 
         // Generate UiState data class from mutable state vars only
         let mutable_state: Vec<_> = file.state.iter().filter(|s| s.mutable).collect();
@@ -3172,9 +3197,19 @@ impl ComposeBackend {
             for hook in &file.lifecycle_hooks {
                 match hook.hook_type.as_str() {
                     "onMount" => {
+                        // Transform hook body to handle route parameters
+                        let mut transformed_body = if has_route_params {
+                            self.transform_lifecycle_hook_body(&hook.body, &route_params)
+                        } else {
+                            hook.body.clone()
+                        };
+
+                        // Strip outer launch{} if present (prevents double wrapping)
+                        transformed_body = self.strip_outer_launch(&transformed_body);
+
                         // Lifecycle hooks in ViewModel use viewModelScope.launch
                         output.push_str("        viewModelScope.launch {\n");
-                        for line in hook.body.lines() {
+                        for line in transformed_body.lines() {
                             if line.trim().is_empty() {
                                 continue;
                             }
@@ -3319,5 +3354,55 @@ impl ComposeBackend {
         output.push_str("}\n");
 
         Ok(output)
+    }
+
+    /// Strip outer launch{} block if present (prevents double wrapping in ViewModel)
+    fn strip_outer_launch(&self, body: &str) -> String {
+        let trimmed = body.trim();
+
+        // Check if body starts with "launch {" and ends with "}"
+        if trimmed.starts_with("launch {") {
+            let mut depth = 0;
+            let chars: Vec<char> = trimmed.chars().collect();
+            let mut start_idx = None;
+            let mut end_idx = None;
+
+            for (i, ch) in chars.iter().enumerate() {
+                if *ch == '{' {
+                    depth += 1;
+                    if start_idx.is_none() {
+                        start_idx = Some(i + 1); // After the opening brace
+                    }
+                } else if *ch == '}' {
+                    depth -= 1;
+                    if depth == 0 {
+                        end_idx = Some(i);
+                        break;
+                    }
+                }
+            }
+
+            if let (Some(start), Some(end)) = (start_idx, end_idx) {
+                let inner = &chars[start..end].iter().collect::<String>();
+                return inner.trim().to_string();
+            }
+        }
+
+        body.to_string()
+    }
+
+    /// Transform lifecycle hook body to handle route parameters
+    /// Replaces $screen.params.xxx with savedStateHandle.get<T?>("xxx")
+    fn transform_lifecycle_hook_body(&self, body: &str, route_params: &[String]) -> String {
+        let mut transformed = body.to_string();
+
+        for param in route_params {
+            // Replace $screen.params.xxx with savedStateHandle.get<String?>("xxx")
+            let old_pattern = format!("$screen.params.{}", param);
+            let new_pattern = format!("savedStateHandle.get<String?>(\"{}\") ?: \"\"", param);
+            transformed = transformed.replace(&old_pattern, &new_pattern);
+        }
+
+        transformed
     }
 }
