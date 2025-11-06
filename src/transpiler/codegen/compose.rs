@@ -230,6 +230,8 @@ impl ComposeBackend {
             imports.push("androidx.lifecycle.viewmodel.compose.hiltViewModel".to_string());
         }
 
+        // Note: Dispatchers import is added later if needed (see end of generate function)
+
         // Deduplicate and sort imports alphabetically (standard Kotlin convention)
         imports.sort();
         imports.dedup();
@@ -600,10 +602,25 @@ impl ComposeBackend {
         }
 
         // Generate markup
-        output.push_str(&self.generate_markup(&file.markup)?);
+        let markup_code = self.generate_markup(&file.markup)?;
+        output.push_str(&markup_code);
 
         self.indent_level -= 1;
         output.push_str("}\n");
+
+        // Check if Dispatchers were used in the generated output
+        if output.contains("Dispatchers.") {
+            // Add import at the beginning (we need to insert it in the imports section)
+            // This is a bit hacky but works for now
+            let dispatcher_import = "import kotlinx.coroutines.Dispatchers\n";
+            if !output.contains(dispatcher_import) {
+                // Find where to insert (after package, before first import or composable)
+                if let Some(package_end) = output.find('\n') {
+                    let insert_pos = package_end + 1;
+                    output.insert_str(insert_pos, dispatcher_import);
+                }
+            }
+        }
 
         Ok(output)
     }
@@ -1933,7 +1950,7 @@ impl ComposeBackend {
         result
     }
 
-    fn transform_prop(&self, component: &str, prop_name: &str, prop_value: &str) -> Result<Vec<String>, String> {
+    fn transform_prop(&mut self, component: &str, prop_name: &str, prop_value: &str) -> Result<Vec<String>, String> {
         // Transform string interpolation first: {expr} → ${expr}
         let prop_value = self.transform_string_interpolation(prop_value);
         let prop_value = prop_value.as_str();
@@ -1981,6 +1998,9 @@ impl ComposeBackend {
 
         // Transform lambda arrow syntax: () => to {}
         let value = self.transform_lambda_arrow(&value);
+
+        // Transform dispatcher syntax: io/cpu/main { } to viewModelScope.launch(Dispatchers.X) { }
+        let value = self.transform_dispatchers(&value);
 
         // Note: Padding/margin shortcuts (p, px, py, etc.) are handled at the component level
         // in generate_markup_with_indent where they can be combined properly
@@ -2174,6 +2194,22 @@ impl ComposeBackend {
         } else {
             value.to_string()
         }
+    }
+
+    /// Transform dispatcher syntax: io { }, cpu { }, main { } to viewModelScope.launch(Dispatchers.X) { }
+    fn transform_dispatchers(&self, value: &str) -> String {
+        let mut result = value.to_string();
+
+        // Pattern: io { ... } → viewModelScope.launch(Dispatchers.IO) { ... }
+        result = result.replace("io {", "viewModelScope.launch(Dispatchers.IO) {");
+
+        // Pattern: cpu { ... } → viewModelScope.launch(Dispatchers.Default) { ... }
+        result = result.replace("cpu {", "viewModelScope.launch(Dispatchers.Default) {");
+
+        // Pattern: main { ... } → viewModelScope.launch(Dispatchers.Main) { ... }
+        result = result.replace("main {", "viewModelScope.launch(Dispatchers.Main) {");
+
+        result
     }
 
     fn transform_route_aliases(&self, value: &str) -> String {
