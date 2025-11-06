@@ -97,12 +97,6 @@ import com.example.app.models.User
 fun ComplexStateManagement() {
     val viewModel = viewModel<ComplexStateManagementViewModel>()
     val uiState by viewModel.uiState.collectAsState()
-    val selectedUser: User? = uiState.users.firstOrNull { it.id == uiState.selectedUserId }
-    val filteredUsers: List<User> = if (uiState.searchQuery.isBlank()) {
-        uiState.users
-    } else {
-        uiState.users.filter { it.name.contains(uiState.searchQuery, ignoreCase = true) }
-    }
 
     Column(
         verticalArrangement = Arrangement.spacedBy(16.dp)

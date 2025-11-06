@@ -252,13 +252,15 @@ impl Analyzer {
     }
 
     /// Main entry point: analyze an AST and produce semantic info
-    pub fn analyze(ast: &WhitehallFile) -> Result<SemanticInfo, String> {
+    /// Analyze AST and enrich it with semantic information
+    /// Takes mutable reference to enable AST enrichment (proper semantic analysis)
+    pub fn analyze(ast: &mut WhitehallFile) -> Result<SemanticInfo, String> {
         let mut analyzer = Analyzer::new();
 
         // Pass 0: Collect @store classes (Phase 0)
         analyzer.collect_stores(ast);
 
-        // Pass 1: Collect declarations (Phase 0)
+        // Pass 1: Collect declarations and enrich AST (Phase 0 + Semantic Enrichment)
         analyzer.collect_declarations(ast);
 
         // Pass 2: Track usage (Phase 1)
@@ -277,8 +279,9 @@ impl Analyzer {
 
     /// Analyze with component context (for single-file transpilation)
     /// Detects component inline vars in addition to @store classes
+    /// Takes mutable reference to enable AST enrichment (proper semantic analysis)
     pub fn analyze_with_context(
-        ast: &WhitehallFile,
+        ast: &mut WhitehallFile,
         component_name: &str,
         package: &str,
     ) -> Result<SemanticInfo, String> {
@@ -290,7 +293,7 @@ impl Analyzer {
         // Phase 1.1: Detect component inline vars (for single-file transpilation)
         analyzer.collect_component_inline_vars(ast, component_name, package);
 
-        // Pass 1: Collect declarations (Phase 0)
+        // Pass 1: Collect declarations and enrich AST (Phase 0 + Semantic Enrichment)
         analyzer.collect_declarations(ast);
 
         // Pass 2: Track usage (Phase 1)
@@ -448,7 +451,9 @@ impl Analyzer {
         }
     }
 
-    fn collect_declarations(&mut self, ast: &WhitehallFile) {
+    /// Collect declarations and enrich AST with semantic information
+    /// This is the proper place for semantic enrichment - enhancing what the parser detected
+    fn collect_declarations(&mut self, ast: &mut WhitehallFile) {
         // Collect props
         for prop in &ast.props {
             self.symbol_table.insert(
@@ -464,9 +469,10 @@ impl Analyzer {
             self.immutable_vals.insert(prop.name.clone());
         }
 
-        // Collect state
-        for state in &ast.state {
-            // Phase 6: Detect computed/reactive values
+        // Collect state and enrich AST with semantic classification
+        for state in &mut ast.state {
+            // Phase 6: Detect computed/reactive values (semantic analysis)
+            // This is more comprehensive than parser's simple keyword detection
             let is_computed = state.initial_value.contains(".filter")
                 || state.initial_value.contains(".map")
                 || state.initial_value.contains(".firstOrNull")
@@ -480,6 +486,13 @@ impl Analyzer {
             } else {
                 SymbolKind::StateVal
             };
+
+            // AST Enrichment: Update AST with improved semantic classification
+            // If semantic analysis determined this is derived state, enrich the AST
+            // This allows code generator to benefit from better detection
+            if matches!(kind, SymbolKind::DerivedState) && !state.is_derived_state {
+                state.is_derived_state = true;
+            }
 
             self.symbol_table.insert(
                 state.name.clone(),

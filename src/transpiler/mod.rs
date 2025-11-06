@@ -85,12 +85,13 @@ pub fn transpile_with_registry(
 ) -> Result<TranspileResult, String> {
     // 1. Parse input to AST
     let mut parser = Parser::new(input);
-    let ast = parser.parse()?;
+    let mut ast = parser.parse()?;
 
-    // 2. Analyze: build semantic information
+    // 2. Analyze: build semantic information and enrich AST
     //    Phase 0-2: Collect symbols, track usage, detect optimizations
+    //    AST Enrichment: Analyzer updates is_derived_state based on semantic analysis
     //    Use analyze_with_context to detect component inline vars for single-file transpilation
-    let mut semantic_info = Analyzer::analyze_with_context(&ast, component_name, package)?;
+    let mut semantic_info = Analyzer::analyze_with_context(&mut ast, component_name, package)?;
 
     // Merge global store registry if provided
     if let Some(global_registry) = global_store_registry {
