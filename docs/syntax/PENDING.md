@@ -25,21 +25,20 @@ This document tracks syntax and design decisions that are **not yet finalized** 
 
 ---
 
-### 2. Data Flow & State Management
+### ~~2. Data Flow & State Management~~
 
-**Topics to explore:**
-- How to pass data down the component tree
-- How to lift state up
-- Shared state across components
-- State persistence (across navigation, app restart)
-- ViewModel integration with .wh components
+**Status:** ✅ DECIDED - See [Decision 008: State Management](./decisions/008-state-management.md)
 
-**Questions:**
-- Do we need special syntax for shared state?
-- How to integrate with Compose ViewModel?
-- State hoisting patterns?
+**Implemented:**
+- ✅ Inline component state: `var count = 0` (auto remember/mutableStateOf)
+- ✅ Auto-ViewModel generation for complex components (Phase 1.1)
+- ✅ @store classes for screen-level state
+- ✅ Automatic StateFlow/UiState generation
+- ✅ Hilt integration (@Inject or @hilt)
+- ✅ Props and state hoisting patterns
+- ✅ Suspend function auto-wrapping in viewModelScope
 
-**Status:** ⏸️ Not yet designed
+**See also:** `/docs/STORE.md` for complete documentation
 
 ---
 
@@ -200,47 +199,32 @@ import $app.native.ImageProcessor  // C++ via JNI
 
 ---
 
-### 7. Lifecycle Hooks
+### ~~7. Lifecycle Hooks~~
 
-**Compose has:**
-- `LaunchedEffect` - run on composition
-- `DisposableEffect` - run on composition + cleanup
-- `SideEffect` - run every recomposition
-- `rememberCoroutineScope` - coroutine scope
+**Status:** ✅ DECIDED - See [Decision 009: Lifecycle Hooks](./decisions/009-lifecycle-hooks.md)
 
-**Potential Whitehall syntax:**
+**Implemented syntax:**
 ```whitehall
 <script>
   onMount {
     // Run once when component mounts
+    // For ViewModels: goes in init {} block with viewModelScope.launch
+    // For simple components: transpiles to LaunchedEffect(Unit)
   }
 
-  onUnmount {
+  onDispose {
     // Cleanup when component unmounts
-  }
-
-  onUpdate(() => [dependency1, dependency2]) {
-    // Run when dependencies change
+    // For ViewModels: not supported (ViewModels have onCleared)
+    // For simple components: transpiles to DisposableEffect(Unit)
   }
 </script>
 ```
 
-**Or stick with Compose:**
-```whitehall
-<script>
-  LaunchedEffect(Unit) {
-    // onMount equivalent
-  }
+**Smart handling:**
+- Complex components with lifecycle → ViewModel with init block
+- Simple components with lifecycle → LaunchedEffect/DisposableEffect
 
-  DisposableEffect(Unit) {
-    onDispose {
-      // onUnmount equivalent
-    }
-  }
-</script>
-```
-
-**Status:** ⏸️ Need to design lifecycle API
+**Status:** ✅ Fully implemented and tested (38/38 tests passing)
 
 ---
 
