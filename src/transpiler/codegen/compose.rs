@@ -163,6 +163,20 @@ impl ComposeBackend {
             return self.generate_store_class(class);
         }
 
+        // Check if this component has inline vars (ComponentInline in registry)
+        let is_component_viewmodel = if let Some(registry) = &self.store_registry {
+            registry.get(&self.component_name)
+                .map(|info| info.source == crate::transpiler::analyzer::StoreSource::ComponentInline)
+                .unwrap_or(false)
+        } else {
+            false
+        };
+
+        if is_component_viewmodel {
+            // Component has inline vars → Generate ViewModel + wrapper component
+            return self.generate_component_viewmodel(file);
+        }
+
         // Pre-pass: Detect store usage for import generation
         self.detect_store_usage(file);
 

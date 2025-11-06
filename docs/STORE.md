@@ -1422,21 +1422,180 @@ fun CounterScreen() {
 3. **Key parameter handling** - Currently automatic by variable name, could be explicit via annotation
 4. **Derived property reference rewriting** - Currently relies on property getter indirection, could be more explicit
 
-### Next Steps for Implementation
+### Phase 1.1: Component Inline Vars → ViewModel (IN PROGRESS)
 
-Based on the STATE-MANAGEMENT.md roadmap, the next phases would be:
+**Status:** 🔧 Implementation in progress
 
-**Phase 6 (Not yet implemented):** Auto-ViewModel for inline `var` declarations
+**Goal:** Detect `var` in component script sections and auto-generate ViewModels without requiring separate class files.
 
-- Detect `var` in `<script>` blocks
-- Auto-generate ViewModel even without `@store` annotation
-- Would require changes to parser and analyzer
+#### Architectural Plan
 
-**Phase 7 (Not yet implemented):** Global singleton stores
+**New @store Definition:**
+- `@store object` = Singleton (StateFlow, NOT ViewModel) - for global state
+- `class` with `var` = ViewModel (no annotation needed) - for reusable state
+- `component` with `var` = ViewModel (no annotation needed) - for inline state
 
-- Redefine `@store` to mean global singletons
-- Support `@store object` pattern
-- Different generation than screen-scoped ViewModels
+**No backwards compatibility** - clean slate implementation.
+
+#### Multi-File Generation Architecture
+
+**Problem:** ComponentInline requires generating TWO files from ONE input:
+
+```
+Counter.wh (with inline vars)
+  ↓
+1. CounterViewModel.kt  (ViewModel class with UiState)
+2. Counter.kt           (wrapper component that uses ViewModel)
+```
+
+**Solution: TranspileResult Enum**
+
+Created a new result type that supports multiple output files:
+
+```rust
+pub enum TranspileResult {
+    /// Single output file (standard case)
+    Single(String),
+
+    /// Multiple output files (ComponentInline case)
+    /// Each tuple is (filename_suffix, content)
+    Multiple(Vec<(String, String)>),
+}
+```
+
+**API Design:**
+- `primary_content()` - Get main content (backward compatible)
+- `is_multiple()` - Check if multi-file result
+- `files()` - Get all files as Vec<(suffix, content)>
+
+#### Implementation Steps
+
+**1. StoreSource Enum** ✅ COMPLETED (Commit: 862e915)
+
+```rust
+pub enum StoreSource {
+    Class,           // Separate class file with var → ViewModel
+    ComponentInline, // Inline vars in component → ViewModel
+    Singleton,       // @store object → StateFlow singleton
+}
+```
+
+**2. Detection Updates** ✅ COMPLETED (Commit: 862e915)
+
+**Analyzer (analyzer.rs):**
+- Updated `collect_stores()` to use `StoreSource` enum
+- Classes with `var` → StoreSource::Class
+- `@store object` → StoreSource::Singleton
+
+**Build Pipeline (build_pipeline.rs):**
+- `build_store_registry()` now scans components for inline vars
+- Components/screens with `var` in state → StoreSource::ComponentInline
+- Registered in global registry with component name
+
+**3. Code Generation** 🔧 IN PROGRESS
+
+**Current Status:**
+- TranspileResult enum created in transpiler/mod.rs
+- Detection logic added to compose.rs (checks registry for ComponentInline)
+- Ready to implement: `generate_component_viewmodel()`
+
+**Next Tasks:**
+1. Implement `generate_component_viewmodel()` in compose.rs
+   - Generate ViewModel class (similar to existing ViewModel generation)
+   - Generate wrapper component that instantiates ViewModel
+   - Return `TranspileResult::Multiple`
+
+2. Update transpiler API signatures
+   - Change return type from `Result<String>` to `Result<TranspileResult>`
+   - Update all callers to handle new result type
+
+3. Update build_pipeline.rs
+   - `transpile_file()` must handle multi-file results
+   - Write each file with appropriate suffix
+   - Example: Counter.wh → Counter.kt + CounterViewModel.kt
+
+4. Update dispatcher scope logic
+   - ComponentInline with vars → use `viewModelScope` (not dispatcherScope)
+   - Enable Level 1 auto-infer from suspend functions
+
+#### Code Generation Strategy
+
+**For ComponentInline Source:**
+
+**File 1: ComponentViewModel.kt**
+```kotlin
+class CounterViewModel : ViewModel() {
+    data class UiState(
+        val count: Int = 0,
+    )
+
+    private val _uiState = MutableStateFlow(UiState())
+    val uiState: StateFlow<UiState> = _uiState.asStateFlow()
+
+    var count: Int
+        get() = _uiState.value.count
+        set(value) { _uiState.update { it.copy(count = value) } }
+
+    // Functions auto-wrapped in viewModelScope.launch
+}
+```
+
+**File 2: Component.kt**
+```kotlin
+@Composable
+fun Counter() {
+    val viewModel = viewModel<CounterViewModel>()
+    val uiState by viewModel.uiState.collectAsState()
+
+    // Markup uses uiState.count and viewModel.functions()
+}
+```
+
+#### Design Decisions
+
+**Q: Why two separate files?**
+A: Clean separation - ViewModel in one file, Composable in another. Matches Android conventions and keeps generated code organized.
+
+**Q: Why TranspileResult enum vs side effects?**
+A: Explicit is better than implicit. Function signature clearly indicates multi-file possibility. Easier to test and reason about.
+
+**Q: How to handle function signatures?**
+A: Update systematically from bottom-up:
+- transpiler::transpile_with_registry() → TranspileResult
+- transpile_file() in build_pipeline → handle multi-file
+- All callers updated together
+
+**Q: Dispatcher scope selection?**
+A: ComponentInline with vars uses `viewModelScope` (like Class source), not `dispatcherScope`. This enables proper Level 1 auto-infer behavior.
+
+#### Testing Plan
+
+1. Create test component with inline vars
+2. Verify ViewModel generation (structure, UiState, accessors)
+3. Verify wrapper component generation
+4. Verify both files written correctly
+5. Verify dispatcher syntax uses viewModelScope
+6. Verify suspend functions auto-wrapped
+
+#### Files to Modify
+
+- ✅ `src/transpiler/analyzer.rs` - StoreSource enum
+- ✅ `src/transpiler/mod.rs` - TranspileResult enum, API signatures
+- ✅ `src/build_pipeline.rs` - Component var detection, multi-file writing
+- 🔧 `src/transpiler/codegen/compose.rs` - generate_component_viewmodel()
+- ⏳ Update all transpile() callers for new return type
+
+---
+
+### Future Phases
+
+**Phase 1.2 (Future):** Imported classes with `var`
+- Auto-detect classes with vars at usage sites
+- Generate viewModel<T>() automatically
+
+**Phase 1.3 (Future):** Additional singleton features
+- Enhanced StateFlow patterns for singletons
+- Persistence support
 
 ---
 

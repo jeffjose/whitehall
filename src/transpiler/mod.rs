@@ -18,6 +18,43 @@ use parser::Parser;
 pub use analyzer::{StoreRegistry, StoreInfo, StoreSource};
 pub use ast::WhitehallFile as AST;
 
+/// Transpilation result that can represent one or more output files
+#[derive(Debug, Clone)]
+pub enum TranspileResult {
+    /// Single output file (standard case)
+    Single(String),
+    /// Multiple output files (e.g., Component + ViewModel for inline vars)
+    /// Each tuple is (filename_suffix, content)
+    /// filename_suffix examples: "" for main file, "ViewModel" for ViewModel file
+    Multiple(Vec<(String, String)>),
+}
+
+impl TranspileResult {
+    /// Get the primary content (for backward compatibility)
+    pub fn primary_content(&self) -> &str {
+        match self {
+            TranspileResult::Single(content) => content,
+            TranspileResult::Multiple(files) => {
+                // First file is primary
+                files.first().map(|(_, content)| content.as_str()).unwrap_or("")
+            }
+        }
+    }
+
+    /// Check if this is a multi-file result
+    pub fn is_multiple(&self) -> bool {
+        matches!(self, TranspileResult::Multiple(_))
+    }
+
+    /// Get all files (for multi-file handling)
+    pub fn files(&self) -> Vec<(String, String)> {
+        match self {
+            TranspileResult::Single(content) => vec![(String::new(), content.clone())],
+            TranspileResult::Multiple(files) => files.clone(),
+        }
+    }
+}
+
 /// Transpile Whitehall source code to Kotlin/Compose
 ///
 /// # Arguments
