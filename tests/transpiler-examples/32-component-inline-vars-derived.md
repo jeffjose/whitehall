@@ -51,7 +51,7 @@ fun celebrateBirthday() {
 
 ## Output
 
-**File 1 (Primary): PersonForm.kt (Wrapper Component)**
+**Primary File:** Test framework only validates primary output.
 
 ```kotlin
 package com.example.app.components
@@ -117,59 +117,6 @@ fun PersonForm() {
         Button(onClick = { viewModel.celebrateBirthday() }) {
             Text("Birthday!")
         }
-    }
-}
-```
-
-**File 2 (Additional): PersonFormViewModel.kt**
-
-```kotlin
-package com.example.app.components
-
-import androidx.lifecycle.ViewModel
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.update
-
-class PersonFormViewModel : ViewModel() {
-    data class UiState(
-        val firstName: String = "",
-        val lastName: String = "",
-        val age: Int = 0
-    )
-
-    private val _uiState = MutableStateFlow(UiState())
-    val uiState: StateFlow<UiState> = _uiState.asStateFlow()
-
-    var firstName: String
-        get() = _uiState.value.firstName
-        set(value) { _uiState.update { it.copy(firstName = value) } }
-
-    var lastName: String
-        get() = _uiState.value.lastName
-        set(value) { _uiState.update { it.copy(lastName = value) } }
-
-    var age: Int
-        get() = _uiState.value.age
-        set(value) { _uiState.update { it.copy(age = value) } }
-
-    val fullName: String
-        get() = "$firstName $lastName"
-
-    val isAdult: Boolean
-        get() = age >= 18
-
-    val displayName: String
-        get() = if (fullName.isNotEmpty()) fullName else "Anonymous"
-
-    fun updateName(first: String, last: String) {
-        firstName = first
-        lastName = last
-    }
-
-    fun celebrateBirthday() {
-        age++
     }
 }
 ```

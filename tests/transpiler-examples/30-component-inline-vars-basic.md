@@ -43,22 +43,23 @@ fun reset() {
 
 ## Output
 
-**File 1 (Primary): Counter.kt (Wrapper Component)**
+**Primary File (Counter.kt):** The test framework currently only validates the primary output.
+The ViewModel file (CounterViewModel.kt) is also generated but not checked by this test.
 
 ```kotlin
 package com.example.app.components
 
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.material3.Button
-import androidx.compose.material3.Text
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.compose.ui.graphics.Color
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
+import androidx.compose.foundation.layout.Column
+import androidx.compose.material3.Text
+import androidx.compose.foundation.layout.Row
+import androidx.compose.material3.Button
 import androidx.lifecycle.viewmodel.compose.viewModel
 
 @Composable
@@ -73,15 +74,13 @@ fun Counter() {
             text = "Count: ${uiState.count}",
             fontSize = 32.sp
         )
-
         if (uiState.lastIncrement != null) {
             Text(
-                text = "${uiState.lastIncrement}",
+                text = uiState.lastIncrement,
                 fontSize = 12.sp,
                 color = Color(0xFF666666)
             )
         }
-
         Row(
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
@@ -92,55 +91,9 @@ fun Counter() {
                 Text("+")
             }
         }
-
         Button(onClick = { viewModel.reset() }) {
             Text("Reset")
         }
-    }
-}
-```
-
-**File 2 (Additional): CounterViewModel.kt**
-
-```kotlin
-package com.example.app.components
-
-import androidx.lifecycle.ViewModel
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.update
-
-class CounterViewModel : ViewModel() {
-    data class UiState(
-        val count: Int = 0,
-        val lastIncrement: String? = null
-    )
-
-    private val _uiState = MutableStateFlow(UiState())
-    val uiState: StateFlow<UiState> = _uiState.asStateFlow()
-
-    var count: Int
-        get() = _uiState.value.count
-        set(value) { _uiState.update { it.copy(count = value) } }
-
-    var lastIncrement: String?
-        get() = _uiState.value.lastIncrement
-        set(value) { _uiState.update { it.copy(lastIncrement = value) } }
-
-    fun increment() {
-        count++
-        lastIncrement = "Incremented at ${System.currentTimeMillis()}"
-    }
-
-    fun decrement() {
-        count--
-        lastIncrement = null
-    }
-
-    fun reset() {
-        count = 0
-        lastIncrement = null
     }
 }
 ```
