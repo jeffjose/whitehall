@@ -80,6 +80,9 @@ impl Parser {
                 }
                 // Otherwise, continue to next iteration to collect more annotations
                 continue;
+            } else if self.peek_word() == Some("class") || self.peek_word() == Some("object") {
+                // Standalone class/object without annotation (e.g., class with var properties)
+                classes.push(self.parse_class_declaration(Vec::new())?);
             } else if self.consume_word("import") {
                 imports.push(self.parse_import()?);
             } else if self.peek_word() == Some("var") || self.peek_word() == Some("val") {

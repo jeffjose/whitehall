@@ -135,11 +135,19 @@ impl ComposeBackend {
     }
 
     pub fn generate(&mut self, file: &WhitehallFile) -> Result<String, String> {
-        // Check if this file contains a @store class
-        let store_class = file.classes.iter().find(|c| c.annotations.contains(&"store".to_string()));
+        // Check if this file contains a reactive class (in store registry)
+        // This includes: classes with var properties OR @store object singletons
+        let store_class = file.classes.iter().find(|c| {
+            // Check if class is in store registry
+            if let Some(registry) = &self.store_registry {
+                registry.contains(&c.name)
+            } else {
+                false
+            }
+        });
 
         if let Some(class) = store_class {
-            // Generate ViewModel code for @store class
+            // Generate ViewModel or singleton code based on registry info
             return self.generate_store_class(class);
         }
 
