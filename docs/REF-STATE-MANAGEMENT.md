@@ -8,7 +8,7 @@
 
 ✅ **Phases 0-5 Complete** | ✅ **Phase 1.1 Complete**
 
-Core state management features are production-ready. Advanced ViewModel generation for inline component vars is underway.
+Core state management features are production-ready. Advanced ViewModel generation for inline component vars is complete.
 
 ---
 
@@ -102,7 +102,7 @@ fun Counter() {
 
 ## Local State (Complex) - Phase 1.1
 
-### Status: 🔄 In Progress
+### Status: ✅ Complete
 
 **Use case:** Complex components with suspend functions, lifecycle hooks, or many functions
 
@@ -845,7 +845,7 @@ Hilt is enabled when EITHER:
 **Store Definition:**
 
 ```whitehall
-@store
+// NOTE: No @store annotation needed! The var property triggers ViewModel generation
 class UserProfile @Inject constructor(
   private val repository: ProfileRepository,
   private val analytics: Analytics
@@ -888,7 +888,7 @@ val profile = hiltViewModel<UserProfile>()  // Uses hiltViewModel, not viewModel
 **Store Definition:**
 
 ```whitehall
-@store
+// NOTE: No @store annotation needed! The var property triggers ViewModel generation
 @hilt
 class UserProfile {
   var name = ""
@@ -930,10 +930,12 @@ pub struct StoreRegistry {
 
 pub struct StoreInfo {
     pub class_name: String,
+    pub source: StoreSource,     // Class, ComponentInline, or Singleton
+    pub has_vars: bool,          // Has mutable var properties?
     pub has_hilt: bool,          // @hilt annotation detected?
     pub has_inject: bool,        // @Inject constructor detected?
     pub package: String,
-    pub source: StoreSource,     // Class, ComponentInline, or Singleton
+    pub route_params: Vec<String>, // Route parameters detected (SavedStateHandle)
 }
 
 pub enum StoreSource {
