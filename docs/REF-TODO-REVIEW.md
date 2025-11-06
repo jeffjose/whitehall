@@ -26,7 +26,7 @@
 
 ---
 
-### ⏳ REF-TRANSPILER.md - NEEDS REVIEW
+### ✅ REF-TRANSPILER.md - NEEDS REVIEW
 
 **Claims to verify:**
 
@@ -327,6 +327,13 @@ For each REF-* file:
 - **Fixed:** 2025-11-06 (commits 40d86d5, 0b9e066)
 
 ### REF-TRANSPILER.md
+- **Issue:** Doc claimed 37/38 tests (97.4%), test 05 failing
+- **Reality:** 38/38 tests passing (100%) - test 05 has been fixed
+- **Issue:** Doc claimed ~600 LOC parser
+- **Reality:** 1595 lines actual
+- **Issue:** Component struct props type wrong in doc
+- **Reality:** props is Vec<ComponentProp>, not Vec<(String, PropValue)>, also has self_closing field
+- **Fixed:** 2025-11-06 (updated test status, line counts, AST docs)
 - (To be filled as we review)
 
 ### REF-BUILD-SYSTEM.md
