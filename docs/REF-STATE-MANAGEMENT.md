@@ -23,7 +23,7 @@ Whitehall provides multiple state management patterns inspired by Svelte and mod
 | Props | `@prop val name: String` | ✅ Complete | Parent-owned state |
 | Two-way binding | `bind:value={email}` | ✅ Complete | Form inputs |
 | Derived values | `val doubled = count * 2` | ✅ Complete | Computed properties |
-| Screen-level stores | `@store class UserProfile { ... }` | ✅ Complete | Screen-scoped state with rotation survival |
+| ViewModels (class with var) | `class UserProfile { var ... }` | ✅ Complete | Screen-scoped state with rotation survival |
 | Suspend functions | `suspend fun save()` | ✅ Complete | Async operations |
 | Coroutine dispatchers | `io { }`, `cpu { }`, `main { }` | ✅ Complete | Thread control |
 | Lifecycle hooks | `onMount`, `onDispose` | ✅ Complete | Side effects and cleanup |
@@ -38,13 +38,14 @@ Whitehall provides multiple state management patterns inspired by Svelte and mod
 3. [Props](#props)
 4. [Two-Way Binding](#two-way-binding)
 5. [Derived Values](#derived-values)
-6. [Screen-Level Stores (@store)](#screen-level-stores-store)
-7. [Suspend Functions & Coroutines](#suspend-functions--coroutines)
-8. [Lifecycle Hooks](#lifecycle-hooks)
-9. [Hilt Integration](#hilt-integration)
-10. [Implementation Details](#implementation-details)
-11. [Known Gaps & Next Steps](#known-gaps--next-steps)
+6. [ViewModels (Auto-Inferred)](#viewmodels-auto-inferred)
+8. [Suspend Functions & Coroutines](#suspend-functions--coroutines)
+9. [Lifecycle Hooks](#lifecycle-hooks)
+10. [Hilt Integration](#hilt-integration)
+11. [Implementation Details](#implementation-details)
+12. [Known Gaps & Next Steps](#known-gaps--next-steps)
 
+7. [Global Singletons (@store object)](#global-singletons-store-object)
 ---
 
 ## Local State (Simple)
@@ -352,30 +353,32 @@ fun NameForm() {
 
 ---
 
-## Screen-Level Stores (@store)
+## ViewModels (Auto-Inferred)
 
 ### Status: ✅ Complete (Phases 0-5)
 
 **Use case:** Screen-scoped state that survives rotation, with complex logic
 
+**Key Insight:** ViewModels are **automatically inferred** from classes with `var` properties. You do NOT need `@store` annotation for ViewModels!
+
 **Architecture Overview:**
 
 ```
-@store class definition (.wh file)
+class with var properties (.wh file)
     ↓
-Analyzer builds StoreRegistry (cross-file detection)
+Analyzer detects var → adds to StoreRegistry as StoreSource::Class
     ↓
 Transpiler generates ViewModel with StateFlow
     ↓
 Usage site auto-detects and generates viewModel<T>()
 ```
 
-### Defining a Store
+### Defining a ViewModel
 
 **File:** `src/stores/UserProfile.wh`
 
 ```whitehall
-@store
+// NO @store annotation needed! var properties trigger ViewModel generation
 class UserProfile {
   var name: String = ""
   var email: String = ""
@@ -444,7 +447,7 @@ class UserProfile : ViewModel() {
 }
 ```
 
-### Using a Store
+### Using a ViewModel
 
 **File:** `src/screens/ProfileScreen.wh`
 
@@ -494,12 +497,66 @@ fun ProfileScreen() {
 ```
 
 **Key Features:**
+- ✅ Auto-inferred from `var` properties (NO `@store` annotation needed!)
 - ✅ Auto-detection at usage sites (no manual viewModel<T>() needed)
 - ✅ StateFlow reactivity with UiState data class
 - ✅ Property accessors for reactive updates
 - ✅ Derived properties excluded from UiState
 - ✅ Suspend functions auto-wrapped in viewModelScope.launch
 - ✅ Multiple instances supported with automatic key generation
+
+---
+
+## Global Singletons (@store object)
+
+### Status: ✅ Complete
+
+**Use case:** App-wide state that lives for entire app lifetime
+
+**Key Difference:** `@store object` generates a **singleton with StateFlow** (NOT a ViewModel!)
+
+**Syntax:**
+
+```whitehall
+@store object AppSettings {
+  var darkMode = false
+  var language = "en"
+  
+  val isDarkModeEnabled: Boolean get() = darkMode
+}
+```
+
+**Generated Code:**
+
+```kotlin
+object AppSettings {  // object, NOT class
+    data class State(
+        val darkMode: Boolean = false,
+        val language: String = "en"
+    )
+
+    private val _state = MutableStateFlow(State())
+    val state: StateFlow<State> = _state.asStateFlow()
+
+    var darkMode: Boolean
+        get() = _state.value.darkMode
+        set(value) { _state.update { it.copy(darkMode = value) } }
+
+    var language: String
+        get() = _state.value.language
+        set(value) { _state.update { it.copy(language = value) } }
+    
+    val isDarkModeEnabled: Boolean
+        get() = darkMode
+}
+```
+
+**Key Differences from ViewModel:**
+- ✅ `object` keyword (not `class`)
+- ✅ StateFlow only (NO ViewModel, NO viewModelScope)
+- ✅ Suspend functions keep `suspend` keyword (caller provides scope)
+- ✅ Lives for entire app lifetime (not screen-scoped)
+- ✅ Accessed directly: `AppSettings.darkMode = true`
 
 ---
 
@@ -873,9 +930,9 @@ pub struct StoreInfo {
 }
 
 pub enum StoreSource {
-    Class,           // Separate @store class file
-    ComponentInline, // Inline vars in component (Phase 1.1)
-    Singleton,       // @store object (future)
+    Class,           // Class with var properties → ViewModel (NO @store needed)
+    ComponentInline, // Inline vars in component → ViewModel (Phase 1.1)
+    Singleton,       // @store object → StateFlow singleton (global state)
 }
 ```
 
@@ -967,39 +1024,6 @@ val user = User()  // Should auto-detect and use viewModel<User>()
 
 **Challenge:** Requires cross-file type analysis
 
-### Phase 1.3: Global Singletons 🔮 FUTURE
-
-**Goal:** App-wide state that lives for entire app lifetime
-
-**Design:**
-
-```whitehall
-<!-- stores/AppSettings.wh -->
-@store object AppSettings {
-  var darkMode = false
-  var language = "en"
-}
-```
-
-**Generates:**
-
-```kotlin
-object AppSettings {
-    data class State(
-        val darkMode: Boolean = false,
-        val language: String = "en"
-    )
-
-    private val _state = MutableStateFlow(State())
-    val state: StateFlow<State> = _state.asStateFlow()
-
-    var darkMode: Boolean
-        get() = _state.value.darkMode
-        set(value) { _state.update { it.copy(darkMode = value) } }
-}
-```
-
-**Not ViewModel** - Just StateFlow singleton
 
 ---
 
@@ -1037,7 +1061,7 @@ object AppSettings {
 | `src/transpiler/codegen/compose.rs` | ~3500 | Code generation, ViewModel output |
 | `src/transpiler/mod.rs` | ~100 | TranspileResult enum, public API |
 | `src/build_pipeline.rs` | ~400 | Component inline var detection |
-| `tests/transpiler-examples/27-29.md` | 3 files | @store test cases |
+| `tests/transpiler-examples/27-29.md` | 3 files | ViewModel test cases (classes with var) |
 | `tests/transpiler-examples/30-32.md` | 3 files | Phase 1.1 test cases |
 
 ---
