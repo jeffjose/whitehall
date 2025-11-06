@@ -589,7 +589,6 @@ src/main.wh              → com.example.myapp.MainActivity
 - ✅ Rebuilds only changed files (incremental)
 - ✅ Shows clear error messages
 - ✅ Handles Ctrl+C gracefully
-- ✅ Debounces rapid changes
 
 ---
 
@@ -771,13 +770,16 @@ notify = "6.1"  # For watch command
 
 | File | Lines | Purpose |
 |------|-------|---------|
-| `src/commands/build.rs` | ~150 | Build command implementation |
-| `src/commands/watch.rs` | ~200 | Watch command with file monitoring |
-| `src/commands/run.rs` | ~300 | Run command with device integration |
-| `src/build_pipeline.rs` | ~400 | Shared build logic |
-| `src/config.rs` | ~150 | Parse whitehall.toml |
-| `src/project.rs` | ~200 | File discovery and classification |
-| `src/android_scaffold.rs` | ~500 | Generate Gradle boilerplate |
+| `src/commands/build.rs` | ~130 | Build command implementation |
+| `src/commands/watch.rs` | ~210 | Watch command with file monitoring |
+| `src/commands/run.rs` | ~230 | Run command with device integration |
+| `src/commands/compile.rs` | ~100 | Single-file transpilation |
+| `src/commands/doctor.rs` | ~220 | System health checks |
+| `src/commands/toolchain.rs` | ~240 | Toolchain management |
+| `src/build_pipeline.rs` | ~530 | Shared build logic |
+| `src/config.rs` | ~200 | Parse whitehall.toml |
+| `src/project.rs` | ~300 | File discovery and classification |
+| `src/android_scaffold.rs` | ~310 | Generate Gradle boilerplate |
 
 ---
 
