@@ -38,15 +38,22 @@ Whitehall provides multiple state management patterns inspired by Svelte and mod
 3. [Props](#props)
 4. [Two-Way Binding](#two-way-binding)
 5. [Derived Values](#derived-values)
+
 6. [ViewModels (Auto-Inferred)](#viewmodels-auto-inferred)
+7. [Global Singletons (@store object)](#global-singletons-store-object)
 8. [Suspend Functions & Coroutines](#suspend-functions--coroutines)
 9. [Lifecycle Hooks](#lifecycle-hooks)
 10. [Hilt Integration](#hilt-integration)
 11. [Implementation Details](#implementation-details)
 12. [Known Gaps & Next Steps](#known-gaps--next-steps)
 
-7. [Global Singletons (@store object)](#global-singletons-store-object)
----
+
+
+
+
+
+
+
 
 ## Local State (Simple)
 
