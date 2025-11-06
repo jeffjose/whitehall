@@ -65,13 +65,13 @@ impl TranspileResult {
 /// * `global_store_registry` - Optional project-wide store registry for cross-file store detection
 ///
 /// # Returns
-/// Generated Kotlin code or error message
+/// TranspileResult (Single or Multiple files) or error message
 pub fn transpile(
     input: &str,
     package: &str,
     component_name: &str,
     component_type: Option<&str>,
-) -> Result<String, String> {
+) -> Result<TranspileResult, String> {
     transpile_with_registry(input, package, component_name, component_type, None)
 }
 
@@ -82,7 +82,7 @@ pub fn transpile_with_registry(
     component_name: &str,
     component_type: Option<&str>,
     global_store_registry: Option<&analyzer::StoreRegistry>,
-) -> Result<String, String> {
+) -> Result<TranspileResult, String> {
     // 1. Parse input to AST
     let mut parser = Parser::new(input);
     let ast = parser.parse()?;
@@ -108,7 +108,10 @@ pub fn transpile_with_registry(
     // 4. Generate Kotlin code
     //    Phase 5: Consume optimizations and route to appropriate backend
     let mut codegen = CodeGenerator::new(package, component_name, component_type);
-    codegen.generate(&optimized_ast)
+    let kotlin_code = codegen.generate(&optimized_ast)?;
+
+    // Wrap in TranspileResult::Single (for now - will be Multiple for ComponentInline)
+    Ok(TranspileResult::Single(kotlin_code))
 }
 
 /// Parse source code to extract AST for store registry building

@@ -41,8 +41,11 @@ pub fn execute(file_path: &str, package: Option<&str>, no_package: bool) -> Resu
     let package_name = package.unwrap_or("com.example.app");
 
     // Transpile to Kotlin
-    let kotlin_code = transpiler::transpile(&code, package_name, &component_name, None)
+    let result = transpiler::transpile(&code, package_name, &component_name, None)
         .map_err(|e| anyhow::anyhow!("Transpilation error: {}", e))?;
+
+    // Get primary content (for compile command, we only show the main file)
+    let kotlin_code = result.primary_content();
 
     // Output the Kotlin code
     if no_package {

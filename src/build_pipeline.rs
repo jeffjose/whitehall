@@ -180,7 +180,7 @@ fn transpile_file(
     };
 
     // Transpile to Kotlin with global store registry
-    let kotlin_code = transpiler::transpile_with_registry(
+    let result = transpiler::transpile_with_registry(
         &source,
         &file.package_path,
         &file.component_name,
@@ -189,12 +189,27 @@ fn transpile_file(
     )
     .map_err(|e| anyhow::anyhow!("Transpilation error: {}", e))?;
 
-    // Write output
-    let output_path = get_kotlin_output_path(output_dir, file);
-    fs::create_dir_all(output_path.parent().unwrap())
-        .context("Failed to create output directories")?;
-    fs::write(&output_path, kotlin_code)
-        .context(format!("Failed to write {}", output_path.display()))?;
+    // Handle single or multiple output files
+    match result {
+        transpiler::TranspileResult::Single(kotlin_code) => {
+            // Single file output (standard case)
+            let output_path = get_kotlin_output_path(output_dir, file);
+            fs::create_dir_all(output_path.parent().unwrap())
+                .context("Failed to create output directories")?;
+            fs::write(&output_path, kotlin_code)
+                .context(format!("Failed to write {}", output_path.display()))?;
+        }
+        transpiler::TranspileResult::Multiple(files) => {
+            // Multiple file output (e.g., ComponentInline generates ViewModel + Component)
+            for (suffix, content) in files {
+                let output_path = get_kotlin_output_path_with_suffix(output_dir, file, &suffix);
+                fs::create_dir_all(output_path.parent().unwrap())
+                    .context("Failed to create output directories")?;
+                fs::write(&output_path, content)
+                    .context(format!("Failed to write {}", output_path.display()))?;
+            }
+        }
+    }
 
     Ok(())
 }
@@ -206,6 +221,22 @@ fn get_kotlin_output_path(output_dir: &Path, file: &WhitehallFile) -> PathBuf {
         .join("app/src/main/kotlin")
         .join(package_path)
         .join(format!("{}.kt", file.component_name))
+}
+
+/// Get the output path for a transpiled Kotlin file with a suffix
+/// Empty suffix returns the standard path (e.g., "Counter.kt")
+/// Non-empty suffix creates a variant (e.g., "CounterViewModel.kt" for suffix="ViewModel")
+fn get_kotlin_output_path_with_suffix(output_dir: &Path, file: &WhitehallFile, suffix: &str) -> PathBuf {
+    let package_path = file.package_path.replace('.', "/");
+    let filename = if suffix.is_empty() {
+        format!("{}.kt", file.component_name)
+    } else {
+        format!("{}{}.kt", file.component_name, suffix)
+    };
+    output_dir
+        .join("app/src/main/kotlin")
+        .join(package_path)
+        .join(filename)
 }
 
 /// Generate MainActivity.kt
@@ -224,8 +255,10 @@ fn generate_main_activity(
     let main_content = if let Some(main_file) = main_file {
         // Use transpiled main.wh content as the App composable
         let source = fs::read_to_string(&main_file.path)?;
-        transpiler::transpile_with_registry(&source, &config.android.package, "App", None, Some(global_store_registry))
-            .map_err(|e| anyhow::anyhow!(e))?
+        let result = transpiler::transpile_with_registry(&source, &config.android.package, "App", None, Some(global_store_registry))
+            .map_err(|e| anyhow::anyhow!(e))?;
+        // Get primary content (main.wh should generate single file)
+        result.primary_content().to_string()
     } else if !discovered_routes.is_empty() {
         // Generate MainActivity with NavHost for routing
         generate_navhost_main_activity(config, &discovered_routes)

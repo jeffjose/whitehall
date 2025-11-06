@@ -174,7 +174,9 @@ impl ComposeBackend {
 
         if is_component_viewmodel {
             // Component has inline vars → Generate ViewModel + wrapper component
-            return self.generate_component_viewmodel(file);
+            // TODO: Implement generate_component_viewmodel() - Phase 1.1
+            // For now, fall through to regular component generation
+            // return self.generate_component_viewmodel(file);
         }
 
         // Pre-pass: Detect store usage for import generation
