@@ -274,8 +274,61 @@ impl Analyzer {
         })
     }
 
+    /// Analyze with component context (for single-file transpilation)
+    /// Detects component inline vars in addition to @store classes
+    pub fn analyze_with_context(
+        ast: &WhitehallFile,
+        component_name: &str,
+        package: &str,
+    ) -> Result<SemanticInfo, String> {
+        let mut analyzer = Analyzer::new();
+
+        // Pass 0: Collect @store classes (Phase 0)
+        analyzer.collect_stores(ast);
+
+        // Phase 1.1: Detect component inline vars (for single-file transpilation)
+        analyzer.collect_component_inline_vars(ast, component_name, package);
+
+        // Pass 1: Collect declarations (Phase 0)
+        analyzer.collect_declarations(ast);
+
+        // Pass 2: Track usage (Phase 1)
+        analyzer.track_usage(ast);
+
+        // Pass 3: Infer optimizations (Phase 2)
+        let optimization_hints = analyzer.infer_optimizations(ast);
+
+        Ok(SemanticInfo {
+            symbol_table: analyzer.symbol_table.clone(),
+            mutability_info: analyzer.build_mutability_info(),
+            optimization_hints, // Phase 2: Return detected optimization hints
+            store_registry: analyzer.store_registry.clone(),  // Phase 0: Return store registry
+        })
+    }
+
+    /// Phase 1.1: Detect component inline vars (for single-file transpilation)
+    /// This is called when transpiling a single component file with inline mutable state
+    fn collect_component_inline_vars(&mut self, ast: &WhitehallFile, component_name: &str, package: &str) {
+        // Check if this component has any mutable state variables
+        let has_mutable_vars = ast.state.iter().any(|state| state.mutable);
+
+        if has_mutable_vars {
+            // Register this component as ComponentInline in the store registry
+            self.store_registry.insert(
+                component_name.to_string(),
+                StoreInfo {
+                    class_name: component_name.to_string(),
+                    source: StoreSource::ComponentInline,
+                    has_vars: true,
+                    has_hilt: false,  // Component inline vars don't support Hilt
+                    has_inject: false,
+                    package: package.to_string(),
+                },
+            );
+        }
+    }
+
     /// Phase 0: Collect reactive classes (classes with var properties or @store object)
-    /// Note: Component inline vars are detected in build_pipeline.rs, not here
     fn collect_stores(&mut self, ast: &WhitehallFile) {
         for class in &ast.classes {
             // Check if class has @store annotation

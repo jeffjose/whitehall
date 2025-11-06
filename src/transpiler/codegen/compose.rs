@@ -175,9 +175,7 @@ impl ComposeBackend {
 
         if is_component_viewmodel {
             // Component has inline vars → Generate ViewModel + wrapper component
-            // TODO: Implement generate_component_viewmodel() - Phase 1.1
-            // For now, fall through to regular component generation
-            // return self.generate_component_viewmodel(file);
+            return self.generate_component_viewmodel(file);
         }
 
         // Pre-pass: Detect store usage for import generation
@@ -2885,6 +2883,270 @@ impl ComposeBackend {
             output.push_str("    }\n\n");
         }
 
+        output.push_str("}\n");
+
+        Ok(output)
+    }
+
+    /// Phase 1.1: Generate ViewModel + wrapper component for component with inline vars
+    /// Returns TranspileResult::Multiple with two files:
+    /// 1. {ComponentName}ViewModel.kt - The ViewModel class
+    /// 2. {ComponentName}.kt - The wrapper component
+    fn generate_component_viewmodel(&mut self, file: &WhitehallFile) -> Result<crate::transpiler::TranspileResult, String> {
+        // Part 1: Generate ViewModel class
+        let viewmodel_code = self.generate_component_viewmodel_class(file)?;
+
+        // Part 2: Generate wrapper component
+        let wrapper_code = self.generate_component_wrapper(file)?;
+
+        // Return as Multiple with two files
+        Ok(crate::transpiler::TranspileResult::Multiple(vec![
+            (String::new(), wrapper_code),                    // Primary file: Component.kt
+            ("ViewModel".to_string(), viewmodel_code),        // Secondary file: ComponentViewModel.kt
+        ]))
+    }
+
+    /// Generate the ViewModel class for component inline vars
+    fn generate_component_viewmodel_class(&self, file: &WhitehallFile) -> Result<String, String> {
+        let mut output = String::new();
+        let viewmodel_name = format!("{}ViewModel", self.component_name);
+
+        // Package declaration
+        output.push_str(&format!("package {}\n\n", self.package));
+
+        // Imports
+        output.push_str("import androidx.lifecycle.ViewModel\n");
+
+        // Check if we have suspend functions
+        let has_suspend = file.functions.iter().any(|f| f.is_suspend);
+        if has_suspend {
+            output.push_str("import androidx.lifecycle.viewModelScope\n");
+        }
+
+        output.push_str("import kotlinx.coroutines.flow.MutableStateFlow\n");
+        output.push_str("import kotlinx.coroutines.flow.StateFlow\n");
+        output.push_str("import kotlinx.coroutines.flow.asStateFlow\n");
+        output.push_str("import kotlinx.coroutines.flow.update\n");
+
+        if has_suspend {
+            output.push_str("import kotlinx.coroutines.launch\n");
+        }
+
+        // Add any user imports from the file
+        for import in &file.imports {
+            let import_path = self.resolve_import(&import.path);
+            output.push_str(&format!("import {}\n", import_path));
+        }
+
+        output.push('\n');
+
+        // Class declaration
+        output.push_str(&format!("class {} : ViewModel() {{\n", viewmodel_name));
+
+        // Generate UiState data class from mutable state vars only
+        let mutable_state: Vec<_> = file.state.iter().filter(|s| s.mutable).collect();
+
+        if !mutable_state.is_empty() {
+            output.push_str("    data class UiState(\n");
+            for (i, state) in mutable_state.iter().enumerate() {
+                let type_str = if let Some(type_ann) = &state.type_annotation {
+                    type_ann.clone()
+                } else {
+                    self.infer_type_from_value(&state.initial_value)
+                };
+                let comma = if i < mutable_state.len() - 1 { "," } else { "" };
+                output.push_str(&format!("        val {}: {} = {}{}\n",
+                    state.name, type_str, state.initial_value, comma));
+            }
+            output.push_str("    )\n\n");
+
+            // StateFlow setup
+            output.push_str("    private val _uiState = MutableStateFlow(UiState())\n");
+            output.push_str("    val uiState: StateFlow<UiState> = _uiState.asStateFlow()\n\n");
+
+            // Property accessors for mutable vars
+            for state in &mutable_state {
+                let type_str = if let Some(type_ann) = &state.type_annotation {
+                    type_ann.clone()
+                } else {
+                    self.infer_type_from_value(&state.initial_value)
+                };
+                output.push_str(&format!("    var {}: {}\n", state.name, type_str));
+                output.push_str(&format!("        get() = _uiState.value.{}\n", state.name));
+                output.push_str(&format!("        set(value) {{ _uiState.update {{ it.copy({} = value) }} }}\n\n", state.name));
+            }
+        }
+
+        // Derived state (val with computed expressions)
+        let derived_state: Vec<_> = file.state.iter().filter(|s| !s.mutable).collect();
+        for state in &derived_state {
+            let type_str = if let Some(type_ann) = &state.type_annotation {
+                format!(": {}", type_ann)
+            } else {
+                String::new()
+            };
+            output.push_str(&format!("    val {}{}\n", state.name, type_str));
+            output.push_str(&format!("        get() = {}\n\n", state.initial_value));
+        }
+
+        // Generate functions
+        for func in &file.functions {
+            output.push_str(&format!("    fun {}({})", func.name, func.params));
+            if let Some(return_type) = &func.return_type {
+                output.push_str(&format!(": {}", return_type));
+            }
+            output.push_str(" {\n");
+
+            // Wrap suspend functions in viewModelScope.launch
+            if func.is_suspend {
+                output.push_str("        viewModelScope.launch {\n");
+                // Indent each line of the function body properly
+                for line in func.body.lines() {
+                    let trimmed = line.trim();
+                    if !trimmed.is_empty() {
+                        output.push_str(&format!("            {}\n", trimmed));
+                    }
+                }
+                output.push_str("        }\n");
+            } else {
+                output.push_str(&format!("        {}\n", func.body.trim()));
+            }
+
+            output.push_str("    }\n\n");
+        }
+
+        output.push_str("}\n");
+
+        Ok(output)
+    }
+
+    /// Generate the wrapper component that uses the ViewModel
+    fn generate_component_wrapper(&mut self, file: &WhitehallFile) -> Result<String, String> {
+        let mut output = String::new();
+        let viewmodel_name = format!("{}ViewModel", self.component_name);
+
+        // Package declaration
+        output.push_str(&format!("package {}\n\n", self.package));
+
+        // Collect imports from markup
+        let mut prop_imports = Vec::new();
+        let mut component_imports = Vec::new();
+        self.collect_imports_recursive(&file.markup, &mut prop_imports, &mut component_imports);
+
+        let mut imports = Vec::new();
+
+        // Add prop imports first (layout, styling, etc.)
+        imports.extend(prop_imports);
+
+        // Add Composable and runtime imports
+        imports.push("androidx.compose.runtime.Composable".to_string());
+        imports.push("androidx.compose.runtime.collectAsState".to_string());
+        imports.push("androidx.compose.runtime.getValue".to_string());
+
+        // User imports (resolve $ aliases)
+        for import in &file.imports {
+            let resolved = self.resolve_import(&import.path);
+            imports.push(resolved);
+        }
+
+        // Add component imports
+        imports.extend(component_imports);
+
+        // Add ViewModel import last
+        imports.push("androidx.lifecycle.viewmodel.compose.viewModel".to_string());
+
+        // Write imports
+        for import in imports {
+            output.push_str(&format!("import {}\n", import));
+        }
+
+        output.push('\n');
+
+        // Component function signature
+        let props_list = if file.props.is_empty() {
+            String::new()
+        } else {
+            file.props
+                .iter()
+                .map(|p| {
+                    let default = p
+                        .default_value
+                        .as_ref()
+                        .map(|d| format!(" = {}", d))
+                        .unwrap_or_default();
+                    format!("{}: {}{}", p.name, p.prop_type, default)
+                })
+                .collect::<Vec<_>>()
+                .join(", ")
+        };
+
+        output.push_str("@Composable\n");
+        output.push_str(&format!("fun {}({}) {{\n", self.component_name, props_list));
+
+        // Instantiate ViewModel and collect state
+        self.indent_level += 1;
+        output.push_str(&self.indent());
+        output.push_str(&format!("val viewModel = viewModel<{}>()\n", viewmodel_name));
+        output.push_str(&self.indent());
+        output.push_str("val uiState by viewModel.uiState.collectAsState()\n");
+
+        // Generate any immutable state (val) that aren't derived
+        for state in &file.state {
+            if !state.mutable && !state.is_derived_state {
+                output.push_str(&self.indent());
+                let type_annotation = state.type_annotation.as_ref()
+                    .map(|t| format!(": {}", t))
+                    .unwrap_or_default();
+                output.push_str(&format!("val {}{} = {}\n", state.name, type_annotation, state.initial_value));
+            }
+        }
+
+        // Generate lifecycle hooks (onMount, onDispose)
+        for hook in &file.lifecycle_hooks {
+            output.push_str("\n");
+            output.push_str(&self.indent());
+            match hook.hook_type.as_str() {
+                "onMount" => {
+                    output.push_str("LaunchedEffect(Unit) {\n");
+                    self.indent_level += 1;
+                    for line in hook.body.lines() {
+                        output.push_str(&self.indent());
+                        output.push_str(line);
+                        output.push('\n');
+                    }
+                    self.indent_level -= 1;
+                    output.push_str(&self.indent());
+                    output.push_str("}\n");
+                }
+                "onDispose" => {
+                    output.push_str("DisposableEffect(Unit) {\n");
+                    self.indent_level += 1;
+                    output.push_str(&self.indent());
+                    output.push_str("onDispose {\n");
+                    self.indent_level += 1;
+                    for line in hook.body.lines() {
+                        output.push_str(&self.indent());
+                        output.push_str(line);
+                        output.push('\n');
+                    }
+                    self.indent_level -= 1;
+                    output.push_str(&self.indent());
+                    output.push_str("}\n");
+                    self.indent_level -= 1;
+                    output.push_str(&self.indent());
+                    output.push_str("}\n");
+                }
+                _ => {}
+            }
+        }
+
+        output.push('\n');
+
+        // Generate markup
+        let markup_code = self.generate_markup(&file.markup)?;
+        output.push_str(&markup_code);
+
+        self.indent_level -= 1;
         output.push_str("}\n");
 
         Ok(output)

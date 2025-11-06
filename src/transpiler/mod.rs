@@ -89,7 +89,8 @@ pub fn transpile_with_registry(
 
     // 2. Analyze: build semantic information
     //    Phase 0-2: Collect symbols, track usage, detect optimizations
-    let mut semantic_info = Analyzer::analyze(&ast)?;
+    //    Use analyze_with_context to detect component inline vars for single-file transpilation
+    let mut semantic_info = Analyzer::analyze_with_context(&ast, component_name, package)?;
 
     // Merge global store registry if provided
     if let Some(global_registry) = global_store_registry {
