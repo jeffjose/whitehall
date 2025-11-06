@@ -1,73 +1,48 @@
 # Suspend Functions and Coroutine Scopes
 
-**Status:** ✅ Decided - Option C (Auto-Infer + Override)
+**Status:** ✅ Phase 2 Complete - Implemented and Tested
 
 ---
 
-## Whitehall Special Syntax Patterns
+## Overview
 
-**Two prefix patterns for clarity:**
+This document covers the complete design and implementation of suspend function and coroutine scope features in Whitehall. The implementation provides three levels of control for async operations:
+
+1. **Level 1:** Auto-infer scope (future - requires var → ViewModel)
+2. **Level 2:** Thread control with dispatchers (`io`, `cpu`, `main`) ✅ **IMPLEMENTED**
+3. **Level 3:** Custom scopes (`$scope()`) ✅ **IMPLEMENTED**
+
+---
+
+## Design: Special Syntax Patterns
+
+Whitehall uses two prefix patterns for clarity:
 
 | Pattern | Meaning | Examples |
 |---------|---------|----------|
-| `@` prefix | **Declare** special behavior (annotations) | `@prop val name`, `@store object Settings`, `@inject constructor()` |
-| `$` prefix | **Access** special compiler-provided values | `$screen.params.id`, `$route.profile`, `$scope()` |
+| `@` prefix | **Declare** special behavior | `@prop val name`, `@store object Settings`, `@inject constructor()` |
+| `$` prefix | **Access** compiler-provided values | `$screen.params.id`, `$route.profile`, `$scope()` |
 
 **Rule:**
-- `@` = "This IS something special" (declaration)
-- `$` = "Get me something special" (reference)
+- `@` = "This IS something special" (declaration/annotation)
+- `$` = "Get me something special" (reference/access)
 
 ---
 
-## Decision: Auto-Infer Scope with Clean Override Syntax
+## Level 1: Auto-Infer (Future Implementation)
 
-**Chosen Approach:** Auto-infer the appropriate scope from context (90% case), but allow explicit override with clean syntax (10% advanced cases).
-
-**Rationale:**
-- Scope is usually obvious from context (component, ViewModel, effect)
-- Clean syntax for common case (like Svelte's `async`)
-- Power users can override for thread control or custom scopes
-- Whitehall compiler can provide better names than Kotlin's verbose APIs
-
----
-
-## Implementation Plan: Three Levels of Control
-
-### Level 1: Auto-Infer (Default - 90% of cases)
-
-**No scope thinking required - just works!**
+**Design:** Auto-infer the appropriate scope from context (90% case).
 
 ```whitehall
-<script>
-  var isLoading = false
+var isLoading = false
 
-  suspend fun save() {
-    isLoading = true
-    api.save()
-    isLoading = false
-  }
-</script>
+suspend fun save() {
+  isLoading = true
+  api.save()
+  isLoading = false
+}
 
 <Button onClick={save}>Save</Button>
-```
-
-**Transpiles to:**
-```kotlin
-class MyScreenViewModel : ViewModel() {
-    fun save() {
-        viewModelScope.launch {  // ← Auto-inferred
-            isLoading = true
-            api.save()
-            isLoading = false
-        }
-    }
-}
-
-@Composable
-fun MyScreen() {
-    val vm = viewModel<MyScreenViewModel>()
-    Button(onClick = { vm.save() })  // ← Simple call
-}
 ```
 
 **Auto-inference rules:**
@@ -76,13 +51,15 @@ fun MyScreen() {
 - Component without `var` → Uses `rememberCoroutineScope()`
 - Singleton (`@store object`) → Keep as `suspend`, caller provides scope
 
+**Status:** ⏳ Pending - Requires Phase 1.1 (var → ViewModel generation)
+
 ---
 
-### Level 2: Thread Control (Dispatchers)
+## Level 2: Thread Control (Dispatchers) ✅
 
-**For when you need to control which thread the work runs on.**
+**Status:** ✅ IMPLEMENTED
 
-#### The Three Dispatchers
+### The Three Dispatchers
 
 | Dispatcher | Whitehall Syntax | When to Use | Kotlin Equivalent |
 |------------|------------------|-------------|-------------------|
@@ -90,24 +67,19 @@ fun MyScreen() {
 | **IO** | `io { }` | Network, disk, database | `Dispatchers.IO` |
 | **CPU** | `cpu { }` | Heavy computation | `Dispatchers.Default` |
 
-#### Examples:
+### Examples
 
 ```whitehall
-<script>
-  var data = []
-  var processedData = []
+var data = []
+var processedData = []
 
-  suspend fun loadData() {
-    data = api.fetch()  // Network call
-  }
+suspend fun loadData() {
+  data = api.fetch()
+}
 
-  suspend fun processData() {
-    processedData = heavyComputation(data)  // CPU-intensive
-  }
-</script>
-
-<!-- Auto (main thread via viewModelScope) -->
-<Button onClick={save}>Save</Button>
+suspend fun processData() {
+  processedData = heavyComputation(data)
+}
 
 <!-- Explicit IO thread (network/disk operations) -->
 <Button onClick={() => io { loadData() }}>Load Data</Button>
@@ -119,54 +91,83 @@ fun MyScreen() {
 <Button onClick={() => main { updateUI() }}>Update UI</Button>
 ```
 
-**Transpiles to:**
+### Generated Kotlin
+
 ```kotlin
-// io { }
-Button(onClick = {
-    viewModelScope.launch(Dispatchers.IO) {
-        vm.loadData()
-    }
-})
+@Composable
+fun MyComponent() {
+    var data by remember { mutableStateOf(emptyList()) }
 
-// cpu { }
-Button(onClick = {
-    viewModelScope.launch(Dispatchers.Default) {
-        vm.processData()
-    }
-})
+    val dispatcherScope = rememberCoroutineScope()  // Auto-generated
 
-// main { }
-Button(onClick = {
-    viewModelScope.launch(Dispatchers.Main) {
-        vm.updateUI()
-    }
-})
+    suspend fun loadData() { data = api.fetch() }
+
+    Button(onClick = {
+        dispatcherScope.launch(Dispatchers.IO) {
+            loadData()
+        }
+    })
+
+    Button(onClick = {
+        dispatcherScope.launch(Dispatchers.Default) {
+            processData()
+        }
+    })
+}
 ```
+
+### Implementation Details
+
+**Parser (parser.rs:90-97):**
+- Added `suspend` keyword detection at component level
+- Supports suspend functions in top-level component declarations
+
+**Code Generator (compose.rs:2251-2267):**
+```rust
+fn transform_dispatchers(&self, value: &str) -> String {
+    let mut result = value.to_string();
+    result = result.replace("io {", "dispatcherScope.launch(Dispatchers.IO) {");
+    result = result.replace("cpu {", "dispatcherScope.launch(Dispatchers.Default) {");
+    result = result.replace("main {", "dispatcherScope.launch(Dispatchers.Main) {");
+    result
+}
+```
+
+**Auto-Detection (compose.rs:139-147):**
+- Detects dispatcher usage in markup via string pattern matching
+- Auto-generates `val dispatcherScope = rememberCoroutineScope()` when needed
+
+**Auto-Imports (compose.rs:643-652):**
+- Automatically adds `kotlinx.coroutines.Dispatchers`
+- Automatically adds `kotlinx.coroutines.launch`
+- Automatically adds `androidx.compose.runtime.rememberCoroutineScope`
 
 ---
 
-### Level 3: Custom Scopes (Advanced - Rare)
+## Level 3: Custom Scopes ✅
 
-**For independent lifecycle management (e.g., cancellable operations).**
+**Status:** ✅ IMPLEMENTED
+
+### Purpose
+For independent lifecycle management (e.g., cancellable operations).
+
+### Syntax
 
 ```whitehall
-<script>
-  var isUploading = false
+var isUploading = false
 
-  val uploadScope = $scope()  // Special compiler-provided scope function
+val uploadScope = $scope()  // Special compiler-provided scope function
 
-  suspend fun uploadLargeFile() {
-    isUploading = true
-    api.upload(largeFile)
-    isUploading = false
-  }
+suspend fun uploadLargeFile() {
+  isUploading = true
+  api.upload(largeFile)
+  isUploading = false
+}
 
-  fun cancelUpload() {
-    uploadScope.cancel()
-  }
-</script>
+fun cancelUpload() {
+  uploadScope.cancel()
+}
 
-<!-- Launch in custom scope -->
 <Button onClick={() => uploadScope.launch { uploadLargeFile() }}>
   Upload File
 </Button>
@@ -176,23 +177,45 @@ Button(onClick = {
 </Button>
 ```
 
-**Transpiles to:**
+### Generated Kotlin
+
 ```kotlin
 @Composable
 fun MyScreen() {
-    val vm = viewModel<MyScreenViewModel>()
+    var isUploading by remember { mutableStateOf(false) }
     val uploadScope = rememberCoroutineScope()  // ← Generated by $scope()
+
+    suspend fun uploadLargeFile() {
+        isUploading = true
+        api.upload(largeFile)
+        isUploading = false
+    }
+
+    fun cancelUpload() {
+        uploadScope.cancel()
+    }
 
     Button(onClick = {
         uploadScope.launch {
-            vm.uploadLargeFile()
+            uploadLargeFile()
         }
     })
 
     Button(
-        onClick = { vm.cancelUpload() },
-        enabled = !vm.isUploading
+        onClick = { cancelUpload() },
+        enabled = !isUploading
     )
+}
+```
+
+### Implementation Details
+
+**Detection (compose.rs:368-372):**
+```rust
+// Check if this is a custom scope: $scope() → rememberCoroutineScope()
+if transformed_value.trim() == "$scope()" {
+    output.push_str(&format!("val {} = rememberCoroutineScope()\n", state.name));
+    continue;
 }
 ```
 
@@ -203,38 +226,36 @@ fun MyScreen() {
 ## Complete Example: All Three Levels
 
 ```whitehall
-<script>
-  var data = []
-  var isUploading = false
+var data = []
+var isUploading = false
 
-  val uploadScope = $scope()
+val uploadScope = $scope()
 
-  // Level 1: Auto (uses viewModelScope, main thread)
-  suspend fun saveSimple() {
-    api.save(data)
-  }
+// Level 1: Auto (uses viewModelScope, main thread)
+suspend fun saveSimple() {
+  api.save(data)
+}
 
-  // Level 1: Auto (but we know it's IO work)
-  suspend fun loadData() {
-    data = api.fetch()
-  }
+// Level 2: Explicit IO thread
+suspend fun loadData() {
+  data = api.fetch()
+}
 
-  // Level 1: Auto (but we know it's CPU work)
-  suspend fun processData() {
-    data = processLargeDataset(data)
-  }
+// Level 2: Explicit CPU thread
+suspend fun processData() {
+  data = processLargeDataset(data)
+}
 
-  // Level 3: Custom scope for cancellation
-  suspend fun uploadFile() {
-    isUploading = true
-    api.upload(largeFile)
-    isUploading = false
-  }
+// Level 3: Custom scope for cancellation
+suspend fun uploadFile() {
+  isUploading = true
+  api.upload(largeFile)
+  isUploading = false
+}
 
-  fun cancelUpload() {
-    uploadScope.cancel()
-  }
-</script>
+fun cancelUpload() {
+  uploadScope.cancel()
+}
 
 <!-- Level 1: Auto (simple) -->
 <Button onClick={saveSimple}>Save</Button>
@@ -243,7 +264,7 @@ fun MyScreen() {
 <Button onClick={() => io { loadData() }}>Load Data</Button>
 
 <!-- Level 2: Explicit CPU thread -->
-<Button onClick={() => cpu { processData() }}>Process Data</Button>
+<Button onClick={() => cpu { processData() }}>Process</Button>
 
 <!-- Level 3: Custom scope -->
 <Button onClick={() => uploadScope.launch { uploadFile() }}>Upload</Button>
@@ -252,205 +273,182 @@ fun MyScreen() {
 
 ---
 
-## Dispatcher Details
+## Implementation Status
 
-### Main Dispatcher (Default)
-**Purpose:** UI thread
-**Thread pool:** Single thread
-**Default for:** ViewModels, components with `var`
-**When to use explicitly:** Rarely (it's the default)
+### ✅ Completed (Phase 2)
 
-```whitehall
-main { updateUI() }  // Force main thread (rarely needed)
-```
+1. **Suspend Function Parsing** - Components can declare `suspend fun` at top level
+   - Parser: `src/transpiler/parser.rs:90-97`
+   - Suspend keyword preserved in generated code
 
-### IO Dispatcher
-**Purpose:** I/O operations (waiting for external resources)
-**Thread pool:** Large pool (64+ threads) optimized for waiting
-**When to use:**
-- Network calls (API requests)
-- File system operations
-- Database queries/writes
-- Anything that **waits** for external I/O
+2. **Dispatcher Syntax** - Thread control with `io { }`, `cpu { }`, `main { }`
+   - Transformation: `src/transpiler/codegen/compose.rs:2251-2267`
+   - Auto-detection: `src/transpiler/codegen/compose.rs:139-147`
+   - Auto-generates `dispatcherScope` when needed
 
-```whitehall
-io {
-  data = api.fetch()        // Network
-  file.write(data)          // Disk
-  db.insert(record)         // Database
-}
-```
+3. **Custom Scope Syntax** - `$scope()` transformation
+   - Detection: `src/transpiler/codegen/compose.rs:368-372`
+   - Transforms to `rememberCoroutineScope()`
 
-### CPU Dispatcher
-**Purpose:** CPU-intensive computation
-**Thread pool:** Sized to CPU cores (e.g., 8 threads on 8-core device)
-**When to use:**
-- Image/video processing
-- Data processing/parsing
-- Complex algorithms
-- Anything that **uses a lot of CPU**
+4. **Auto-Import Detection** - All coroutine imports automatically added
+   - Dispatchers import: `compose.rs:643-652`
+   - CoroutineScope import: `compose.rs:654-663`
+   - Launch import: `compose.rs:632-641`
 
-```whitehall
-cpu {
-  processImage()            // Image processing
-  parseHugeJSON()          // Heavy parsing
-  sortMassiveArray()       // Computation
-}
-```
+### ⏳ Pending (Phase 1.1 Required)
+
+**Level 1 Auto-Infer:**
+- Requires inline `var` → ViewModel generation
+- Context-aware scope selection (viewModelScope vs dispatcherScope)
+- Auto-wrap suspend functions in ViewModels
 
 ---
 
-## Context-Specific Behavior
+## Test Files
 
-### Components with `var` (ViewModel Generated)
+### DispatcherTest.wh
+**Location:** `examples/counter-store/src/components/DispatcherTest.wh`
 
-```whitehall
-<script>
-  var count = 0
-
-  suspend fun increment() {
-    count++
-  }
-</script>
-
-<Button onClick={increment}>  <!-- Auto: viewModelScope.launch -->
-```
-
-**Auto-inference:** Uses `viewModelScope.launch`
-
----
-
-### Components without `var` (No ViewModel)
+Tests all three dispatcher types:
 
 ```whitehall
-<script>
-  suspend fun logAnalytics() {
-    analytics.log("screen_viewed")
-  }
+var count: Int = 0
 
-  onMount {
-    logAnalytics()  // Works in LaunchedEffect scope
-  }
-</script>
-```
-
-**Auto-inference:**
-- In `onMount`: Already has `LaunchedEffect` scope
-- In `onClick`: Auto-generate `rememberCoroutineScope()`
-
----
-
-### Singletons (`@store object`)
-
-```whitehall
-@store
-object AppSettings {
-  var darkMode = false
-
-  suspend fun loadFromDisk() {  // ← Stays suspend
-    darkMode = dataStore.read()
-  }
+suspend fun loadData() {
+  count++
 }
 
-// Usage:
-onMount {
-  AppSettings.loadFromDisk()  // Caller provides scope
+suspend fun processData() {
+  count = count * 2
 }
 
-<Button onClick={() => io { AppSettings.loadFromDisk() }}>Load</Button>
+suspend fun updateUI() {
+  count = count + 10
+}
+
+<Column padding={16} spacing={12}>
+  <Text fontSize={24}>Dispatcher Test: {count}</Text>
+
+  <Button onClick={() => io { loadData() }}>
+    IO: Load Data
+  </Button>
+
+  <Button onClick={() => cpu { processData() }}>
+    CPU: Process Data
+  </Button>
+
+  <Button onClick={() => main { updateUI() }}>
+    Main: Update UI
+  </Button>
+</Column>
 ```
 
-**Decision:** Singletons keep functions as `suspend` - no auto-wrap
-**Reason:** No lifecycle to tie scope to, caller provides context
+**Generated:** `build/.../DispatcherTest.kt` with proper scope and imports
+
+### CustomScopeTest.wh
+**Location:** `examples/counter-store/src/components/CustomScopeTest.wh`
+
+Tests custom scope creation and usage:
+
+```whitehall
+var uploadCount: Int = 0
+var downloadCount: Int = 0
+
+val uploadScope = $scope()
+val downloadScope = $scope()
+
+suspend fun uploadFile() {
+  uploadCount++
+}
+
+suspend fun downloadFile() {
+  downloadCount++
+}
+
+<Column padding={16} spacing={12}>
+  <Text fontSize={24}>Custom Scope Test</Text>
+  <Text>Uploads: {uploadCount}</Text>
+  <Text>Downloads: {downloadCount}</Text>
+
+  <Button onClick={() => uploadScope.launch { uploadFile() }}>
+    Upload File
+  </Button>
+
+  <Button onClick={() => downloadScope.launch { downloadFile() }}>
+    Download File
+  </Button>
+</Column>
+```
 
 ---
 
-## Implementation Tasks
+## Key Implementation Files
 
-### 1. Auto-Wrap for ViewModels
-- Detect `suspend fun` in ViewModel-generating contexts (components with `var`)
-- Transform to non-suspend, wrap body in `viewModelScope.launch { }`
-- Default dispatcher: `Dispatchers.Main`
-
-### 2. Dispatcher Syntax
-- Parse `io { }`, `cpu { }`, `main { }` blocks
-- Transform to `viewModelScope.launch(Dispatchers.X) { }`
-- Map: `io` → `IO`, `cpu` → `Default`, `main` → `Main`
-
-### 3. Custom Scope Syntax
-- Parse `val myScope = $scope()` pattern
-- Detect `$scope()` function call
-- Transform to `val myScope = rememberCoroutineScope()`
-- Parse `myScope.launch { }` blocks
-- Transform to Kotlin `myScope.launch { }`
-
-### 4. Context Detection
-- Components with `var`: Use `viewModelScope`
-- Components without `var`: Use `rememberCoroutineScope()` (if needed)
-- Inside `onMount`: Already in scope
-- Singletons: Keep as `suspend`
-
-### 5. Error Messages
-- Warn if using `io` for pure computation (suggest `cpu`)
-- Warn if using `cpu` for network calls (suggest `io`)
-- Clear errors for scope misuse
+| Component | File | Lines | Description |
+|-----------|------|-------|-------------|
+| Suspend parsing | `parser.rs` | 90-97 | Parse `suspend fun` at component level |
+| Dispatcher transform | `compose.rs` | 2251-2267 | Transform io/cpu/main to Dispatchers |
+| Dispatcher detection | `compose.rs` | 139-147 | Auto-detect dispatcher usage |
+| Scope generation | `compose.rs` | 436-440 | Auto-generate dispatcherScope |
+| $scope() detection | `compose.rs` | 368-372 | Transform $scope() calls |
+| Import detection | `compose.rs` | 619-663 | Auto-add coroutine imports |
 
 ---
 
-## Alternative Syntax Considered
+## Future Enhancements
 
-### For Dispatchers:
-- ✅ `io { }` - Chosen (clean, standard term)
-- ❌ `background { }` - Less specific (IO or CPU?)
-- ❌ `launch(on: IO) { }` - More verbose
+### Phase 1.1 Integration
+When inline `var` → ViewModel generation is implemented:
 
-### For Custom Scopes:
-- ✅ `$scope()` - Chosen (consistent with `$screen`, `$route` pattern for special compiler functions)
-- ❌ `@scope val myScope` - Annotation style (but `@` is for declarations, not references)
-- ❌ `scope()` - Looks like regular function (no indication it's special)
+1. **Context-aware dispatcher scope:**
+   - Components with `var` → Use `viewModelScope.launch`
+   - Components without `var` → Use `dispatcherScope.launch`
 
-### For Thread Names:
-- ✅ `io`, `cpu`, `main` - Chosen (clear purpose)
-- ❌ `io`, `default`, `main` - "default" is unclear
-- ❌ `network`, `compute`, `ui` - More words, not standard
+2. **Auto-wrap suspend functions:**
+   - ViewModel functions auto-wrap in `viewModelScope.launch`
+   - As designed in Level 1
 
----
+### Potential Improvements
 
-## Comparison to Original Options
+1. **Error messages:**
+   - Warn if using `io` for CPU-bound work
+   - Warn if using `cpu` for I/O operations
+   - Suggest correct dispatcher
 
-This approach combines the best of both:
-
-| Aspect | Option A (suspend) | Option B (auto-wrap) | **Option C (chosen)** |
-|--------|-------------------|---------------------|---------------------|
-| Common case | Verbose | Clean ✅ | Clean ✅ |
-| Thread control | Flexible ✅ | Limited | Flexible ✅ |
-| Custom scopes | Supported ✅ | No | Supported ✅ |
-| Learning curve | Steeper | Easy ✅ | Balanced ✅ |
-| Kotlin-native | Yes ✅ | No | Hybrid ✅ |
+2. **Advanced features:**
+   - Support cancellation (`scope.cancel()`)
+   - Support structured concurrency patterns
+   - Dispatcher configuration
 
 ---
 
 ## Migration from Current Implementation
 
-Current implementation (Phase 4) auto-wraps all `suspend fun` in ViewModels.
+**Current (Phases 0-5):**
+- `@store` annotation for screen-scoped state ✅
+- Auto-detection at usage sites ✅
+- Hilt integration ✅
+- Auto-wrap suspend functions ✅
 
-**Changes needed:**
-1. Keep auto-wrap behavior (already correct)
-2. Add dispatcher syntax (`io { }`, `cpu { }`, `main { }`)
-3. Add custom scope syntax (`val myScope = $scope()`)
-4. Add scope inference for components without ViewModels
-5. Update singleton handling (keep as suspend)
+**Phase 2 Additions:**
+- Dispatcher syntax (`io`/`cpu`/`main`) ✅
+- Custom scope syntax (`$scope()`) ✅
+- Auto-import detection ✅
 
-**Breaking changes:** None - current auto-wrap behavior is preserved as default.
+**Breaking changes:** None - all new features
 
 ---
 
-## Next Steps
+## Related Documentation
 
-1. ✅ Decision made: Option C (auto-infer + override)
-2. ✅ Syntax decisions finalized (`io`/`cpu`/`main`, `$scope()`)
-3. 📋 Implement dispatcher syntax (`io { }`, `cpu { }`, `main { }`)
-4. 📋 Implement custom scope syntax (`val x = $scope()`)
-5. 📋 Update context detection rules
-6. 📋 Add helpful error messages
-7. 📋 Document in user-facing guides
+- [STORE.md](STORE.md) - State management and @store implementation
+- [STATE-MANAGEMENT.md](STATE-MANAGEMENT.md) - Overall state management design
+
+---
+
+## Commit History
+
+- `882b89e` - Complete Phase 2: Suspend functions and coroutine scopes
+- Full implementation of dispatcher syntax and custom scopes
+- Auto-import detection and scope generation
+- Comprehensive test files and examples
