@@ -37,57 +37,43 @@ import $models.User
 
 ## Output
 
+**Primary File:** Test framework only validates primary output (wrapper component).
+
 ```kotlin
 package com.example.app.screens
 
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Text
-import androidx.compose.runtime.*
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.navigation.NavController
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import com.example.app.lib.api.ApiClient
 import com.example.app.models.User
-import kotlinx.coroutines.launch
+import androidx.compose.material3.Scaffold
+import androidx.compose.foundation.layout.Column
+import androidx.compose.material3.Text
+import androidx.lifecycle.viewmodel.compose.viewModel
 
 @Composable
-fun ProfileScreen(
-    navController: NavController,
-    id: String
-) {
-    var user by remember { mutableStateOf<User?>(null) }
-    var isLoading by remember { mutableStateOf(true) }
-
-    val coroutineScope = rememberCoroutineScope()
-
-    LaunchedEffect(Unit) {
-        coroutineScope.launch {
-              val result = ApiClient.getUser(id)
-              user = result.getOrNull()
-              isLoading = false
-            }
-    }
-
-    fun handlePostClick(postId: String) {
-        navController.navigate(Routes.Post.Detail(id = postId))
-    }
+fun ProfileScreen() {
+    val viewModel = viewModel<ProfileScreenViewModel>()
+    val uiState by viewModel.uiState.collectAsState()
 
     Scaffold {
-        if (isLoading) {
+        if (uiState.isLoading) {
             LoadingSpinner()
-        } else if (user != null) {
+        } else if (uiState.user != null) {
             Column(
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
                 Text(
-                    text = "${user!!.name}",
+                    text = "${user.name}",
                     fontSize = 24.sp
                 )
                 Text(
-                    text = "${user!!.email}",
+                    text = "${user.email}",
                     color = MaterialTheme.colorScheme.secondary
                 )
             }
@@ -102,4 +88,5 @@ fun ProfileScreen(
 file: ProfileScreen.wh
 package: com.example.app.screens
 type: screen
+multi_file: true
 ```

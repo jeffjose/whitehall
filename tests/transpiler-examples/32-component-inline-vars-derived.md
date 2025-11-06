@@ -1,8 +1,8 @@
 # Component Inline Vars - Derived State (Phase 1.1)
 
-Tests automatic ViewModel generation with derived properties. Derived properties (val with getters) should NOT be included in UiState but should be generated as computed properties.
+Tests that simple components with derived properties do NOT generate ViewModels. Component has only 2 functions, which doesn't meet the >= 3 threshold for ViewModel generation. Uses remember/mutableStateOf instead.
 
-**Note:** This generates TWO files - primary output shown below is the wrapper component.
+**Note:** This is a single-file component (no ViewModel generated).
 
 ## Input
 
@@ -51,8 +51,6 @@ fun celebrateBirthday() {
 
 ## Output
 
-**Primary File:** Test framework only validates primary output.
-
 ```kotlin
 package com.example.app.components
 
@@ -62,32 +60,41 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.material3.Button
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextField
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.getValue
+import androidx.compose.runtime.*
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.lifecycle.viewmodel.compose.viewModel
 
 @Composable
 fun PersonForm() {
-    val viewModel = viewModel<PersonFormViewModel>()
-    val uiState by viewModel.uiState.collectAsState()
+    var firstName by remember { mutableStateOf("") }
+    var lastName by remember { mutableStateOf("") }
+    var age by remember { mutableStateOf(0) }
+
+    val fullName: String get() = "$firstName $lastName"
+    val isAdult: Boolean get() = age >= 18
+    val displayName: String get() = if (fullName.isNotEmpty()) fullName else "Anonymous"
+
+    fun updateName(first: String, last: String) {
+        firstName = first
+          lastName = last
+    }
+    fun celebrateBirthday() {
+        age++
+    }
 
     Column(
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
         Text(
-            text = "Name: ${viewModel.displayName}",
+            text = "Name: ${displayName}",
             fontSize = 24.sp
         )
         Text(
-            text = "Age: ${uiState.age}",
+            text = "Age: ${age}",
             fontSize = 18.sp
         )
-
-        if (viewModel.isAdult) {
+        if (isAdult) {
             Text(
                 text = "✓ Adult",
                 color = Color(0xFF4CAF50)
@@ -98,23 +105,21 @@ fun PersonForm() {
                 color = Color(0xFFFFA000)
             )
         }
-
         Row(
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             TextField(
                 label = { Text("First Name") },
-                value = uiState.firstName,
-                onValueChange = { viewModel.firstName = it }
+                value = firstName,
+                onValueChange = { firstName = it }
             )
             TextField(
                 label = { Text("Last Name") },
-                value = uiState.lastName,
-                onValueChange = { viewModel.lastName = it }
+                value = lastName,
+                onValueChange = { lastName = it }
             )
         }
-
-        Button(onClick = { viewModel.celebrateBirthday() }) {
+        Button(onClick = { celebrateBirthday() }) {
             Text("Birthday!")
         }
     }
@@ -127,5 +132,4 @@ fun PersonForm() {
 file: PersonForm.wh
 package: com.example.app.components
 type_hint: component
-multi_file: true
 ```

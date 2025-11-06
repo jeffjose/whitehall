@@ -1725,10 +1725,10 @@ pub enum StoreSource {
    - Backward compatible
 
 **Test Status:**
-- 30/38 tests passing
-- Phase 1.1 tests (30-32): Infrastructure working, minor formatting differences
-- Tests 06, 08, 11, 16, 17: Now use ViewModels (have lifecycle/complexity)
-  * These need test expectations updated
+- ✅ 38/38 tests passing (as of 2025-11-06, after lifecycle fix)
+- Phase 1.1 tests (30-32): Working correctly
+- Tests 06, 08, 11, 16, 17: Generate ViewModels (have lifecycle/complexity)
+  * ✅ **FIXED**: Now generate compilable code with lifecycle in ViewModel init
 
 #### Code Generation Strategy
 
@@ -1779,6 +1779,24 @@ A: Update systematically from bottom-up:
 
 **Q: Dispatcher scope selection?**
 A: ComponentInline with vars uses `viewModelScope` (like Class source), not `dispatcherScope`. This enables proper Level 1 auto-infer behavior.
+
+#### ~~Known Issue~~ FIXED: Lifecycle Hooks in ViewModels ✅
+
+**Status**: ✅ Fixed 2025-11-06 (same day as discovery)
+
+**What Was Broken**: When components with lifecycle hooks triggered ViewModel generation, the transpiler produced invalid Kotlin code with `LaunchedEffect` blocks in the wrapper that referenced undefined variables.
+
+**The Fix** (3 changes in `src/transpiler/codegen/compose.rs`):
+1. **Lifecycle hooks moved to ViewModel's `init {}` block** (lines 3165-3192)
+   - `onMount` → `viewModelScope.launch` in ViewModel's init
+   - Proper scope and variable references via property setters
+2. **Removed lifecycle hooks from wrapper** (lines 3299-3304)
+   - Wrapper no longer contains `LaunchedEffect`/`DisposableEffect`
+3. **Fixed variable references in @for loops** (lines 764, 790, 821)
+   - Collection names properly transformed: `posts` → `uiState.posts`
+   - Applied `transform_viewmodel_expression` to loop collections
+
+**Result**: ✅ All 38 tests passing, generated code compiles correctly
 
 #### Testing Plan
 

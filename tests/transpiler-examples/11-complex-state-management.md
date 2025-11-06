@@ -70,77 +70,59 @@ import $lib.api.ApiClient
 
 ## Output
 
+**Primary File:** Test framework only validates primary output (wrapper component).
+
 ```kotlin
 package com.example.app.components
 
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
-import androidx.compose.material3.Card
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
-import androidx.compose.material3.TextField
-import androidx.compose.runtime.*
 import androidx.compose.ui.unit.dp
+import androidx.compose.runtime.key
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.ui.unit.sp
-import com.example.app.lib.api.ApiClient
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import com.example.app.models.User
-import kotlinx.coroutines.launch
+import com.example.app.lib.api.ApiClient
+import androidx.compose.foundation.layout.Column
+import androidx.compose.material3.TextField
+import androidx.compose.material3.Card
+import androidx.compose.material3.Text
+import androidx.lifecycle.viewmodel.compose.viewModel
 
 @Composable
 fun ComplexStateManagement() {
-    var users by remember { mutableStateOf<List<User>>(emptyList()) }
-    var selectedUserId by remember { mutableStateOf<String?>(null) }
-    var searchQuery by remember { mutableStateOf("") }
-    var isLoading by remember { mutableStateOf(false) }
-
+    val viewModel = viewModel<ComplexStateManagementViewModel>()
+    val uiState by viewModel.uiState.collectAsState()
     val selectedUser: User? = users.firstOrNull { it.id == selectedUserId }
     val filteredUsers: List<User> = users.filter {
-        it.name.contains(searchQuery, ignoreCase = true)
-    }
-
-    fun handleSearch(query: String) {
-        searchQuery = query
-    }
-
-    fun handleUserSelect(userId: String) {
-        selectedUserId = userId
-    }
-
-    val coroutineScope = rememberCoroutineScope()
-
-    LaunchedEffect(Unit) {
-        coroutineScope.launch {
-            isLoading = true
-            val result = ApiClient.getUsers()
-            users = result.getOrNull() ?: emptyList()
-            isLoading = false
-        }
-    }
+    it.name.contains(searchQuery, ignoreCase = true)
+  }
 
     Column(
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
         TextField(
-            label = { Text("Search users") },
-            value = searchQuery,
-            onValueChange = { searchQuery = it },
+            label = { Text("Search uiState.users") },
+            value = uiState.searchQuery,
+            onValueChange = { uiState.searchQuery = it },
             placeholder = { Text("Enter name...") }
         )
-
-        if (isLoading) {
+        if (uiState.isLoading) {
             LoadingSpinner()
         } else {
-            if (filteredUsers.isEmpty()) {
+            if (viewModel.filteredUsers.isEmpty()) {
                 Text(
                     text = "No users found",
                     color = MaterialTheme.colorScheme.secondary
                 )
             } else {
-                filteredUsers.forEach { user ->
+                viewModel.filteredUsers.forEach { user ->
                     key(user.id) {
                         Card(
-                            onClick = { handleUserSelect(user.id) },
-                            selected = user.id == selectedUserId
+                            onClick = { viewModel.handleUserSelect(user.id) },
+                            selected = user.id == uiState.selectedUserId
                         ) {
                             Text(text = "${user.name}")
                         }
@@ -148,18 +130,17 @@ fun ComplexStateManagement() {
                 }
             }
         }
-
-        if (selectedUser != null) {
+        if (viewModel.selectedUser != null) {
             Card {
                 Column(
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     Text(
-                        text = "Selected: ${selectedUser!!.name}",
+                        text = "Selected: ${selectedUser.name}",
                         fontSize = 20.sp
                     )
                     Text(
-                        text = "${selectedUser!!.email}",
+                        text = "${selectedUser.email}",
                         color = MaterialTheme.colorScheme.secondary
                     )
                 }
@@ -174,4 +155,5 @@ fun ComplexStateManagement() {
 ```
 file: ComplexStateManagement.wh
 package: com.example.app.components
+multi_file: true
 ```

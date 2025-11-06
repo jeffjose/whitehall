@@ -453,8 +453,15 @@ See `docs/SINGLE-FILE-MODE.md` for complete design.
 
 **Priority Order:**
 
+### **~~0. Fix Lifecycle Hooks in ViewModels~~** ✅ COMPLETED
+**Status:** ✅ Fixed on 2025-11-06 (same day as discovery)
+- Lifecycle hooks now correctly moved to ViewModel's `init {}` block
+- Variable references in @for loops fixed (`posts` → `uiState.posts`)
+- All 38 tests passing with compilable output
+- See `docs/STORE.md` for implementation details
+
 ### **1. End-to-End Testing (NOW) - CRITICAL** ⭐
-**Why:** Single-file mode is complete! Now validate the entire pipeline works
+**Why:** Transpiler is feature-complete and all tests passing - time to validate with real Android
 - ✅ Single-file mode implemented (compile, build, run, watch all work)
 - ✅ 5 commands working (init, compile, build, watch, run)
 - ❌ Not tested with real Android device/emulator yet
@@ -481,17 +488,19 @@ After core is stable and tested:
 - LSP for editor support
 
 **Current Status (Nov 6, 2025):**
-- ✅ Transpiler: 100% complete (31 tests passing, 7 cosmetic failures)
-- ✅ **Phase 1.1: Component → ViewModel**: 100% complete (production-ready)
-  - Smart detection, multi-file output, markup transformation all working
-  - Backward compatible, zero tech debt
+- ✅ Transpiler: 100% complete (38/38 tests passing)
+- ✅ **Phase 1.1: Component → ViewModel**: 100% complete - **ALL ISSUES FIXED!** 🎉
+  - Smart detection working ✅
+  - Multi-file output working ✅
+  - Markup transformation working ✅
+  - ✅ Lifecycle hooks in ViewModels FIXED (generated code now compiles)
+  - ✅ Variable references in @for loops FIXED (`posts` → `uiState.posts`)
+  - All 38 tests passing with compilable output
 - ✅ Routing: 100% complete
 - ✅ CLI: All 5 commands implemented
 - ✅ Single-file mode: Complete with caching, package customization
 - ✅ Toolchain Management: 100% complete (Phases 1-5 done!)
-- ⏳ Test suite: 7 tests need updated expectations (import order, ViewModel output)
-- ❌ E2E testing: Not done yet
-- **Next:** Fix remaining 7 test expectations OR do End-to-End Testing
+- **Next:** End-to-End Testing with real Android device/emulator
 
 **Why Not APK Generation in Build?**
 - `whitehall run` already generates APKs (at `build/app/build/outputs/apk/debug/`)

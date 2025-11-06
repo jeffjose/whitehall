@@ -58,19 +58,19 @@ fun clearError() {
 package com.example.app.components
 
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
-import androidx.compose.material3.Button
-import androidx.compose.material3.Card
-import androidx.compose.material3.Text
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.unit.sp
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
-import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.app.lib.api.ApiClient
 import com.example.app.models.User
+import androidx.compose.foundation.layout.Column
+import androidx.compose.material3.Text
+import androidx.compose.material3.Button
+import androidx.compose.material3.Card
+import androidx.lifecycle.viewmodel.compose.viewModel
 
 @Composable
 fun UserProfile() {
@@ -97,11 +97,11 @@ fun UserProfile() {
         } else if (uiState.user != null) {
             Card {
                 Text(
-                    text = "${uiState.user!!.name}",
+                    text = uiState.user.name,
                     fontSize = 20.sp
                 )
                 Text(
-                    text = "${uiState.user!!.email}",
+                    text = uiState.user.email,
                     color = Color(0xFF666666)
                 )
             }

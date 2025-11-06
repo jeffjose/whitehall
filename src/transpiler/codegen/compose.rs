@@ -761,7 +761,8 @@ impl ComposeBackend {
                 // Special handling for LazyColumn: use items() instead of forEach
                 if parent == Some("LazyColumn") {
                     // items(collection, key = { expr }) { item ->
-                    output.push_str(&format!("{}items({}", indent_str, for_loop.collection));
+                    let transformed_collection = self.transform_viewmodel_expression(&for_loop.collection);
+                    output.push_str(&format!("{}items({}", indent_str, transformed_collection));
 
                     if let Some(key_expr) = &for_loop.key_expr {
                         // Ensure key expression has braces
@@ -787,7 +788,8 @@ impl ComposeBackend {
                 // If there's an empty block, wrap in if/else
                 if let Some(empty_body) = &for_loop.empty_block {
                     // if (collection.isEmpty()) { empty block } else { forEach }
-                    output.push_str(&format!("{}if ({}.isEmpty()) {{\n", indent_str, for_loop.collection));
+                    let transformed_collection = self.transform_viewmodel_expression(&for_loop.collection);
+                    output.push_str(&format!("{}if ({}.isEmpty()) {{\n", indent_str, transformed_collection));
                     for child in empty_body {
                         output.push_str(&self.generate_markup_with_indent(child, indent + 1)?);
                     }
@@ -796,7 +798,7 @@ impl ComposeBackend {
 
                     // forEach block
                     output.push_str(&format!("{}    {}.forEach {{ {} ->\n",
-                        indent_str, for_loop.collection, for_loop.item));
+                        indent_str, transformed_collection, for_loop.item));
 
                     // If there's a key, wrap in key() block
                     if let Some(key_expr) = &for_loop.key_expr {
@@ -817,8 +819,9 @@ impl ComposeBackend {
                     output.push_str(&format!("{}}}\n", indent_str));
                 } else {
                     // Just forEach without empty check
+                    let transformed_collection = self.transform_viewmodel_expression(&for_loop.collection);
                     output.push_str(&format!("{}{}.forEach {{ {} ->\n",
-                        indent_str, for_loop.collection, for_loop.item));
+                        indent_str, transformed_collection, for_loop.item));
 
                     if let Some(key_expr) = &for_loop.key_expr {
                         let transformed_key = key_expr.replace("it", &for_loop.item);
@@ -3063,9 +3066,10 @@ impl ComposeBackend {
         // Imports
         output.push_str("import androidx.lifecycle.ViewModel\n");
 
-        // Check if we have suspend functions
+        // Check if we have suspend functions or lifecycle hooks
         let has_suspend = file.functions.iter().any(|f| f.is_suspend);
-        if has_suspend {
+        let has_lifecycle_hooks = !file.lifecycle_hooks.is_empty();
+        if has_suspend || has_lifecycle_hooks {
             output.push_str("import androidx.lifecycle.viewModelScope\n");
         }
 
@@ -3074,7 +3078,7 @@ impl ComposeBackend {
         output.push_str("import kotlinx.coroutines.flow.asStateFlow\n");
         output.push_str("import kotlinx.coroutines.flow.update\n");
 
-        if has_suspend {
+        if has_suspend || has_lifecycle_hooks {
             output.push_str("import kotlinx.coroutines.launch\n");
         }
 
@@ -3156,6 +3160,35 @@ impl ComposeBackend {
                 output.push_str("        }\n");
             } else {
                 output.push_str(&format!("        {}\n", func.body.trim()));
+            }
+
+            output.push_str("    }\n\n");
+        }
+
+        // Generate init block for lifecycle hooks
+        if !file.lifecycle_hooks.is_empty() {
+            output.push_str("    init {\n");
+
+            for hook in &file.lifecycle_hooks {
+                match hook.hook_type.as_str() {
+                    "onMount" => {
+                        // Lifecycle hooks in ViewModel use viewModelScope.launch
+                        output.push_str("        viewModelScope.launch {\n");
+                        for line in hook.body.lines() {
+                            if line.trim().is_empty() {
+                                continue;
+                            }
+                            output.push_str(&format!("            {}\n", line.trim()));
+                        }
+                        output.push_str("        }\n");
+                    }
+                    "onDispose" => {
+                        // onDispose doesn't make sense in ViewModel init
+                        // ViewModels have onCleared() instead, but we'll skip for now
+                        // TODO: Consider mapping onDispose to onCleared() override
+                    }
+                    _ => {}
+                }
             }
 
             output.push_str("    }\n\n");
@@ -3266,44 +3299,9 @@ impl ComposeBackend {
             self.function_names.insert(func.name.clone());
         }
 
-        // Generate lifecycle hooks (onMount, onDispose)
-        for hook in &file.lifecycle_hooks {
-            output.push_str("\n");
-            output.push_str(&self.indent());
-            match hook.hook_type.as_str() {
-                "onMount" => {
-                    output.push_str("LaunchedEffect(Unit) {\n");
-                    self.indent_level += 1;
-                    for line in hook.body.lines() {
-                        output.push_str(&self.indent());
-                        output.push_str(line);
-                        output.push('\n');
-                    }
-                    self.indent_level -= 1;
-                    output.push_str(&self.indent());
-                    output.push_str("}\n");
-                }
-                "onDispose" => {
-                    output.push_str("DisposableEffect(Unit) {\n");
-                    self.indent_level += 1;
-                    output.push_str(&self.indent());
-                    output.push_str("onDispose {\n");
-                    self.indent_level += 1;
-                    for line in hook.body.lines() {
-                        output.push_str(&self.indent());
-                        output.push_str(line);
-                        output.push('\n');
-                    }
-                    self.indent_level -= 1;
-                    output.push_str(&self.indent());
-                    output.push_str("}\n");
-                    self.indent_level -= 1;
-                    output.push_str(&self.indent());
-                    output.push_str("}\n");
-                }
-                _ => {}
-            }
-        }
+        // NOTE: Lifecycle hooks are now in ViewModel's init block, not in wrapper
+        // The wrapper component should not contain LaunchedEffect/DisposableEffect
+        // that reference ViewModel state - that causes undefined variable errors
 
         output.push('\n');
 
