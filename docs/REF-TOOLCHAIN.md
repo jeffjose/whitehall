@@ -101,7 +101,7 @@ output_dir = "build"
 pub const DEFAULT_JAVA: &str = "21";       // Java 21 LTS (stable until 2029)
 pub const DEFAULT_GRADLE: &str = "8.4";    // Latest stable Gradle
 pub const DEFAULT_AGP: &str = "8.2.0";     // Android Gradle Plugin
-pub const DEFAULT_KOTLIN: &str = "1.9.20"; // Latest stable Kotlin
+pub const DEFAULT_KOTLIN: &str = "2.0.0";  // Kotlin compiler version
 ```
 
 These defaults are updated with Whitehall releases, but **existing projects are not affected**.
@@ -161,7 +161,9 @@ Whitehall validates version compatibility when reading `whitehall.toml`:
 | 8.0.x | 8.0+ | 17+ | ✅ Yes |
 | 8.1.x | 8.0+ | 17+ | ✅ Yes |
 | 8.2.x | 8.2+ | 17+ | ✅ Yes (recommended) |
-| 9.0.x | 8.6+ | 21+ | 🔮 Future |
+| 8.3.x | 8.4+ | 17+ | ✅ Yes |
+| 8.4.x | 8.6+ | 17+ | ✅ Yes |
+| 9.0.x | 8.6+ | 21+ | ✅ Yes |
 
 **Invalid Configuration Example:**
 
@@ -605,13 +607,13 @@ whitehall build  # Works offline!
 
 | File | Lines | Purpose |
 |------|-------|---------|
-| `src/toolchain/mod.rs` | ~400 | Core toolchain manager |
-| `src/toolchain/defaults.rs` | ~20 | Default version constants |
-| `src/toolchain/platform.rs` | ~100 | Platform detection |
-| `src/toolchain/validator.rs` | ~150 | Version compatibility |
-| `src/toolchain/downloader.rs` | ~500 | HTTP download + extraction |
-| `src/commands/toolchain.rs` | ~200 | User commands (list/clean/install) |
-| `src/commands/doctor.rs` | ~250 | Health check |
+| `src/toolchain/mod.rs` | ~1000 | Core toolchain manager |
+| `src/toolchain/defaults.rs` | ~60 | Default version constants |
+| `src/toolchain/platform.rs` | ~130 | Platform detection |
+| `src/toolchain/validator.rs` | ~270 | Version compatibility |
+| `src/toolchain/downloader.rs` | ~480 | HTTP download + extraction |
+| `src/commands/toolchain.rs` | ~240 | User commands (list/clean/install) |
+| `src/commands/doctor.rs` | ~220 | Health check |
 
 ---
 

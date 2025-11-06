@@ -16,10 +16,10 @@
 | REF-TRANSPILER.md | ✅ Complete | HIGH | 3 (all fixed) | 2025-11-06 |
 | REF-BUILD-SYSTEM.md | ✅ Complete | HIGH | 2 (all fixed) | 2025-11-06 |
 | REF-OVERVIEW.md | ✅ Complete | MEDIUM | 3 (all fixed) | 2025-11-06 |
-| REF-TOOLCHAIN.md | ⏳ Pending | MEDIUM | - | - |
+| REF-TOOLCHAIN.md | ✅ Complete | MEDIUM | 3 (all fixed) | 2025-11-06 |
 | REF-WEB-PLAYGROUND.md | ⏳ Pending | LOW | - | - |
 
-**Progress:** 4/6 complete (67%)
+**Progress:** 5/6 complete (83%)
 
 ---
 
@@ -149,51 +149,67 @@
 
 ---
 
-### ⏳ REF-TOOLCHAIN.md - NEEDS REVIEW
+### ✅ REF-TOOLCHAIN.md - REVIEWED (2025-11-06)
 
-**Claims to verify:**
+**Status:** Systematic review complete - 3 issues fixed
+
+**Claims verified:**
 
 1. **Cache structure**
-   - [ ] Code check: `src/toolchain/mod.rs`
-   - [ ] Verify: ~/.whitehall/toolchains/ structure
-   - [ ] Verify: java/, gradle/, android/ subdirectories
-   - [ ] Verify: Version-specific subdirectories
+   - ✅ Code check: `src/toolchain/mod.rs:31` - ~/.whitehall/toolchains/ root
+   - ✅ Verified: java/, gradle/, android/ subdirectories structure accurate
+   - ✅ Verified: Version-specific subdirectories (java/21, gradle/8.4, etc.)
 
 2. **Toolchain detection and download**
-   - [ ] Code check: `src/toolchain/downloader.rs`
-   - [ ] Verify: Download sources for Java/Gradle/SDK
-   - [ ] Verify: Extraction logic
-   - [ ] Verify: Verification after download
+   - ✅ Code check: `src/toolchain/downloader.rs:423` - Adoptium URL correct
+   - ✅ Verified: Gradle URL (services.gradle.org/distributions)
+   - ✅ Verified: Android cmdline-tools URL (dl.google.com/android/repository)
+   - ✅ Verified: Extraction logic exists (tar.gz for Java/Gradle, zip for Android)
 
-3. **Version compatibility**
-   - [ ] Code check: `src/toolchain/validator.rs`
-   - [ ] Verify: AGP version requirements
-   - [ ] Verify: Java version compatibility matrix
-   - [ ] Verify: Gradle version requirements
+3. **Version compatibility matrix**
+   - ✅ Code check: `src/toolchain/validator.rs:17-27` - Compatibility table matches
+   - ⚠️  Doc missing AGP 8.3.x (Gradle 8.4+) and 8.4.x (Gradle 8.6+) → Fixed
+   - ✅ Verified: AGP-Java validation logic (lines 106-115)
+   - ✅ Verified: AGP-Gradle validation logic (lines 142-157)
 
 4. **Platform detection**
-   - [ ] Code check: `src/toolchain/platform.rs`
-   - [ ] Verify: OS detection (Linux, macOS, Windows)
-   - [ ] Verify: Architecture detection (x86_64, aarch64)
-   - [ ] Verify: Platform-specific download URLs
+   - ✅ Code check: `src/toolchain/platform.rs:16-30` - Platform::detect()
+   - ✅ Verified: Linux (x64, aarch64), macOS (x64, aarch64) supported
+   - ⚠️  Windows NOT supported (doc accurate about this)
+   - ✅ Verified: Platform-specific download URL generation
 
 5. **Default versions**
-   - [ ] Code check: `src/toolchain/defaults.rs`
-   - [ ] Verify: Default Java version
-   - [ ] Verify: Default Gradle version
-   - [ ] Verify: Default AGP version
+   - ✅ Code check: `src/toolchain/defaults.rs:10-26`
+   - ✅ Java 21 - correct
+   - ✅ Gradle 8.4 - correct
+   - ✅ AGP 8.2.0 - correct
+   - ⚠️  Kotlin default: Doc says "1.9.20" but code has "2.0.0" → Fixed
 
 6. **Environment variable setup**
-   - [ ] Verify: JAVA_HOME setup
-   - [ ] Verify: ANDROID_HOME setup
-   - [ ] Verify: PATH modifications
+   - ✅ Verified: JAVA_HOME (mod.rs:259)
+   - ✅ Verified: ANDROID_HOME (mod.rs:260)
+   - ✅ Direct binary paths used (no PATH pollution)
 
-**Files to check:**
-- `src/toolchain/mod.rs` - Core manager
-- `src/toolchain/defaults.rs` - Default versions
-- `src/toolchain/platform.rs` - Platform detection
-- `src/toolchain/validator.rs` - Version compatibility
-- `src/toolchain/downloader.rs` - Download logic
+7. **Line counts**
+   - ⚠️  mod.rs: Doc says ~400, actual 1023 lines → Fixed
+   - ✅ defaults.rs: ~20 → 62 (close enough, include tests)
+   - ✅ platform.rs: ~100 → 132 (close)
+   - ✅ validator.rs: ~150 → 268 (includes extensive tests)
+   - ✅ downloader.rs: ~500 → 482 (close)
+   - ✅ toolchain.rs: ~200 → 243 (close)
+   - ✅ doctor.rs: ~250 → 223 (close)
+
+8. **Test coverage**
+   - ✅ Unit tests: 16 tests (correct)
+   - ✅ Integration tests: 6 counter variants verified
+
+**Files checked:**
+- `src/toolchain/mod.rs` (1023 lines)
+- `src/toolchain/defaults.rs` (62 lines)
+- `src/toolchain/platform.rs` (132 lines)
+- `src/toolchain/validator.rs` (268 lines)
+- `src/toolchain/downloader.rs` (482 lines)
+- `examples/counter*` (6 variants)
 
 ---
 
@@ -359,8 +375,14 @@ For each REF-* file:
 - **Impact:** Low (estimates, not critical)
 - **Decision:** Update line count estimates to match reality
 
-### REF-TOOLCHAIN.md
-- (To be filled as we review)
+### REF-TOOLCHAIN.md (Fixed)
+- **Issue:** Line 104 claimed DEFAULT_KOTLIN = "1.9.20"
+- **Reality:** Code has "2.0.0" (defaults.rs:26)
+- **Issue:** Line 158-164 compatibility matrix missing AGP 8.3.x and 8.4.x
+- **Reality:** Code supports 8.3.x (Gradle 8.4+) and 8.4.x (Gradle 8.6+) in validator.rs
+- **Issue:** Line 608 claimed mod.rs is ~400 lines
+- **Reality:** mod.rs is 1023 lines (major discrepancy)
+- **Fixed:** 2025-11-06 (updated Kotlin version, added missing AGP rows, corrected line count)
 
 ### REF-WEB-PLAYGROUND.md
 - (To be filled as we review)
