@@ -1,18 +1,16 @@
-<script>
-  var count: Int = 0
+var count: Int = 0
 
-  suspend fun loadData() {
-    count++
-  }
+suspend fun loadData() {
+  count++
+}
 
-  suspend fun processData() {
-    count = count * 2
-  }
+suspend fun processData() {
+  count = count * 2
+}
 
-  suspend fun updateUI() {
-    count = count + 10
-  }
-</script>
+suspend fun updateUI() {
+  count = count + 10
+}
 
 <Column padding={16} spacing={12}>
   <Text fontSize={24}>Dispatcher Test: {count}</Text>

@@ -1,0 +1,27 @@
+var uploadCount: Int = 0
+var downloadCount: Int = 0
+
+val uploadScope = $scope()
+val downloadScope = $scope()
+
+suspend fun uploadFile() {
+  uploadCount++
+}
+
+suspend fun downloadFile() {
+  downloadCount++
+}
+
+<Column padding={16} spacing={12}>
+  <Text fontSize={24}>Custom Scope Test</Text>
+  <Text>Uploads: {uploadCount}</Text>
+  <Text>Downloads: {downloadCount}</Text>
+
+  <Button onClick={() => uploadScope.launch { uploadFile() }}>
+    Upload File
+  </Button>
+
+  <Button onClick={() => downloadScope.launch { downloadFile() }}>
+    Download File
+  </Button>
+</Column>

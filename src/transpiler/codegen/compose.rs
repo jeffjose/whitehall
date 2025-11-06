@@ -15,6 +15,7 @@ pub struct ComposeBackend {
     store_registry: Option<StoreRegistry>, // Phase 2: Store registry for @store detection
     uses_viewmodel: bool, // Phase 2: Track if any stores are used (for imports)
     uses_hilt_viewmodel: bool, // Phase 2: Track if any Hilt stores are used (for imports)
+    uses_dispatchers: bool, // Phase 2: Track if dispatcher syntax is used (io/cpu/main)
 }
 
 /// Convert hex color string to Color(0x...) format
@@ -74,6 +75,7 @@ impl ComposeBackend {
             store_registry: None, // Phase 2: Will be set by generate_with_optimizations
             uses_viewmodel: false, // Phase 2: Track store usage for imports
             uses_hilt_viewmodel: false, // Phase 2: Track Hilt store usage for imports
+            uses_dispatchers: false, // Phase 2: Track dispatcher syntax usage
         }
     }
 
@@ -134,6 +136,16 @@ impl ComposeBackend {
         }
     }
 
+    /// Pre-pass: Detect if the file uses dispatcher syntax (io/cpu/main)
+    /// Sets the uses_dispatchers flag for scope generation
+    fn detect_dispatcher_usage(&mut self, file: &WhitehallFile) {
+        // Check markup for dispatcher patterns
+        let markup_str = format!("{:?}", file.markup);
+        if markup_str.contains("io {") || markup_str.contains("cpu {") || markup_str.contains("main {") {
+            self.uses_dispatchers = true;
+        }
+    }
+
     pub fn generate(&mut self, file: &WhitehallFile) -> Result<String, String> {
         // Check if this file contains a reactive class (in store registry)
         // This includes: classes with var properties OR @store object singletons
@@ -153,6 +165,9 @@ impl ComposeBackend {
 
         // Pre-pass: Detect store usage for import generation
         self.detect_store_usage(file);
+
+        // Pre-pass: Detect dispatcher usage (io/cpu/main)
+        self.detect_dispatcher_usage(file);
 
         // Otherwise, generate standard Composable component
         let mut output = String::new();
@@ -364,6 +379,13 @@ impl ComposeBackend {
             // Transform array literals: [1,2,3] -> listOf(1,2,3)
             let transformed_value = self.transform_array_literal(&state.initial_value, false);
 
+            // Check if this is a custom scope: $scope() → rememberCoroutineScope()
+            if transformed_value.trim() == "$scope()" {
+                output.push_str(&format!("val {} = rememberCoroutineScope()\n", state.name));
+                // Note: Import is added via output detection at the end of generate()
+                continue;
+            }
+
             // Check if this is a store instantiation
             if let Some(store_info) = self.detect_store_instantiation(&transformed_value) {
                 // Track store usage for imports
@@ -411,6 +433,12 @@ impl ComposeBackend {
             output.push('\n');
         }
 
+        // Generate dispatcher scope if dispatchers are used
+        if self.uses_dispatchers {
+            output.push_str(&self.indent());
+            output.push_str("val dispatcherScope = rememberCoroutineScope()\n\n");
+        }
+
         // Determine if functions should come before or after lifecycle hooks
         // If there are computed state values, functions come first (test 11)
         // If there are no computed state values, lifecycle comes first (test 08)
@@ -425,7 +453,8 @@ impl ComposeBackend {
                 } else {
                     String::new()
                 };
-                output.push_str(&format!("fun {}({}){} {{\n", func.name, func.params, return_type_str));
+                let suspend_keyword = if func.is_suspend { "suspend " } else { "" };
+                output.push_str(&format!("{}fun {}({}){} {{\n", suspend_keyword, func.name, func.params, return_type_str));
                 // Output function body with proper indentation and transformations
                 for line in func.body.lines() {
                     output.push_str(&self.indent());
@@ -573,7 +602,8 @@ impl ComposeBackend {
                 } else {
                     String::new()
                 };
-                output.push_str(&format!("fun {}({}){} {{\n", func.name, func.params, return_type_str));
+                let suspend_keyword = if func.is_suspend { "suspend " } else { "" };
+                output.push_str(&format!("{}fun {}({}){} {{\n", suspend_keyword, func.name, func.params, return_type_str));
                 // Output function body with proper indentation and transformations
                 for line in func.body.lines() {
                     output.push_str(&self.indent());
@@ -618,6 +648,28 @@ impl ComposeBackend {
                 if let Some(package_end) = output.find('\n') {
                     let insert_pos = package_end + 1;
                     output.insert_str(insert_pos, dispatcher_import);
+                }
+            }
+        }
+
+        // Check if rememberCoroutineScope was used
+        if output.contains("rememberCoroutineScope()") {
+            let scope_import = "import androidx.compose.runtime.rememberCoroutineScope\n";
+            if !output.contains(scope_import) {
+                if let Some(package_end) = output.find('\n') {
+                    let insert_pos = package_end + 1;
+                    output.insert_str(insert_pos, scope_import);
+                }
+            }
+        }
+
+        // Check if CoroutineScope.launch was used (for custom scopes)
+        if output.contains(".launch {") || output.contains(".launch(") {
+            let launch_import = "import kotlinx.coroutines.launch\n";
+            if !output.contains(launch_import) {
+                if let Some(package_end) = output.find('\n') {
+                    let insert_pos = package_end + 1;
+                    output.insert_str(insert_pos, launch_import);
                 }
             }
         }
@@ -2196,18 +2248,20 @@ impl ComposeBackend {
         }
     }
 
-    /// Transform dispatcher syntax: io { }, cpu { }, main { } to viewModelScope.launch(Dispatchers.X) { }
+    /// Transform dispatcher syntax: io { }, cpu { }, main { } to dispatcherScope.launch(Dispatchers.X) { }
+    /// For components, uses dispatcherScope (rememberCoroutineScope)
+    /// For ViewModels, would use viewModelScope (future enhancement)
     fn transform_dispatchers(&self, value: &str) -> String {
         let mut result = value.to_string();
 
-        // Pattern: io { ... } → viewModelScope.launch(Dispatchers.IO) { ... }
-        result = result.replace("io {", "viewModelScope.launch(Dispatchers.IO) {");
+        // Pattern: io { ... } → dispatcherScope.launch(Dispatchers.IO) { ... }
+        result = result.replace("io {", "dispatcherScope.launch(Dispatchers.IO) {");
 
-        // Pattern: cpu { ... } → viewModelScope.launch(Dispatchers.Default) { ... }
-        result = result.replace("cpu {", "viewModelScope.launch(Dispatchers.Default) {");
+        // Pattern: cpu { ... } → dispatcherScope.launch(Dispatchers.Default) { ... }
+        result = result.replace("cpu {", "dispatcherScope.launch(Dispatchers.Default) {");
 
-        // Pattern: main { ... } → viewModelScope.launch(Dispatchers.Main) { ... }
-        result = result.replace("main {", "viewModelScope.launch(Dispatchers.Main) {");
+        // Pattern: main { ... } → dispatcherScope.launch(Dispatchers.Main) { ... }
+        result = result.replace("main {", "dispatcherScope.launch(Dispatchers.Main) {");
 
         result
     }

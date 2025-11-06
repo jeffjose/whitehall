@@ -87,6 +87,14 @@ impl Parser {
                 imports.push(self.parse_import()?);
             } else if self.peek_word() == Some("var") || self.peek_word() == Some("val") {
                 state.push(self.parse_state_declaration()?);
+            } else if self.peek_word() == Some("suspend") {
+                // Handle suspend fun
+                self.consume_word("suspend");
+                self.skip_whitespace();
+                if !self.consume_word("fun") {
+                    return Err(self.error_at_pos("Expected 'fun' after 'suspend'"));
+                }
+                functions.push(self.parse_function_declaration(true)?);
             } else if self.consume_word("fun") {
                 functions.push(self.parse_function_declaration(false)?);
             } else if self.consume_word("onMount") {
