@@ -63,30 +63,27 @@ fun Colors() {
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         Text(
-            text = "Color Examples
-  ",
+            text = "Color Examples",
             fontSize = 24.sp,
             fontWeight = FontWeight.Bold,
             color = Color(0xFF1976D2)
         )
         Text(
-            text = "3-char hex: #F00
-  ",
+            text = "3-char hex: #F00",
             color = Color(0xFFFF0000)
         )
         Text(
-            text = "6-char hex: #4CAF50
-  ",
+            text = "6-char hex: #4CAF50",
             color = Color(0xFF4CAF50)
         )
         Text(
-            text = "8-char RGBA: #FF000080 (50% alpha)
-  ",
+            text = "8-char RGBA: #FF000080 (50% alpha)",
             color = Color(0x80FF0000)
         )
         Column(
-            modifier = Modifier.background(Color(0xFFF5F5F5)),
-            modifier = Modifier.padding(8.dp)
+            modifier = Modifier
+                .background(Color(0xFFF5F5F5))
+                .padding(8.dp)
         ) {
             Text(text = "backgroundColor prop")
         }

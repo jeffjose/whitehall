@@ -92,12 +92,12 @@ fun UserProfile() {
                 Column(modifier = Modifier.padding(16.dp)) {
                     Text(
                         text = "Error",
-                        color = "uiState.error",
+                        color = MaterialTheme.colorScheme.error,
                         fontWeight = FontWeight.Bold
                     )
                     Text(
-                        text = "${error}",
-                        color = "uiState.error"
+                        text = "${uiState.error}",
+                        color = MaterialTheme.colorScheme.error
                     )
                 }
             }

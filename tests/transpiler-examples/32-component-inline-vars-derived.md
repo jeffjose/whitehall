@@ -77,7 +77,7 @@ fun PersonForm() {
 
     fun updateName(first: String, last: String) {
         firstName = first
-          lastName = last
+        lastName = last
     }
     fun celebrateBirthday() {
         age++

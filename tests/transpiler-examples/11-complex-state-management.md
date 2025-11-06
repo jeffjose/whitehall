@@ -14,8 +14,10 @@ import $lib.api.ApiClient
   var isLoading = false
 
   val selectedUser: User? = users.firstOrNull { it.id == selectedUserId }
-  val filteredUsers: List<User> = users.filter {
-    it.name.contains(searchQuery, ignoreCase = true)
+  val filteredUsers: List<User> = if (searchQuery.isBlank()) {
+    users
+  } else {
+    users.filter { it.name.contains(searchQuery, ignoreCase = true) }
   }
 
   fun handleSearch(query: String) {
@@ -95,18 +97,20 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 fun ComplexStateManagement() {
     val viewModel = viewModel<ComplexStateManagementViewModel>()
     val uiState by viewModel.uiState.collectAsState()
-    val selectedUser: User? = users.firstOrNull { it.id == selectedUserId }
-    val filteredUsers: List<User> = users.filter {
-    it.name.contains(searchQuery, ignoreCase = true)
-  }
+    val selectedUser: User? = uiState.users.firstOrNull { it.id == uiState.selectedUserId }
+    val filteredUsers: List<User> = if (uiState.searchQuery.isBlank()) {
+        uiState.users
+    } else {
+        uiState.users.filter { it.name.contains(uiState.searchQuery, ignoreCase = true) }
+    }
 
     Column(
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
         TextField(
-            label = { Text("Search uiState.users") },
+            label = { Text("Search users") },
             value = uiState.searchQuery,
-            onValueChange = { uiState.searchQuery = it },
+            onValueChange = { viewModel.searchQuery = it },
             placeholder = { Text("Enter name...") }
         )
         if (uiState.isLoading) {
@@ -136,11 +140,11 @@ fun ComplexStateManagement() {
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     Text(
-                        text = "Selected: ${selectedUser.name}",
+                        text = "Selected: ${viewModel.selectedUser.name}",
                         fontSize = 20.sp
                     )
                     Text(
-                        text = "${selectedUser.email}",
+                        text = "${viewModel.selectedUser.email}",
                         color = MaterialTheme.colorScheme.secondary
                     )
                 }

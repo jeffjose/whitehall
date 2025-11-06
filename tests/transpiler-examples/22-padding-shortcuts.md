@@ -51,14 +51,12 @@ fun PaddingShortcuts() {
             .padding(16.dp)
         )
         Text(
-            text = "Horizontal & Vertical
-  ",
+            text = "Horizontal & Vertical",
             modifier = Modifier
             .padding(horizontal = 20.dp, vertical = 8.dp)
         )
         Text(
-            text = "Top & Bottom
-  ",
+            text = "Top & Bottom",
             modifier = Modifier
             .padding(top = 4.dp, bottom = 12.dp)
         )

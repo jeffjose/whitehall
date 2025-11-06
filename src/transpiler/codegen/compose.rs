@@ -3304,17 +3304,6 @@ impl ComposeBackend {
         output.push_str(&self.indent());
         output.push_str("val uiState by viewModel.uiState.collectAsState()\n");
 
-        // Generate any immutable state (val) that aren't derived
-        for state in &file.state {
-            if !state.mutable && !state.is_derived_state {
-                output.push_str(&self.indent());
-                let type_annotation = state.type_annotation.as_ref()
-                    .map(|t| format!(": {}", t))
-                    .unwrap_or_default();
-                output.push_str(&format!("val {}{} = {}\n", state.name, type_annotation, state.initial_value));
-            }
-        }
-
         // Phase 1.1: Set up ViewModel wrapper context before generating markup
         // This enables transformation of variable/function references
         self.in_viewmodel_wrapper = true;
@@ -3332,6 +3321,20 @@ impl ComposeBackend {
         // Collect function names (need viewModel prefix)
         for func in &file.functions {
             self.function_names.insert(func.name.clone());
+        }
+
+        // Generate any immutable state (val) that aren't derived
+        // These need to be after ViewModel context setup so variable references get transformed
+        for state in &file.state {
+            if !state.mutable && !state.is_derived_state {
+                output.push_str(&self.indent());
+                let type_annotation = state.type_annotation.as_ref()
+                    .map(|t| format!(": {}", t))
+                    .unwrap_or_default();
+                // Transform variable references in the initial value
+                let transformed_value = self.transform_viewmodel_expression(&state.initial_value);
+                output.push_str(&format!("val {}{} = {}\n", state.name, type_annotation, transformed_value));
+            }
         }
 
         // NOTE: Lifecycle hooks are now in ViewModel's init block, not in wrapper
