@@ -89,7 +89,7 @@ impl ComposeBackend {
         file: &WhitehallFile,
         optimizations: &[crate::transpiler::optimizer::Optimization],
         semantic_info: &crate::transpiler::analyzer::SemanticInfo,
-    ) -> Result<String, String> {
+    ) -> Result<crate::transpiler::TranspileResult, String> {
         // Phase 6: Store optimizations for use during for loop generation
         self.optimizations = optimizations.to_vec();
 
@@ -146,7 +146,7 @@ impl ComposeBackend {
         }
     }
 
-    pub fn generate(&mut self, file: &WhitehallFile) -> Result<String, String> {
+    pub fn generate(&mut self, file: &WhitehallFile) -> Result<crate::transpiler::TranspileResult, String> {
         // Check if this file contains a reactive class (in store registry)
         // This includes: classes with var properties OR @store object singletons
         let store_class = file.classes.iter().find(|c| {
@@ -160,7 +160,8 @@ impl ComposeBackend {
 
         if let Some(class) = store_class {
             // Generate ViewModel or singleton code based on registry info
-            return self.generate_store_class(class);
+            let kotlin_code = self.generate_store_class(class)?;
+            return Ok(crate::transpiler::TranspileResult::Single(kotlin_code));
         }
 
         // Check if this component has inline vars (ComponentInline in registry)
@@ -690,7 +691,8 @@ impl ComposeBackend {
             }
         }
 
-        Ok(output)
+        // Wrap final output in TranspileResult::Single
+        Ok(crate::transpiler::TranspileResult::Single(output))
     }
 
     fn generate_markup(&mut self, markup: &Markup) -> Result<String, String> {

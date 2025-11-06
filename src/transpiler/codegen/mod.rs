@@ -33,7 +33,8 @@ impl CodeGenerator {
     /// Routes to appropriate backend based on optimization plans:
     /// - If optimizations present: May use View backend with RecyclerView
     /// - Default: Compose backend
-    pub fn generate(&mut self, optimized_ast: &OptimizedAST) -> Result<String, String> {
+    /// Returns TranspileResult (Single or Multiple files)
+    pub fn generate(&mut self, optimized_ast: &OptimizedAST) -> Result<crate::transpiler::TranspileResult, String> {
         // Phase 5: Pass optimizations and semantic info to Compose backend
         // Compose backend will check for RecyclerView optimizations
         // and use store registry for @store detection

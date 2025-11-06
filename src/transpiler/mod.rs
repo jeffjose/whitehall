@@ -107,11 +107,9 @@ pub fn transpile_with_registry(
 
     // 4. Generate Kotlin code
     //    Phase 5: Consume optimizations and route to appropriate backend
+    //    Returns TranspileResult (Single or Multiple files)
     let mut codegen = CodeGenerator::new(package, component_name, component_type);
-    let kotlin_code = codegen.generate(&optimized_ast)?;
-
-    // Wrap in TranspileResult::Single (for now - will be Multiple for ComponentInline)
-    Ok(TranspileResult::Single(kotlin_code))
+    codegen.generate(&optimized_ast)
 }
 
 /// Parse source code to extract AST for store registry building
