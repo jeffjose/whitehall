@@ -1,18 +1,47 @@
 # Whitehall @store Implementation
 
-**Comprehensive Documentation - All Phases Complete**
+**Comprehensive Documentation - All Phases Complete + Future Design**
 
-**Status:** Phases 0-5 COMPLETE and fully integrated
-**Date:** November 6, 2025
+**Status:** Phases 0-5 COMPLETE and fully integrated | Phase 1.1 IN PROGRESS
+**Date:** January 2025
 **Version:** 1.0
+
+---
+
+## Quick Reference: Current Status
+
+| **Pattern** | **Status** | **Whitehall Syntax** | **Notes** |
+|-------------|-----------|---------------------|-----------|
+| Local state (inline) | ✅ Supported | `var count = 0` (remember/mutableStateOf) | Simple components |
+| Local state (complex) | 🔄 Phase 1.1 | `var count = 0` (auto-ViewModel if complex) | Has suspend/lifecycle/3+ functions |
+| Props | ✅ Supported | `@prop val name: String` | Parent-owned state |
+| Two-way binding | ✅ Supported | `bind:value={email}` | Form inputs |
+| Derived values | ✅ Supported | `val doubled = count * 2` | Computed properties |
+| Hoisted state | ✅ Supported | Local state + props | Parent manages state |
+| **Screen-level stores** | **✅ Complete** | `@store class UserProfile { var name = "" }` | Separate class files |
+| **Suspend functions** | **✅ Complete** | `suspend fun save()` + dispatchers | Auto-wrap in viewModelScope |
+| **Hilt integration** | **✅ Complete** | `@Inject constructor()` or `@hilt` | Hybrid auto-detection |
+| **Global stores (singletons)** | **🔮 Future** | `@store object AppSettings { var darkMode = false }` | Planned |
+| Lifecycle hooks | ✅ Complete | `onMount`, `onDispose` | Smart combination |
+| StateFlow (manual) | ⚠️ Works today | Use Kotlin files directly | Manual approach |
+| Persistence | 🤔 Future | Manual integration recommended | No special syntax |
+
+**Legend:**
+- ✅ **Supported** - Works today with clean syntax
+- 🔄 **In Progress** - Implementation underway
+- 🔮 **Future** - Design decided, pending implementation
+- ⚠️ **Works today** - No special syntax, use Kotlin/Compose directly
+- 🤔 **Future** - Options available, decision needed
 
 ---
 
 ## Table of Contents
 
-1. [Quick Navigation](#quick-navigation)
-2. [Executive Summary](#executive-summary)
-3. [Architecture Overview](#architecture-overview)
+1. [Quick Reference](#quick-reference-current-status)
+2. [Quick Navigation](#quick-navigation)
+3. [Executive Summary](#executive-summary)
+4. [Future Design: ViewModel by Default](#future-design-viewmodel-by-default)
+5. [Architecture Overview](#architecture-overview)
    - [Phase 0: Store Registry](#phase-0-store-registry)
    - [Phase 1: ViewModel Generation](#phase-1-viewmodel-generation)
    - [Phase 2: Auto-Detection at Usage Sites](#phase-2-auto-detection-at-usage-sites)
