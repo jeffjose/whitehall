@@ -15,11 +15,11 @@
 | REF-STATE-MANAGEMENT.md | ✅ Complete | HIGH | 4 (all fixed) | 2025-11-06 |
 | REF-TRANSPILER.md | ✅ Complete | HIGH | 3 (all fixed) | 2025-11-06 |
 | REF-BUILD-SYSTEM.md | ✅ Complete | HIGH | 2 (all fixed) | 2025-11-06 |
-| REF-OVERVIEW.md | ⏳ Pending | MEDIUM | - | - |
+| REF-OVERVIEW.md | ✅ Complete | MEDIUM | 3 (all fixed) | 2025-11-06 |
 | REF-TOOLCHAIN.md | ⏳ Pending | MEDIUM | - | - |
 | REF-WEB-PLAYGROUND.md | ⏳ Pending | LOW | - | - |
 
-**Progress:** 3/6 complete (50%)
+**Progress:** 4/6 complete (67%)
 
 ---
 
@@ -246,47 +246,62 @@
 
 ---
 
-### ⏳ REF-OVERVIEW.md - NEEDS REVIEW
+### ✅ REF-OVERVIEW.md - REVIEWED (2025-11-06)
 
-**Claims to verify:**
+**Status:** Systematic review complete - 3 issues fixed
+
+**Claims verified:**
 
 1. **Component status table**
-   - [ ] Verify: Transpiler 37/38 tests
-   - [ ] Verify: Build System "Fully Implemented"
-   - [ ] Verify: State Management "Phase 1.1 Complete"
-   - [ ] Verify: Toolchain "Fully Implemented"
-   - [ ] Verify: Web Playground "Phase 1 Complete"
+   - ✅ Build System "Fully Implemented" - accurate
+   - ✅ State Management "Phase 1.1 Complete" - accurate
+   - ✅ Toolchain "Fully Implemented" - accurate
+   - ✅ Web Playground "Phase 1 Complete" - accurate
+   - ⚠️ Transpiler: Doc says 37/38 tests → Fixed to 38/38 (100%)
 
 2. **Architecture layers diagram**
-   - [ ] Verify: Actual module structure matches diagram
-   - [ ] Verify: Layer separation accurate
+   - ✅ Module structure matches diagram
+   - ✅ Layer separation accurate
 
 3. **File structure guide**
-   - [ ] Verify: Directory structure matches reality
-   - [ ] Verify: File paths are correct
-   - [ ] Verify: Line counts are accurate
-   - [ ] Verify: Test count (38 not 23)
+   - ✅ Directory structure verified (src/commands/, src/transpiler/, src/toolchain/, tools/playground/)
+   - ✅ File paths correct
+   - ✅ Test count: 38 markdown test files (correct)
 
 4. **State management patterns table**
-   - [ ] Verify: All patterns are actually implemented
-   - [ ] Verify: Status indicators are accurate
+   - ✅ Local state (inline) - tested
+   - ✅ Local state (auto-ViewModel) - tested (Phase 1.1)
+   - ✅ Props (@prop) - tested (14 test files)
+   - ✅ Two-way binding (bind:) - tested (6 test files)
+   - ✅ Screen-level stores (@store class) - tested (27-29)
+   - ✅ Suspend functions - tested
+   - ⚠️ Coroutine dispatchers (io/cpu/main) - code exists but NO tests (noted)
+   - ✅ Lifecycle hooks (onMount/onDispose) - tested (6 test files)
+   - ✅ Hilt integration (@Inject/@hilt) - tested (27-28)
 
 5. **CLI command table**
-   - [ ] Verify: All 9 commands exist
-   - [ ] Verify: Descriptions match actual behavior
+   - ✅ All 9 commands verified (already checked in REF-BUILD-SYSTEM review)
 
 6. **Test categories**
-   - [ ] Verify: Test file count per category
-   - [ ] Verify: Total test count = 38
+   - ✅ Foundation (00-00e): 6 tests ✓
+   - ✅ Core Features (01-06): 6 tests ✓
+   - ✅ Routing (07-08): 2 tests ✓
+   - ✅ Composition (09-11): 3 tests ✓
+   - ✅ Extended Patterns (12-17): 6 tests ✓
+   - ✅ Advanced Features (18-26): 9 tests ✓
+   - ✅ Stores (27-29): 3 tests ✓
+   - ✅ Phase 1.1 (30-32): 3 tests ✓
+   - ✅ Total: 38/38 tests passing (100%)
+   - ⚠️ Doc claimed 37/38 with test 05 failing → Fixed
 
 7. **Compilation pipeline diagram**
-   - [ ] Verify: Pipeline stages match code
-   - [ ] Verify: Module flow is accurate
+   - ✅ Pipeline stages match code
+   - ✅ Module flow accurate
 
-**Files to check:**
-- All REF-* files (cross-references)
+**Files checked:**
+- All REF-* file cross-references
 - `src/` directory structure
-- `tests/transpiler-examples/` count
+- `tests/transpiler-examples/` (38 test files)
 
 ---
 
@@ -350,8 +365,17 @@ For each REF-* file:
 ### REF-WEB-PLAYGROUND.md
 - (To be filled as we review)
 
-### REF-OVERVIEW.md
-- (To be filled as we review)
+### REF-OVERVIEW.md (Fixed)
+- **Issue:** Line 46 claimed "37/38 tests, 97.4%"
+- **Reality:** 38/38 tests passing (100%) - test 05 is now fixed
+- **Issue:** Line 221 claimed "37/38 tests passing (97.4% coverage)"
+- **Reality:** 38/38 tests passing (100%)
+- **Issue:** Line 233 claimed "Test 05 (data-binding) has import detection issues"
+- **Reality:** Test 05 passes - issue was already resolved
+- **Note:** Line 136 claims coroutine dispatchers (io/cpu/main) are "✅ Complete"
+- **Reality:** Code exists in compose.rs:2426-2433, but NO test coverage
+- **Decision:** Not critical - feature is implemented, just lacks dedicated tests
+- **Fixed:** 2025-11-06 (updating test counts and removing outdated test 05 note)
 
 ---
 

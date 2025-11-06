@@ -43,7 +43,7 @@ Whitehall is a **Svelte-inspired framework for Android development** that transp
 
 | Component | Status | Reference Doc |
 |-----------|--------|---------------|
-| **Transpiler** | ✅ Nearly Complete (37/38 tests, 97.4%) | [REF-TRANSPILER.md](./REF-TRANSPILER.md) |
+| **Transpiler** | ✅ Complete (38/38 tests, 100%) | [REF-TRANSPILER.md](./REF-TRANSPILER.md) |
 | **Build System** | ✅ Fully Implemented | [REF-BUILD-SYSTEM.md](./REF-BUILD-SYSTEM.md) |
 | **State Management** | ✅ Phase 1.1 Complete (Component inline vars) | [REF-STATE-MANAGEMENT.md](./REF-STATE-MANAGEMENT.md) |
 | **Toolchain** | ✅ Fully Implemented (Phases 1-5) | [REF-TOOLCHAIN.md](./REF-TOOLCHAIN.md) |
@@ -218,7 +218,7 @@ Web-based IDE for learning and experimenting with Whitehall syntax.
 
 **Location:** `tests/transpiler-examples/`
 
-**Status:** 37/38 tests passing (97.4% coverage)
+**Status:** 38/38 tests passing (100% coverage)
 
 **Test Categories:**
 - Foundation (00-00e): Basic text, interpolation, props, variables, lists, arrays
@@ -229,8 +229,6 @@ Web-based IDE for learning and experimenting with Whitehall syntax.
 - Advanced Features (18-26): String resources, checkboxes, derived state, colors, padding shortcuts, escape braces, inline lambdas, spacer shortcuts, function return types
 - Stores (27-29): Hilt stores, explicit Hilt, stores without Hilt
 - Component Inline Vars / Phase 1.1 (30-32): Basic inline vars, suspend functions, derived properties
-
-**Known Issue:** Test 05 (data-binding) has import detection issues (Text inside Button lambda, PasswordVisualTransformation)
 
 **Run tests:** `cargo test --test transpiler_examples_test examples`
 
