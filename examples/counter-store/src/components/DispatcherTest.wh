@@ -1,0 +1,31 @@
+<script>
+  var count: Int = 0
+
+  suspend fun loadData() {
+    count++
+  }
+
+  suspend fun processData() {
+    count = count * 2
+  }
+
+  suspend fun updateUI() {
+    count = count + 10
+  }
+</script>
+
+<Column padding={16} spacing={12}>
+  <Text fontSize={24}>Dispatcher Test: {count}</Text>
+
+  <Button onClick={() => io { loadData() }}>
+    IO: Load Data
+  </Button>
+
+  <Button onClick={() => cpu { processData() }}>
+    CPU: Process Data
+  </Button>
+
+  <Button onClick={() => main { updateUI() }}>
+    Main: Update UI
+  </Button>
+</Column>

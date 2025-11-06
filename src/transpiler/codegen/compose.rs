@@ -625,15 +625,15 @@ impl ComposeBackend {
         Ok(output)
     }
 
-    fn generate_markup(&self, markup: &Markup) -> Result<String, String> {
+    fn generate_markup(&mut self, markup: &Markup) -> Result<String, String> {
         self.generate_markup_with_indent(markup, self.indent_level)
     }
 
-    fn generate_markup_with_indent(&self, markup: &Markup, indent: usize) -> Result<String, String> {
+    fn generate_markup_with_indent(&mut self, markup: &Markup, indent: usize) -> Result<String, String> {
         self.generate_markup_with_context(markup, indent, None)
     }
 
-    fn generate_markup_with_context(&self, markup: &Markup, indent: usize, parent: Option<&str>) -> Result<String, String> {
+    fn generate_markup_with_context(&mut self, markup: &Markup, indent: usize, parent: Option<&str>) -> Result<String, String> {
         match markup {
             // Trim text in Button children to remove surrounding whitespace/newlines
             Markup::Text(text) if parent == Some("Button") => {
@@ -2485,7 +2485,7 @@ impl ComposeBackend {
     }
 
     /// Generate Scaffold's first child with .padding(paddingValues) prepended to modifier
-    fn generate_scaffold_child(&self, markup: &Markup, indent: usize) -> Result<String, String> {
+    fn generate_scaffold_child(&mut self, markup: &Markup, indent: usize) -> Result<String, String> {
         // Only layout containers (Column, Row, Box) should get paddingValues
         if let Markup::Component(comp) = markup {
             if comp.name == "Column" || comp.name == "Row" || comp.name == "Box" {
