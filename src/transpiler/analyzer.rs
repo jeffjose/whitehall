@@ -308,11 +308,30 @@ impl Analyzer {
 
     /// Phase 1.1: Detect component inline vars (for single-file transpilation)
     /// This is called when transpiling a single component file with inline mutable state
+    /// Only registers as ComponentInline for complex components that benefit from ViewModel pattern
+    /// Simple forms continue to use remember/mutableStateOf
     fn collect_component_inline_vars(&mut self, ast: &WhitehallFile, component_name: &str, package: &str) {
         // Check if this component has any mutable state variables
         let has_mutable_vars = ast.state.iter().any(|state| state.mutable);
 
-        if has_mutable_vars {
+        if !has_mutable_vars {
+            return; // No mutable state, no ViewModel needed
+        }
+
+        // Check for complexity indicators that warrant ViewModel usage:
+        // 1. Has suspend functions (async operations need viewModelScope)
+        let has_suspend = ast.functions.iter().any(|f| f.is_suspend);
+
+        // 2. Has multiple state manipulating functions (>= 3 functions suggests complex state logic)
+        let function_count = ast.functions.len();
+        let has_multiple_functions = function_count >= 3;
+
+        // 3. Has lifecycle hooks (indicates component lifecycle management)
+        let has_lifecycle = !ast.lifecycle_hooks.is_empty();
+
+        // Only use ViewModel for complex components
+        // Simple forms with 1-2 simple functions continue using remember/mutableStateOf
+        if has_suspend || has_multiple_functions || has_lifecycle {
             // Register this component as ComponentInline in the store registry
             self.store_registry.insert(
                 component_name.to_string(),

@@ -16,6 +16,11 @@ pub struct ComposeBackend {
     uses_viewmodel: bool, // Phase 2: Track if any stores are used (for imports)
     uses_hilt_viewmodel: bool, // Phase 2: Track if any Hilt stores are used (for imports)
     uses_dispatchers: bool, // Phase 2: Track if dispatcher syntax is used (io/cpu/main)
+    // Phase 1.1: ViewModel wrapper context
+    in_viewmodel_wrapper: bool, // Are we generating markup inside a ViewModel wrapper?
+    mutable_vars: std::collections::HashSet<String>, // Mutable vars (need uiState prefix)
+    derived_props: std::collections::HashSet<String>, // Derived properties (need viewModel prefix)
+    function_names: std::collections::HashSet<String>, // Functions (need viewModel prefix)
 }
 
 /// Convert hex color string to Color(0x...) format
@@ -76,6 +81,10 @@ impl ComposeBackend {
             uses_viewmodel: false, // Phase 2: Track store usage for imports
             uses_hilt_viewmodel: false, // Phase 2: Track Hilt store usage for imports
             uses_dispatchers: false, // Phase 2: Track dispatcher syntax usage
+            in_viewmodel_wrapper: false, // Phase 1.1: Not in ViewModel wrapper by default
+            mutable_vars: std::collections::HashSet::new(), // Phase 1.1: Track mutable vars
+            derived_props: std::collections::HashSet::new(), // Phase 1.1: Track derived properties
+            function_names: std::collections::HashSet::new(), // Phase 1.1: Track functions
         }
     }
 
@@ -701,8 +710,11 @@ impl ComposeBackend {
                 let mut output = String::new();
                 let indent_str = "    ".repeat(indent);
 
+                // Phase 1.1: Transform condition for ViewModel wrapper
+                let condition = self.transform_viewmodel_expression(&if_block.condition);
+
                 // if block
-                output.push_str(&format!("{}if ({}) {{\n", indent_str, if_block.condition));
+                output.push_str(&format!("{}if ({}) {{\n", indent_str, condition));
                 for child in &if_block.then_branch {
                     output.push_str(&self.generate_markup_with_indent(child, indent + 1)?);
                 }
@@ -710,7 +722,9 @@ impl ComposeBackend {
 
                 // else if blocks
                 for else_if in &if_block.else_ifs {
-                    output.push_str(&format!(" else if ({}) {{\n", else_if.condition));
+                    // Phase 1.1: Transform else-if condition for ViewModel wrapper
+                    let else_if_condition = self.transform_viewmodel_expression(&else_if.condition);
+                    output.push_str(&format!(" else if ({}) {{\n", else_if_condition));
                     for child in &else_if.body {
                         output.push_str(&self.generate_markup_with_indent(child, indent + 1)?);
                     }
@@ -2010,6 +2024,11 @@ impl ComposeBackend {
     fn transform_prop(&mut self, component: &str, prop_name: &str, prop_value: &str) -> Result<Vec<String>, String> {
         // Transform string interpolation first: {expr} → ${expr}
         let prop_value = self.transform_string_interpolation(prop_value);
+
+        // Phase 1.1: Transform ViewModel wrapper references
+        // Must happen AFTER string interpolation but BEFORE other transforms
+        let prop_value = self.transform_viewmodel_expression(&prop_value);
+
         let prop_value = prop_value.as_str();
 
         // Handle modifier prop - convert hex colors in background() calls
@@ -2022,6 +2041,29 @@ impl ComposeBackend {
         if prop_name == "bind:value" {
             let var_name = prop_value.trim();
 
+            // Phase 1.1: Handle ViewModel wrapper bind:value
+            if self.in_viewmodel_wrapper && self.mutable_vars.contains(var_name) {
+                // In ViewModel wrapper: bind to uiState.var and viewModel.var = it
+                // Check if this variable has a numeric type
+                if let Some((type_str, default_value)) = self.var_types.get(var_name) {
+                    if self.is_numeric_type(type_str) {
+                        // Numeric bind:value needs type conversions
+                        let (to_method, default) = self.get_numeric_conversion(type_str, default_value);
+                        return Ok(vec![
+                            format!("value = uiState.{}.toString()", var_name),
+                            format!("onValueChange = {{ viewModel.{} = it.{} ?: {} }}", var_name, to_method, default),
+                        ]);
+                    }
+                }
+
+                // Default bind:value (for String types) in ViewModel wrapper
+                return Ok(vec![
+                    format!("value = uiState.{}", var_name),
+                    format!("onValueChange = {{ viewModel.{} = it }}", var_name),
+                ]);
+            }
+
+            // Regular component (not in ViewModel wrapper)
             // Check if this variable has a numeric type
             if let Some((type_str, default_value)) = self.var_types.get(var_name) {
                 if self.is_numeric_type(type_str) {
@@ -2447,6 +2489,110 @@ impl ComposeBackend {
                 ""
             }
         }
+    }
+
+    /// Phase 1.1: Transform expression for ViewModel wrapper context
+    /// Transforms variable references and function calls when in ViewModel wrapper
+    fn transform_viewmodel_expression(&self, expr: &str) -> String {
+        if !self.in_viewmodel_wrapper {
+            return expr.to_string();
+        }
+
+        let mut result = expr.to_string();
+
+        // First pass: Transform standalone variable references (not in interpolations)
+        // This handles cases like: if (varName != null) or text = varName
+        // We need to be careful to only match whole words
+        for var_name in &self.mutable_vars {
+            result = self.replace_identifier(&result, var_name, &format!("uiState.{}", var_name));
+        }
+        for prop_name in &self.derived_props {
+            result = self.replace_identifier(&result, prop_name, &format!("viewModel.{}", prop_name));
+        }
+
+        // Second pass: Transform string interpolations: ${varName} → ${uiState.varName} or ${viewModel.prop}
+        let mut transformed = String::new();
+        let mut chars = result.chars().peekable();
+        let mut in_interpolation = false;
+        let mut current_token = String::new();
+
+        while let Some(ch) = chars.next() {
+            if ch == '$' && chars.peek() == Some(&'{') {
+                transformed.push(ch);
+                in_interpolation = true;
+                current_token.clear();
+            } else if ch == '{' && in_interpolation {
+                transformed.push(ch);
+            } else if ch == '}' && in_interpolation {
+                // Already handled in first pass - just copy
+                transformed.push_str(&current_token);
+                transformed.push(ch);
+                in_interpolation = false;
+                current_token.clear();
+            } else if in_interpolation {
+                current_token.push(ch);
+            } else {
+                transformed.push(ch);
+            }
+        }
+
+        result = transformed;
+
+        // Third pass: Transform function calls: functionName() → viewModel.functionName()
+        for func_name in &self.function_names {
+            let pattern = format!("{}(", func_name);
+            let replacement = format!("viewModel.{}(", func_name);
+
+            let parts: Vec<&str> = result.split(&pattern).collect();
+            let mut new_result = String::new();
+            for (i, part) in parts.iter().enumerate() {
+                new_result.push_str(part);
+                if i < parts.len() - 1 {
+                    // Check if already prefixed
+                    if !part.ends_with("viewModel.") {
+                        new_result.push_str(&replacement);
+                    } else {
+                        new_result.push_str(&pattern);
+                    }
+                }
+            }
+            result = new_result;
+        }
+
+        result
+    }
+
+    /// Helper: Replace identifier in expression (whole word only)
+    /// Replaces standalone references to an identifier with a new value
+    /// Only replaces if it's a whole word (not part of another identifier)
+    fn replace_identifier(&self, expr: &str, identifier: &str, replacement: &str) -> String {
+        let mut result = String::new();
+        let mut chars = expr.chars().peekable();
+        let mut current_word = String::new();
+
+        while let Some(ch) = chars.next() {
+            if ch.is_alphanumeric() || ch == '_' {
+                current_word.push(ch);
+            } else {
+                // End of word - check if it matches
+                if current_word == identifier {
+                    result.push_str(replacement);
+                } else {
+                    result.push_str(&current_word);
+                }
+                current_word.clear();
+                result.push(ch);
+            }
+        }
+
+        // Handle last word
+        if current_word == identifier {
+            result.push_str(replacement);
+        } else {
+            result.push_str(&current_word);
+        }
+
+        result
     }
 
     /// Infer type from initial value
@@ -3101,6 +3247,25 @@ impl ComposeBackend {
             }
         }
 
+        // Phase 1.1: Set up ViewModel wrapper context before generating markup
+        // This enables transformation of variable/function references
+        self.in_viewmodel_wrapper = true;
+
+        // Collect mutable vars (need uiState prefix)
+        for state in &file.state {
+            if state.mutable {
+                self.mutable_vars.insert(state.name.clone());
+            } else {
+                // Derived properties (need viewModel prefix)
+                self.derived_props.insert(state.name.clone());
+            }
+        }
+
+        // Collect function names (need viewModel prefix)
+        for func in &file.functions {
+            self.function_names.insert(func.name.clone());
+        }
+
         // Generate lifecycle hooks (onMount, onDispose)
         for hook in &file.lifecycle_hooks {
             output.push_str("\n");
@@ -3142,9 +3307,15 @@ impl ComposeBackend {
 
         output.push('\n');
 
-        // Generate markup
+        // Generate markup with ViewModel wrapper context active
         let markup_code = self.generate_markup(&file.markup)?;
         output.push_str(&markup_code);
+
+        // Clean up context
+        self.in_viewmodel_wrapper = false;
+        self.mutable_vars.clear();
+        self.derived_props.clear();
+        self.function_names.clear();
 
         self.indent_level -= 1;
         output.push_str("}\n");
