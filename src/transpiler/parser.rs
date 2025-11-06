@@ -65,9 +65,10 @@ impl Parser {
                 let annotation = self.parse_identifier()?;
                 pending_annotations.push(annotation.clone());
 
-                // Check if next is "class" keyword
+                // Check if next is "class" or "object" keyword
                 self.skip_whitespace();
-                if self.peek_word() == Some("class") {
+                let next_word = self.peek_word();
+                if next_word == Some("class") || next_word == Some("object") {
                     classes.push(self.parse_class_declaration(pending_annotations.clone())?);
                     pending_annotations.clear();
                     continue;
@@ -478,9 +479,18 @@ impl Parser {
     }
 
     fn parse_class_declaration(&mut self, annotations: Vec<String>) -> Result<ClassDeclaration, String> {
-        // Parse: class ClassName { ... } or class ClassName constructor(...) { ... }
+        // Parse: class/object ClassName { ... } or class/object ClassName constructor(...) { ... }
         self.skip_whitespace();
-        self.expect_word("class")?;
+
+        // Check for "class" or "object" keyword
+        let is_object = if self.consume_word("object") {
+            true
+        } else if self.consume_word("class") {
+            false
+        } else {
+            return Err(self.error_at_pos("Expected 'class' or 'object' keyword"));
+        };
+
         self.skip_whitespace();
 
         let name = self.parse_identifier()?;
@@ -534,6 +544,7 @@ impl Parser {
 
         Ok(ClassDeclaration {
             annotations,
+            is_object,
             name,
             constructor,
             properties,

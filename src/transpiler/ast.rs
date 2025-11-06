@@ -50,6 +50,7 @@ pub struct LifecycleHook {
 #[derive(Debug, Clone, PartialEq)]
 pub struct ClassDeclaration {
     pub annotations: Vec<String>,          // e.g., ["store", "HiltViewModel"]
+    pub is_object: bool,                   // true for "object", false for "class"
     pub name: String,                      // e.g., "UserProfile"
     pub constructor: Option<ConstructorDeclaration>,  // Constructor with @Inject
     pub properties: Vec<PropertyDeclaration>,  // var/val properties

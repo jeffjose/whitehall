@@ -94,17 +94,28 @@ fn build_store_registry(files: &[WhitehallFile]) -> Result<transpiler::StoreRegi
         let source = fs::read_to_string(&file.path)
             .context(format!("Failed to read {} for store registry", file.path.display()))?;
 
-        // Quick parse to extract @store classes
-        // We only need the AST to find classes with @store annotation
+        // Quick parse to extract reactive classes (classes with var or @store object)
         if let Ok(ast) = transpiler::parse_for_stores(&source) {
             for class in &ast.classes {
-                if class.annotations.contains(&"store".to_string()) {
+                let has_store_annotation = class.annotations.contains(&"store".to_string());
+                let is_object = class.is_object;
+                let has_vars = class.properties.iter().any(|prop| prop.mutable);
+                let is_singleton = has_store_annotation && is_object;
+
+                // Register if it's a singleton or has vars
+                if is_singleton || has_vars {
+                    let has_hilt_annotation = class.annotations.iter().any(|a| a == "HiltViewModel" || a.eq_ignore_ascii_case("hilt"));
+                    let has_inject = class.constructor.as_ref()
+                        .map(|c| c.annotations.iter().any(|a| a.eq_ignore_ascii_case("inject")))
+                        .unwrap_or(false);
+                    let has_hilt = has_hilt_annotation || has_inject;
+
                     let store_info = transpiler::StoreInfo {
                         class_name: class.name.clone(),
-                        has_hilt: class.annotations.iter().any(|a| a == "HiltViewModel"),
-                        has_inject: class.constructor.as_ref()
-                            .map(|c| c.annotations.contains(&"Inject".to_string()))
-                            .unwrap_or(false),
+                        is_singleton,
+                        has_vars,
+                        has_hilt,
+                        has_inject,
                         package: file.package_path.clone(),
                     };
                     registry.insert(class.name.clone(), store_info);

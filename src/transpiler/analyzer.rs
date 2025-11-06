@@ -61,12 +61,15 @@ impl StoreRegistry {
     }
 }
 
-/// Information about a @store class
+/// Information about a reactive class (store)
+/// Tracks both screen-scoped ViewModels (classes with var) and singletons (@store object)
 #[derive(Debug, Clone)]
 pub struct StoreInfo {
     pub class_name: String,
-    pub has_hilt: bool,        // Has @HiltViewModel annotation?
-    pub has_inject: bool,      // Has @Inject constructor?
+    pub is_singleton: bool,     // true for "@store object", false for regular classes
+    pub has_vars: bool,         // true if class has any mutable (var) properties
+    pub has_hilt: bool,         // Has @HiltViewModel annotation or @hilt/@Inject?
+    pub has_inject: bool,       // Has @Inject constructor?
     pub package: String,        // Package name (will be filled during codegen)
 }
 
@@ -263,17 +266,31 @@ impl Analyzer {
         })
     }
 
-    /// Phase 0: Collect @store annotated classes
+    /// Phase 0: Collect reactive classes (classes with var properties or @store object)
     fn collect_stores(&mut self, ast: &WhitehallFile) {
         for class in &ast.classes {
             // Check if class has @store annotation
-            let has_store = class.annotations.iter().any(|a| a == "store");
-            if !has_store {
-                continue;
+            let has_store_annotation = class.annotations.iter().any(|a| a == "store");
+
+            // Check if this is an object (vs class)
+            let is_object = class.is_object;
+
+            // Check if class has any mutable (var) properties
+            let has_vars = class.properties.iter().any(|prop| prop.mutable);
+
+            // Determine if this is a singleton: @store object
+            let is_singleton = has_store_annotation && is_object;
+
+            // Register if:
+            // 1. It's a singleton (@store object), OR
+            // 2. It has var properties (reactive class)
+            // Note: @store annotation is now OPTIONAL for classes with var
+            if !is_singleton && !has_vars {
+                continue;  // Skip classes with no vars and not a singleton
             }
 
             // Check for @hilt annotation (case-insensitive: @hilt or @HiltViewModel)
-            let has_hilt = class.annotations.iter().any(|a| {
+            let has_hilt_annotation = class.annotations.iter().any(|a| {
                 a.eq_ignore_ascii_case("hilt") || a == "HiltViewModel"
             });
 
@@ -284,11 +301,16 @@ impl Analyzer {
                 }))
                 .unwrap_or(false);
 
+            // Auto-enable Hilt if either @hilt annotation OR @Inject constructor
+            let has_hilt = has_hilt_annotation || has_inject;
+
             // Register the store
             self.store_registry.insert(
                 class.name.clone(),
                 StoreInfo {
                     class_name: class.name.clone(),
+                    is_singleton,
+                    has_vars,
                     has_hilt,
                     has_inject,
                     package: String::new(),  // Will be filled during codegen
