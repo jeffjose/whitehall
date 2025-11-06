@@ -1070,7 +1070,69 @@ impl ComposeBackend {
                         let transformed = self.transform_prop(&comp.name, &prop.name, prop_expr);
                         params.extend(transformed?);
                     }
-                } else if comp.name == "Box" || comp.name == "AsyncImage" {
+                }
+                // Special handling for Column/Row with backgroundColor + padding
+                else if comp.name == "Column" || comp.name == "Row" {
+                    // Check if we have both backgroundColor and padding that need to be combined
+                    let background_color = comp.props.iter().find(|p| p.name == "backgroundColor")
+                        .map(|p| self.get_prop_expr(&p.value));
+                    let padding = comp.props.iter().find(|p| p.name == "padding")
+                        .map(|p| self.get_prop_expr(&p.value));
+
+                    // Build chained modifier if both props exist
+                    if background_color.is_some() && padding.is_some() {
+                        let mut modifiers = Vec::new();
+
+                        if let Some(color) = background_color {
+                            // Transform hex colors to Color(0x...)
+                            let color_str = if color.starts_with('"') && color.ends_with('"') {
+                                let c = &color[1..color.len()-1];
+                                if c.starts_with('#') {
+                                    convert_hex_to_color(&c[1..])?
+                                } else {
+                                    format!("Color.{}", c.chars().next().unwrap().to_uppercase().collect::<String>() + &c[1..])
+                                }
+                            } else {
+                                color.to_string()
+                            };
+                            modifiers.push(format!(".background({})", color_str));
+                        }
+
+                        if let Some(pad) = padding {
+                            let padding_value = if pad.ends_with(".dp") {
+                                pad.to_string()
+                            } else {
+                                format!("{}.dp", pad)
+                            };
+                            modifiers.push(format!(".padding({})", padding_value));
+                        }
+
+                        // Combine into modifier parameter with proper indentation
+                        let modifier_chain = modifiers.iter()
+                            .map(|m| format!("                {}", m))
+                            .collect::<Vec<_>>()
+                            .join("\n");
+                        params.push(format!("modifier = Modifier\n{}", modifier_chain));
+
+                        // Process other props, skipping backgroundColor and padding
+                        for prop in &comp.props {
+                            if prop.name == "backgroundColor" || prop.name == "padding" {
+                                continue;
+                            }
+                            let prop_expr = self.get_prop_expr(&prop.value);
+                            let transformed = self.transform_prop(&comp.name, &prop.name, prop_expr);
+                            params.extend(transformed?);
+                        }
+                    } else {
+                        // No special handling needed - process all props normally
+                        for prop in &comp.props {
+                            let prop_expr = self.get_prop_expr(&prop.value);
+                            let transformed = self.transform_prop(&comp.name, &prop.name, prop_expr);
+                            params.extend(transformed?);
+                        }
+                    }
+                }
+                else if comp.name == "Box" || comp.name == "AsyncImage" {
                     // Special handling for Box and AsyncImage with width/height/etc
                     // Collect special props as expression strings
                     let width = comp.props.iter().find(|p| p.name == "width")
@@ -1832,7 +1894,16 @@ impl ComposeBackend {
         // If single non-whitespace child
         if non_whitespace_children.len() == 1 {
             match non_whitespace_children[0] {
-                Markup::Text(text) => return Ok(format!("\"{}\"", text)),
+                Markup::Text(text) => {
+                    // Only trim if text contains newlines (multi-line markup artifact)
+                    // Otherwise preserve intentional spaces (like "Hello, ")
+                    let cleaned = if text.contains('\n') {
+                        text.trim()
+                    } else {
+                        text.as_str()
+                    };
+                    return Ok(format!("\"{}\"", cleaned));
+                }
                 // Single interpolation - wrap in string template to ensure string conversion
                 Markup::Interpolation(expr) => {
                     let transformed = self.transform_string_resource(expr);
@@ -1849,8 +1920,15 @@ impl ComposeBackend {
         for child in &non_whitespace_children {
             match child {
                 Markup::Text(text) => {
+                    // Only trim if text contains newlines (multi-line markup artifact)
+                    // Otherwise preserve intentional spaces
+                    let cleaned = if text.contains('\n') {
+                        text.trim()
+                    } else {
+                        text.as_str()
+                    };
                     // Escape dollar signs in literal text for Kotlin string templates
-                    parts.push(self.escape_dollar_signs(text));
+                    parts.push(self.escape_dollar_signs(cleaned));
                 }
                 Markup::Interpolation(expr) => {
                     let str_res_transformed = self.transform_string_resource(expr);
@@ -2030,19 +2108,8 @@ impl ComposeBackend {
         // Transform string interpolation first: {expr} → ${expr}
         let prop_value = self.transform_string_interpolation(prop_value);
 
-        // Phase 1.1: Transform ViewModel wrapper references
-        // Must happen AFTER string interpolation but BEFORE other transforms
-        let prop_value = self.transform_viewmodel_expression(&prop_value);
-
-        let prop_value = prop_value.as_str();
-
-        // Handle modifier prop - convert hex colors in background() calls
-        if prop_name == "modifier" {
-            let transformed = self.convert_hex_in_modifier(prop_value)?;
-            return Ok(vec![format!("modifier = {}", transformed)]);
-        }
-
-        // Handle bind:value special syntax
+        // Handle bind:value special syntax BEFORE transform_viewmodel_expression
+        // because we need the original variable name, not the transformed one
         if prop_name == "bind:value" {
             let var_name = prop_value.trim();
 
@@ -2089,12 +2156,35 @@ impl ComposeBackend {
         }
 
         // Handle bind:checked special syntax (for Checkbox, Switch)
+        // Also before transform_viewmodel_expression for same reason as bind:value
         if prop_name == "bind:checked" {
             let var_name = prop_value.trim();
+
+            // In ViewModel wrapper, use uiState for checked value and viewModel for setter
+            if self.in_viewmodel_wrapper && self.mutable_vars.contains(var_name) {
+                return Ok(vec![
+                    format!("checked = uiState.{}", var_name),
+                    format!("onCheckedChange = {{ viewModel.{} = it }}", var_name),
+                ]);
+            }
+
+            // Regular component
             return Ok(vec![
                 format!("checked = {}", var_name),
                 format!("onCheckedChange = {{ {} = it }}", var_name),
             ]);
+        }
+
+        // Phase 1.1: Transform ViewModel wrapper references
+        // Must happen AFTER bind:value/bind:checked but BEFORE other transforms
+        let prop_value = self.transform_viewmodel_expression(&prop_value);
+
+        let prop_value = prop_value.as_str();
+
+        // Handle modifier prop - convert hex colors in background() calls
+        if prop_name == "modifier" {
+            let transformed = self.convert_hex_in_modifier(prop_value)?;
+            return Ok(vec![format!("modifier = {}", transformed)]);
         }
 
         // Transform route aliases first: $routes → Routes (before adding braces)
@@ -2570,31 +2660,94 @@ impl ComposeBackend {
     /// Helper: Replace identifier in expression (whole word only)
     /// Replaces standalone references to an identifier with a new value
     /// Only replaces if it's a whole word (not part of another identifier)
+    /// Skips replacements inside string literals but DOES transform inside ${} interpolations
     fn replace_identifier(&self, expr: &str, identifier: &str, replacement: &str) -> String {
         let mut result = String::new();
-        let mut chars = expr.chars().peekable();
-        let mut current_word = String::new();
+        let chars: Vec<char> = expr.chars().collect();
+        let mut i = 0;
 
-        while let Some(ch) = chars.next() {
+        while i < chars.len() {
+            let ch = chars[i];
+
+            // Handle string literals
+            if ch == '"' || ch == '\'' {
+                let quote = ch;
+                result.push(ch);
+                i += 1;
+
+                // Process string contents
+                while i < chars.len() {
+                    let inner_ch = chars[i];
+
+                    if inner_ch == '\\' && i + 1 < chars.len() {
+                        // Handle escape sequences - copy both chars
+                        result.push(inner_ch);
+                        i += 1;
+                        result.push(chars[i]);
+                        i += 1;
+                        continue;
+                    } else if inner_ch == '$' && i + 1 < chars.len() && chars[i + 1] == '{' {
+                        // String interpolation ${...} - need to transform inside
+                        result.push('$');
+                        result.push('{');
+                        i += 2;
+
+                        // Find the closing } and process the interpolation content
+                        let interp_start = i;
+                        let mut depth = 1;
+                        while i < chars.len() && depth > 0 {
+                            if chars[i] == '{' {
+                                depth += 1;
+                            } else if chars[i] == '}' {
+                                depth -= 1;
+                                if depth == 0 {
+                                    break;
+                                }
+                            }
+                            i += 1;
+                        }
+
+                        // Transform the interpolation content
+                        let interp_content: String = chars[interp_start..i].iter().collect();
+                        let transformed_interp = self.replace_identifier(&interp_content, identifier, replacement);
+                        result.push_str(&transformed_interp);
+
+                        if i < chars.len() && chars[i] == '}' {
+                            result.push('}');
+                            i += 1;
+                        }
+                        continue;
+                    } else if inner_ch == quote {
+                        // Found closing quote
+                        result.push(inner_ch);
+                        i += 1;
+                        break;
+                    } else {
+                        // Regular character inside string (not interpolation)
+                        result.push(inner_ch);
+                        i += 1;
+                    }
+                }
+                continue;
+            }
+
+            // Build identifier outside of strings
             if ch.is_alphanumeric() || ch == '_' {
-                current_word.push(ch);
-            } else {
-                // End of word - check if it matches
-                if current_word == identifier {
+                let start = i;
+                while i < chars.len() && (chars[i].is_alphanumeric() || chars[i] == '_') {
+                    i += 1;
+                }
+
+                let word: String = chars[start..i].iter().collect();
+                if word == identifier {
                     result.push_str(replacement);
                 } else {
-                    result.push_str(&current_word);
+                    result.push_str(&word);
                 }
-                current_word.clear();
+            } else {
                 result.push(ch);
+                i += 1;
             }
-        }
-
-        // Handle last word
-        if current_word == identifier {
-            result.push_str(replacement);
-        } else {
-            result.push_str(&current_word);
         }
 
         result

@@ -105,11 +105,11 @@ fun UserProfile() {
             Card {
                 Column(modifier = Modifier.padding(16.dp)) {
                     Text(
-                        text = "${user.name}",
+                        text = "${uiState.user.name}",
                         fontSize = 20.sp
                     )
                     Text(
-                        text = "${user.email}",
+                        text = "${uiState.user.email}",
                         color = MaterialTheme.colorScheme.secondary
                     )
                 }
