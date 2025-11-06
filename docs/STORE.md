@@ -89,6 +89,155 @@ The @store implementation in Whitehall is a complete, multi-phase transpilation 
 5. **Auto-wrapping suspend functions** in `viewModelScope.launch`
 6. **Hybrid Hilt detection** based on `@Inject` or `@hilt` annotations
 
+---
+
+## Future Design: ViewModel by Default
+
+**Status:** 🔄 Phase 1.1 IN PROGRESS - Refinement of current implementation
+
+### Design Philosophy
+
+**Core Principle:** Any `var` (mutable state) automatically becomes ViewModel state - whether inline in a component or in a separate class. Only global singletons need the `@store` annotation.
+
+**Rationale:**
+- **Rotation survival should be default** - Users shouldn't lose data on screen rotation
+- **Simpler mental model** - Don't choose between `remember` vs ViewModel, just use `var`
+- **`var` = needs reactivity** - Mutable state signals the need for rotation survival + StateFlow
+- **Annotate the special case, not the common case** - Only global singletons need `@store`
+
+### The Rules
+
+| What | Old Way | New Way |
+|------|---------|---------|
+| Screen-scoped state | `@store class UserProfile { var name = "" }` | `class UserProfile { var name = "" }` (no annotation) |
+| Global singleton | N/A (under consideration) | `@store object AppSettings { var darkMode = false }` |
+| Detection mechanism | Look for `@store` annotation | Look for `var` properties |
+| Annotation meaning | Screen-scoped ViewModel | Global singleton |
+
+### Smart Detection Heuristic (Phase 1.1)
+
+**ViewModel generation triggered when component has:**
+- Suspend functions (needs viewModelScope)
+- >= 3 functions (complex state logic)
+- Lifecycle hooks (onMount/onDispose)
+
+**Simple forms continue using `remember/mutableStateOf`** for backward compatibility.
+
+### Open Questions
+
+#### Question 1: Global Stores (App-Wide State) 🔮 FUTURE
+
+**Question:** How to define stores that live for the entire app lifetime (not screen-scoped)?
+
+**Option A: Global store files (Svelte-style)** ← RECOMMENDED
+
+```whitehall
+<!-- stores/AppSettings.wh -->
+@store object AppSettings {
+  var darkMode = false
+  var language = "en"
+}
+```
+
+Generates Kotlin singleton with StateFlow (NOT ViewModel):
+
+```kotlin
+object AppSettings {
+    data class State(
+        val darkMode: Boolean = false,
+        val language: String = "en"
+    )
+
+    private val _state = MutableStateFlow(State())
+    val state: StateFlow<State> = _state.asStateFlow()
+
+    var darkMode: Boolean
+        get() = _state.value.darkMode
+        set(value) { _state.update { it.copy(darkMode = value) } }
+}
+```
+
+**Option B: Repository pattern (Kotlin files)** - Works today, manual StateFlow setup
+
+**Decision needed:** Option A (global store files) or Option B (Kotlin repositories)?
+
+#### Question 2: Persistence 🤔 FUTURE
+
+**Decision:** Keep it manual (no special syntax)
+
+**Rationale:**
+- DataStore is just one option, not the only one
+- `@persisted` annotation would be too opinionated
+- Manual approach is flexible and explicit
+
+**Recommended pattern:**
+
+```whitehall
+@store class AppSettings {
+  var darkMode = false
+
+  init {
+    loadSettings()
+  }
+
+  private fun loadSettings() {
+    viewModelScope.launch {
+      dataStore.data.collect { prefs ->
+        darkMode = prefs[DARK_MODE_KEY] ?: false
+      }
+    }
+  }
+}
+```
+
+#### Question 3: Callable References ✅ DECIDED
+
+**Decision:** Use Kotlin's callable reference operator (`::`) for passing functions.
+
+```whitehall
+<!-- Function reference -->
+<Button onClick={profile::save}>Save</Button>
+
+<!-- Lambda when you need parameters -->
+<Button onClick={() => profile.save("John")}>Save John</Button>
+```
+
+#### Question 4: Multiple Store Instances ✅ DECIDED
+
+**Decision:** Support multiple instances with automatic key generation.
+
+```whitehall
+<script>
+  val adminProfile = UserProfile()  // Auto-keyed as "adminProfile"
+  val guestProfile = UserProfile()  // Auto-keyed as "guestProfile"
+</script>
+```
+
+Transpiles to:
+```kotlin
+val adminProfile = viewModel<UserProfile>(key = "adminProfile")
+val guestProfile = viewModel<UserProfile>(key = "guestProfile")
+```
+
+### Stores Directory Convention
+
+**Recommended structure:**
+```
+src/
+  stores/              ← Reactive stores (@store) - RECOMMENDED location
+    UserProfile.wh
+    Settings.wh
+  models/              ← Plain data classes (no reactivity)
+    User.kt
+    Post.kt
+  screens/
+    ProfileScreen.wh
+```
+
+**Important:** The `@store` annotation is what matters - it works regardless of file location. The directory structure is purely for organization.
+
+---
+
 ### Implementation Status
 
 | Phase | Component | Status | Location |
@@ -1769,6 +1918,63 @@ whitehall run examples/counter-store/
 
 ---
 
+## Summary: What Works Today vs Future
+
+### ✅ Working Today (Phases 0-5 Complete)
+
+**Screen-Level State Management:**
+1. ✅ **@store annotation** for screen-level reactive state
+2. ✅ **Auto-detection** - `val profile = UserProfile()` automatically uses `viewModel<T>()`
+3. ✅ **Project-wide store registry** - Cross-file detection of @store classes
+4. ✅ **StateFlow generation** - Automatic UiState, _uiState, uiState.collectAsState()
+5. ✅ **Property accessors** - get/set with `.update { it.copy(...) }`
+6. ✅ **Derived properties** - `val isPositive get() = count > 0`
+7. ✅ **stores/** directory support - Proper package resolution
+8. ✅ **Script tag support** - `<script>` for imports in main.wh
+9. ✅ **Multiple store instances** - Auto-keyed by variable name
+10. ✅ **Auto-wrap suspend functions** - `suspend fun` → `viewModelScope.launch { }`
+11. ✅ **Type inference** - Automatically infer types from literal values
+12. ✅ **Hilt integration** - Hybrid auto-detection: `@inject`/`@Inject` OR `@hilt`
+13. ✅ **Lifecycle hooks** - `onMount` / `onDispose` with smart combination
+14. ✅ **Dispatcher control** - `io { }`, `cpu { }`, `main { }` syntax
+15. ✅ **Custom scopes** - `$scope()` for independent lifecycle
+
+**Basic Patterns:**
+- ✅ Local state: `var count = 0`
+- ✅ Props: `@prop val name: String`
+- ✅ Two-way binding: `bind:value={email}`
+- ✅ Derived values: `val doubled = count * 2`
+- ✅ Hoisted state: Local state + props
+- ✅ Manual StateFlow (Kotlin files)
+- ✅ Manual ViewModels (Kotlin files)
+
+### 🔄 In Progress (Phase 1.1)
+
+**Component Inline Vars → ViewModel:**
+- 🔄 Auto-detect `var` in component `<script>` blocks
+- 🔄 Generate ViewModel automatically for complex components
+- 🔄 Smart heuristic: suspend functions, lifecycle hooks, or >=3 functions
+- 🔄 Multi-file output: ComponentViewModel.kt + Component.kt
+- 🔄 Markup transformation: `count` → `uiState.count`, `save()` → `viewModel.save()`
+
+**Current Status:** Infrastructure complete, markup transformation working, tests passing
+
+### 🔮 Future Plans
+
+**Phase 1.2:** Imported classes with `var` - Auto-detect at usage sites
+**Phase 1.3:** Global singletons - `@store object` pattern
+**Phase 2.0:** Advanced features - Store composition, DevTools, persistence middleware
+
+### Migration Path
+
+**Current → Future:**
+- **Breaking:** `@store` will mean singleton, not screen-scoped
+- **Non-breaking:** Screen-scoped state no longer needs `@store` annotation
+- **Backward compatible:** Simple components keep using `remember/mutableStateOf`
+- **Smart migration:** Only complex components auto-convert to ViewModels
+
+---
+
 ## File Map
 
 ```
@@ -1792,12 +1998,13 @@ examples/
     └── build/                           : Generated code
 
 docs/
-├── STATE-MANAGEMENT.md          : Design document & roadmap
-├── STORE-ARCHITECTURE.md        : Complete architectural analysis
-├── STORE-CODE-REFERENCE.md      : Code snippets & quick reference
-├── STORE-EXPLORATION-INDEX.md   : Navigation and index
-└── STORE.md                     : This file (consolidated documentation)
+├── STORE.md                     : This file (comprehensive @store documentation)
+├── SUSPEND-FUNCTIONS.md         : Coroutine scope and dispatcher documentation
+└── (STATE-MANAGEMENT.md)        : [CONSOLIDATED INTO STORE.MD]
 ```
+
+**Note:** STATE-MANAGEMENT.md has been merged into this file for easier maintenance.
+
 
 ---
 
@@ -1826,6 +2033,31 @@ docs/
 
 ---
 
+## Related Documentation
+
+- **[SUSPEND-FUNCTIONS.md](SUSPEND-FUNCTIONS.md)** - Coroutine scope management, dispatcher control (`io`/`cpu`/`main`), and custom scopes
+- **[ROADMAP.md](ROADMAP.md)** - Phase 2.7 details on @store implementation status
+- **[VISION.md](VISION.md)** - Overall project vision including state management goals
+
+---
+
+## Document History
+
+**v1.0 (January 2025):**
+- Consolidated STATE-MANAGEMENT.md into this document
+- Added comprehensive "Future Design" section
+- Added "What Works Today vs Future" summary
+- Clarified Phase 1.1 status and smart detection heuristic
+- Added open questions with recommended approaches
+
+**v0.9 (November 2025):**
+- Completed Phases 0-5 implementation
+- Added Hilt integration (Phase 5)
+- Added suspend function auto-wrapping (Phase 4)
+- Added complete code reference and troubleshooting
+
+---
+
 **End of Documentation**
 
-For questions or issues, refer to the specific phase documentation or code reference sections above.
+This is the single source of truth for Whitehall's @store implementation. For questions or issues, refer to the specific phase documentation or code reference sections above.
