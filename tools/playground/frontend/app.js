@@ -661,19 +661,20 @@ val canSubmit = name.isNotEmpty() && isValidEmail && isValidAge && agreed
     },
     'shopping': {
         name: '16. Shopping Cart',
-        code: `// Work with maps and complex data structures
-var cart = [
-  { "name": "Laptop", "price": 999, "qty": 1 },
-  { "name": "Mouse", "price": 25, "qty": 2 }
+        code: `// Shopping cart with price calculation
+// Using Kotlin maps for item data
+var items = [
+  mapOf("name" to "Laptop", "price" to 999, "qty" to 1),
+  mapOf("name" to "Mouse", "price" to 25, "qty" to 2)
 ]
 
 // Kotlin stdlib functions work in Whitehall
-val total = cart.sumOf { it["price"] as Int * it["qty"] as Int }
+val total = items.sumOf { (it["price"] as Int) * (it["qty"] as Int) }
 
 <Column padding={16} spacing={12}>
   <Text fontSize={24} fontWeight="bold">Shopping Cart</Text>
 
-  @for (item in cart) {
+  @for (item in items) {
     <Card padding={12} modifier={Modifier.fillMaxWidth()}>
       <Column spacing={4}>
         <Text fontSize={16} fontWeight="bold">
@@ -682,7 +683,7 @@ val total = cart.sumOf { it["price"] as Int * it["qty"] as Int }
         <Row spacing={8}>
           <Text>\${item["price"]} x {item["qty"]}</Text>
           <Text fontWeight="bold">
-            = \${item["price"] as Int * item["qty"] as Int}
+            = \${(item["price"] as Int) * (item["qty"] as Int)}
           </Text>
         </Row>
       </Column>
@@ -702,10 +703,10 @@ val total = cart.sumOf { it["price"] as Int * it["qty"] as Int }
 </Column>`
     },
     'navigation': {
-        name: '17. Navigation',
+        name: '17. Navigation (Concept)',
         files: {
-            'App.wh': `// App.wh - Main entry point with NavHost
-// File-based routing: routes/[name]/+screen.wh
+            'App.wh': `// CONCEPTUAL EXAMPLE - Shows navigation patterns
+// Real navigation uses Jetpack Navigation Compose (coming soon)
 
 // Back stack for navigation
 var backStack = ["home"]
@@ -714,123 +715,69 @@ var userId = ""
 // Current route from back stack
 val currentRoute = backStack[backStack.size - 1]
 
-// Navigation helpers
-fun navigateTo(route: String) {
-  backStack = backStack + route
-}
-
-fun navigateBack() {
-  if (backStack.size > 1) {
-    backStack = backStack.dropLast(1)
-  }
-}
-
-// NavHost: loads screen from routes/[name]/+screen.wh
+// Simple navigation with back stack
 <Column padding={16} spacing={16}>
-  <Text>Route: /{currentRoute}</Text>
-  <Text>Stack: {backStack.joinToString(" → ")}</Text>
+  <Text fontSize={20} fontWeight="bold">Navigation Demo</Text>
+  <Text color="#666">Route: /{currentRoute}</Text>
+  <Text color="#666">Stack: {backStack.joinToString(" → ")}</Text>
 
   // Render current route's screen
   @if (currentRoute == "home") {
-    // Would import: routes/home/+screen.wh
-    <HomeScreen />
+    <Column spacing={8}>
+      <Text fontSize={18}>Home Screen</Text>
+      <Button onClick={() => backStack = backStack + "profile"}>
+        Go to Profile →
+      </Button>
+      <Button onClick={() => backStack = backStack + "settings"}>
+        Go to Settings →
+      </Button>
+    </Column>
   } else if (currentRoute == "profile") {
-    // Would import: routes/profile/+screen.wh
-    <ProfileScreen />
+    <Column spacing={8}>
+      <Text fontSize={18}>Profile Screen</Text>
+      <Button onClick={() => backStack = backStack.dropLast(1)}>
+        ← Back
+      </Button>
+      <Text>User: John Doe</Text>
+      <Button onClick={() => {
+        userId = "123"
+        backStack = backStack + "detail"
+      }}>
+        View Details →
+      </Button>
+    </Column>
   } else if (currentRoute == "detail") {
-    // Would import: routes/detail/+screen.wh
-    <DetailScreen userId={userId} />
+    <Column spacing={8}>
+      <Text fontSize={18}>Detail Screen</Text>
+      <Button onClick={() => backStack = backStack.dropLast(1)}>
+        ← Back
+      </Button>
+      <Text>User ID: {userId}</Text>
+    </Column>
   } else {
-    // Would import: routes/settings/+screen.wh
-    <SettingsScreen />
+    <Column spacing={8}>
+      <Text fontSize={18}>Settings Screen</Text>
+      <Button onClick={() => backStack = backStack.dropLast(1)}>
+        ← Back
+      </Button>
+      <Text>Version: 1.0.0</Text>
+    </Column>
   }
 </Column>`,
-            'routes/home/+screen.wh': `// routes/home/+screen.wh
-// Home route screen
-
-<Column spacing={8}>
-  <Text fontSize={24}>Home Screen</Text>
-  <Text>Path: /home</Text>
-
-  <Button onClick={() => navigateTo("profile")}>
-    Go to Profile →
-  </Button>
-
-  <Button onClick={() => navigateTo("settings")}>
-    Go to Settings →
-  </Button>
-</Column>`,
-            'routes/profile/+screen.wh': `// routes/profile/+screen.wh
-// Profile route screen
-
-<Column spacing={8}>
-  <Text fontSize={24}>Profile Screen</Text>
-  <Text>Path: /profile</Text>
-
-  <Button onClick={() => navigateBack()}>
-    ← Back
-  </Button>
-
-  <Text>User: John Doe</Text>
-  <Text>Email: john@example.com</Text>
-
-  <Button onClick={() => {
-    userId = "123"
-    navigateTo("detail")
-  }}>
-    View Details →
-  </Button>
-</Column>`,
-            'routes/detail/+screen.wh': `// routes/detail/+screen.wh
-// Detail route screen with parameter
-
-@prop val userId: String
-
-<Column spacing={8}>
-  <Text fontSize={24}>Detail Screen</Text>
-  <Text>Path: /detail</Text>
-
-  <Button onClick={() => navigateBack()}>
-    ← Back
-  </Button>
-
-  <Text>User ID: {userId}</Text>
-  <Text>Name: John Doe</Text>
-  <Text>Role: Developer</Text>
-</Column>`,
-            'routes/settings/+screen.wh': `// routes/settings/+screen.wh
-// Settings route screen
-
-var notifications = true
-
-<Column spacing={8}>
-  <Text fontSize={24}>Settings Screen</Text>
-  <Text>Path: /settings</Text>
-
-  <Button onClick={() => navigateBack()}>
-    ← Back
-  </Button>
-
-  <Row spacing={8}>
-    <Checkbox bind:checked={notifications} />
-    <Text>Enable notifications</Text>
-  </Row>
-
-  <Text>Version: 1.0.0</Text>
-</Column>`
         }
     },
     'multifile': {
         name: '18. Multi-File Project',
         files: {
-            'Main.wh': `// Multi-file example: Main screen uses components from other files
-// Note: Import functionality is coming soon!
+            'Main.wh': `// Multi-file projects organize code across files
+// Each .wh file compiles to a separate Kotlin file
 
 var count = 0
 var name = ""
 
 <Column padding={16} spacing={12}>
   <Text fontSize={24} fontWeight="bold">Multi-File Demo</Text>
+  <Text color="#666">This is Main.wh</Text>
 
   <Text>Count: {count}</Text>
   <Button onClick={() => count++}>
@@ -839,18 +786,31 @@ var name = ""
 
   <TextField bind:value={name} label="Your name" />
   <Text>Hello, {name}!</Text>
-</Column>`,
-            'Components.wh': `// Reusable components
-// This file would contain shared components
 
-<Column padding={12}>
-  <Text fontWeight="bold">Custom Component</Text>
-  <Text>This demonstrates multi-file structure</Text>
+  <Text color="#888" fontSize={12}>
+    Check the "Output" tab to see all generated files!
+  </Text>
 </Column>`,
-            'Utils.wh': `// Utility functions and helpers
-// This file would contain helper functions
+            'Header.wh': `// Header.wh - Reusable header component
+// This compiles to Header.kt
 
-<Text>Utility helpers would go here</Text>`
+@prop val title: String
+
+<Column padding={16}>
+  <Text fontSize={28} fontWeight="bold">{title}</Text>
+  <Text color="#666">Subtitle goes here</Text>
+</Column>`,
+            'Footer.wh': `// Footer.wh - Reusable footer component
+// This compiles to Footer.kt
+
+<Column padding={16}>
+  <Text color="#888" fontSize={12}>
+    Made with Whitehall
+  </Text>
+  <Text color="#888" fontSize={12}>
+    Version 1.0.0
+  </Text>
+</Column>`
         }
     }
 };
