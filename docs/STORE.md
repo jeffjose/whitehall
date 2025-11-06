@@ -1503,21 +1503,44 @@ pub enum StoreSource {
 - ✅ All 35 transpiler examples passing
 - ✅ All 2 optimization examples passing
 
-**4. Component ViewModel Generation** ⏳ NOT STARTED
+**4. Component ViewModel Generation** ✅ INFRASTRUCTURE COMPLETE (Commit: 6ee58f1)
+
+**Completed Work:**
+- ✅ Implemented `generate_component_viewmodel()` - returns TranspileResult::Multiple
+- ✅ Implemented `generate_component_viewmodel_class()` - ViewModel with UiState, StateFlow, accessors
+- ✅ Implemented `generate_component_wrapper()` - wrapper component with viewModel<T>()
+- ✅ Wired up ComponentInline detection in generate()
+- ✅ Added `analyze_with_context()` for single-file transpilation
+- ✅ Component inline vars detection working in Analyzer
+
+**Current Status:**
+- ViewModel generation: ✅ WORKING
+- Wrapper component structure: ✅ WORKING
+- Multi-file output: ✅ WORKING
+- Markup transformation: ❌ NOT YET IMPLEMENTED
+
+**5. Markup Transformation** ⏳ IN PROGRESS
+
+**Problem:**
+The wrapper component generates correct structure but doesn't transform variable/function references:
+- Current: `text = "Count: ${count}"`
+- Expected: `text = "Count: ${uiState.count}"`
+
+**Required Transformations:**
+1. Mutable vars: `{count}` → `{uiState.count}`
+2. Derived properties: `{displayName}` → `{viewModel.displayName}`
+3. Function calls: `increment()` → `viewModel.increment()`
+4. Bind directives: `bind:value={count}` → `value=uiState.count, onValueChange={viewModel.count = it}`
 
 **Next Tasks:**
-1. Implement `generate_component_viewmodel()` in compose.rs
-   - Part 1: Generate ViewModel class (similar to existing ViewModel generation)
-   - Part 2: Generate wrapper component that instantiates ViewModel
-   - Return `TranspileResult::Multiple`
+1. Add context tracking to ComposeBackend (in_viewmodel_wrapper flag)
+2. Transform interpolations in `generate_prop_value()`
+3. Transform function calls in event handlers
+4. Transform bind:value directives
 
-2. Wire up ComponentInline detection to call `generate_component_viewmodel()`
-   - Check registry for StoreSource::ComponentInline
-   - Route to new generation function instead of standard component generation
-
-3. Update dispatcher scope logic
-   - ComponentInline with vars → use `viewModelScope` (not dispatcherScope)
-   - Enable Level 1 auto-infer from suspend functions
+**Test Status:**
+- Tests 30-32 failing due to missing markup transformation
+- Infrastructure tests would pass if we disable markup comparison
 
 #### Code Generation Strategy
 
