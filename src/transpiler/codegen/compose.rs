@@ -1689,6 +1689,14 @@ impl ComposeBackend {
                             self.add_import_if_missing(prop_imports, "androidx.compose.ui.Modifier");
                             self.add_import_if_missing(prop_imports, "androidx.compose.foundation.clickable");
                         }
+                        ("TextField", "label") | ("TextField", "placeholder") => {
+                            // label/placeholder generate Text() components
+                            self.add_import_if_missing(component_imports, "androidx.compose.material3.Text");
+                        }
+                        ("TextField", "type") if prop_expr.trim_matches('"') == "password" => {
+                            // type="password" → visualTransformation = PasswordVisualTransformation()
+                            self.add_import_if_missing(prop_imports, "androidx.compose.ui.text.input.PasswordVisualTransformation");
+                        }
                         _ => {}
                     }
 
@@ -2219,6 +2227,25 @@ impl ComposeBackend {
                 };
                 Ok(vec![format!("placeholder = {{ Text(\"{}\") }}", placeholder_text)])
             }
+            // TextField type → visualTransformation (e.g., type="password" → PasswordVisualTransformation())
+            // Note: Import is added during collect_imports phase
+            ("TextField", "type") => {
+                let type_value = if value.starts_with('"') && value.ends_with('"') {
+                    &value[1..value.len()-1]
+                } else {
+                    value.as_str()
+                };
+
+                match type_value {
+                    "password" => {
+                        Ok(vec!["visualTransformation = PasswordVisualTransformation()".to_string()])
+                    }
+                    _ => {
+                        // Unknown type - just pass through as-is
+                        Ok(vec![format!("type = {}", value)])
+                    }
+                }
+            }
             // Button text is handled differently - it becomes a child, not a prop
             ("Button", "text") => {
                 // Return empty vec - text will be handled as child in generate_markup
@@ -2571,6 +2598,47 @@ impl ComposeBackend {
 
     fn indent(&self) -> String {
         "    ".repeat(self.indent_level)
+    }
+
+    /// Re-indent a multi-line expression to match current indent level
+    /// Preserves relative indentation between lines
+    fn reindent_expression(&self, expr: &str) -> String {
+        let lines: Vec<&str> = expr.lines().collect();
+        if lines.is_empty() {
+            return expr.to_string();
+        }
+
+        // Find minimum indentation (excluding empty lines and first line)
+        let min_indent = lines.iter()
+            .skip(1) // Skip first line
+            .filter(|line| !line.trim().is_empty())
+            .map(|line| line.len() - line.trim_start().len())
+            .min()
+            .unwrap_or(0);
+
+        // Re-indent each line
+        let reindented: Vec<String> = lines.iter().enumerate()
+            .map(|(i, line)| {
+                if line.trim().is_empty() {
+                    // Preserve empty lines
+                    String::new()
+                } else if i == 0 {
+                    // First line stays on same line as 'val x = '
+                    line.trim().to_string()
+                } else {
+                    // Calculate original indentation relative to minimum
+                    let original_indent = line.len() - line.trim_start().len();
+                    let relative_levels = original_indent.saturating_sub(min_indent) / 2; // Source uses 2 spaces/level
+
+                    // New indentation: current level + relative levels (both use 4 spaces/level in output)
+                    let new_indent = (self.indent_level + relative_levels) * 4;
+                    let spaces = " ".repeat(new_indent);
+                    format!("{}{}", spaces, line.trim_start())
+                }
+            })
+            .collect();
+
+        reindented.join("\n")
     }
 
     /// Helper to extract expression string from PropValue
@@ -3486,7 +3554,16 @@ impl ComposeBackend {
                     .unwrap_or_default();
                 // Transform variable references in the initial value
                 let transformed_value = self.transform_viewmodel_expression(&state.initial_value);
-                output.push_str(&format!("val {}{} = {}\n", state.name, type_annotation, transformed_value));
+
+                // Check if value contains newlines (multi-line expression)
+                if transformed_value.contains('\n') {
+                    // Multi-line expression - re-indent to current level
+                    let reindented = self.reindent_expression(&transformed_value);
+                    output.push_str(&format!("val {}{} = {}\n", state.name, type_annotation, reindented));
+                } else {
+                    // Single line - output as-is
+                    output.push_str(&format!("val {}{} = {}\n", state.name, type_annotation, transformed_value));
+                }
             }
         }
 
