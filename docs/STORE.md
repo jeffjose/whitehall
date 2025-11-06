@@ -1571,12 +1571,31 @@ A: ComponentInline with vars uses `viewModelScope` (like Class source), not `dis
 
 #### Testing Plan
 
-1. Create test component with inline vars
-2. Verify ViewModel generation (structure, UiState, accessors)
-3. Verify wrapper component generation
-4. Verify both files written correctly
-5. Verify dispatcher syntax uses viewModelScope
-6. Verify suspend functions auto-wrapped
+**Test Cases Created:** ✅ COMPLETED
+
+Three comprehensive test cases added to `/tests/transpiler-examples/`:
+
+1. **30-component-inline-vars-basic.md** - Basic component with inline vars
+   - Tests: ViewModel generation, UiState data class, property accessors
+   - Tests: Wrapper component with viewModel<T>() and collectAsState
+   - Tests: Multi-file output (CounterViewModel.kt + Counter.kt)
+
+2. **31-component-inline-vars-suspend.md** - Component with suspend functions
+   - Tests: Suspend function auto-wrapping in viewModelScope.launch
+   - Tests: Error handling patterns with suspend functions
+   - Tests: Complex state management with loading/error states
+
+3. **32-component-inline-vars-derived.md** - Component with derived state
+   - Tests: Derived properties (val with getters) NOT in UiState
+   - Tests: Derived properties accessing mutable vars
+   - Tests: Correct reference to viewModel.derivedProp vs uiState.var
+
+**Current Status:** Tests failing as expected (feature not implemented yet)
+
+**Next Steps:**
+1. Implement `generate_component_viewmodel()` to make tests pass
+2. Verify all 3 new tests pass
+3. Verify existing 35 tests still pass
 
 #### Files Modified
 
