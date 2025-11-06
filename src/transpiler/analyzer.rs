@@ -61,13 +61,21 @@ impl StoreRegistry {
     }
 }
 
+/// Source type for reactive state
+#[derive(Debug, Clone, PartialEq)]
+pub enum StoreSource {
+    Class,           // Separate class file with var properties → ViewModel
+    ComponentInline, // Inline vars in component script → ViewModel
+    Singleton,       // @store object → StateFlow singleton (global state)
+}
+
 /// Information about a reactive class (store)
-/// Tracks both screen-scoped ViewModels (classes with var) and singletons (@store object)
+/// Tracks ViewModels (from classes or components with var) and singletons (@store object)
 #[derive(Debug, Clone)]
 pub struct StoreInfo {
     pub class_name: String,
-    pub is_singleton: bool,     // true for "@store object", false for regular classes
-    pub has_vars: bool,         // true if class has any mutable (var) properties
+    pub source: StoreSource,    // Where the vars came from
+    pub has_vars: bool,         // true if has any mutable (var) properties (false for empty singletons)
     pub has_hilt: bool,         // Has @HiltViewModel annotation or @hilt/@Inject?
     pub has_inject: bool,       // Has @Inject constructor?
     pub package: String,        // Package name (will be filled during codegen)
@@ -267,6 +275,7 @@ impl Analyzer {
     }
 
     /// Phase 0: Collect reactive classes (classes with var properties or @store object)
+    /// Note: Component inline vars are detected in build_pipeline.rs, not here
     fn collect_stores(&mut self, ast: &WhitehallFile) {
         for class in &ast.classes {
             // Check if class has @store annotation
@@ -278,16 +287,16 @@ impl Analyzer {
             // Check if class has any mutable (var) properties
             let has_vars = class.properties.iter().any(|prop| prop.mutable);
 
-            // Determine if this is a singleton: @store object
-            let is_singleton = has_store_annotation && is_object;
-
-            // Register if:
-            // 1. It's a singleton (@store object), OR
-            // 2. It has var properties (reactive class)
-            // Note: @store annotation is now OPTIONAL for classes with var
-            if !is_singleton && !has_vars {
-                continue;  // Skip classes with no vars and not a singleton
-            }
+            // Determine source type:
+            // - @store object → Singleton (global state)
+            // - class with var → ViewModel (screen-scoped)
+            let source = if has_store_annotation && is_object {
+                StoreSource::Singleton
+            } else if has_vars {
+                StoreSource::Class
+            } else {
+                continue;  // Skip classes with no vars and not @store object
+            };
 
             // Check for @hilt annotation (case-insensitive: @hilt or @HiltViewModel)
             let has_hilt_annotation = class.annotations.iter().any(|a| {
@@ -309,7 +318,7 @@ impl Analyzer {
                 class.name.clone(),
                 StoreInfo {
                     class_name: class.name.clone(),
-                    is_singleton,
+                    source,
                     has_vars,
                     has_hilt,
                     has_inject,

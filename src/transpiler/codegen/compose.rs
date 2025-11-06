@@ -2642,20 +2642,20 @@ impl ComposeBackend {
 
     /// Phase 1: Generate ViewModel or Singleton code for reactive class
     fn generate_store_class(&self, class: &ClassDeclaration) -> Result<String, String> {
-        // Check if this is a singleton (@store object)
-        let is_singleton = if let Some(registry) = &self.store_registry {
+        // Check if this is a singleton (@store object) or ViewModel (class/component with var)
+        let source = if let Some(registry) = &self.store_registry {
             registry.get(&class.name)
-                .map(|info| info.is_singleton)
-                .unwrap_or(false)
+                .map(|info| info.source.clone())
+                .unwrap_or(crate::transpiler::analyzer::StoreSource::Class)
         } else {
-            false
+            crate::transpiler::analyzer::StoreSource::Class
         };
 
-        if is_singleton {
+        if source == crate::transpiler::analyzer::StoreSource::Singleton {
             // Generate singleton StateFlow code
             self.generate_singleton_store(class)
         } else {
-            // Generate ViewModel code
+            // Generate ViewModel code (for both Class and ComponentInline sources)
             self.generate_view_model_store(class)
         }
     }

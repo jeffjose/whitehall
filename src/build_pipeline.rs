@@ -86,7 +86,10 @@ pub fn execute_build(config: &Config, clean: bool) -> Result<BuildResult> {
     })
 }
 
-/// Build project-wide store registry by scanning all files for @store classes
+/// Build project-wide store registry by scanning all files for:
+/// - Classes with var properties → ViewModel
+/// - @store object → Singleton
+/// - Components with inline var → ViewModel
 fn build_store_registry(files: &[WhitehallFile]) -> Result<transpiler::StoreRegistry> {
     let mut registry = transpiler::StoreRegistry::new();
 
@@ -94,31 +97,58 @@ fn build_store_registry(files: &[WhitehallFile]) -> Result<transpiler::StoreRegi
         let source = fs::read_to_string(&file.path)
             .context(format!("Failed to read {} for store registry", file.path.display()))?;
 
-        // Quick parse to extract reactive classes (classes with var or @store object)
+        // Parse to extract reactive classes and component vars
         if let Ok(ast) = transpiler::parse_for_stores(&source) {
+            // 1. Scan classes (for Class and Singleton sources)
             for class in &ast.classes {
                 let has_store_annotation = class.annotations.contains(&"store".to_string());
                 let is_object = class.is_object;
                 let has_vars = class.properties.iter().any(|prop| prop.mutable);
-                let is_singleton = has_store_annotation && is_object;
 
-                // Register if it's a singleton or has vars
-                if is_singleton || has_vars {
-                    let has_hilt_annotation = class.annotations.iter().any(|a| a == "HiltViewModel" || a.eq_ignore_ascii_case("hilt"));
-                    let has_inject = class.constructor.as_ref()
-                        .map(|c| c.annotations.iter().any(|a| a.eq_ignore_ascii_case("inject")))
-                        .unwrap_or(false);
-                    let has_hilt = has_hilt_annotation || has_inject;
+                // Determine source type
+                let source_type = if has_store_annotation && is_object {
+                    transpiler::StoreSource::Singleton
+                } else if has_vars {
+                    transpiler::StoreSource::Class
+                } else {
+                    continue;  // Skip classes with no vars and not @store object
+                };
+
+                let has_hilt_annotation = class.annotations.iter().any(|a| a == "HiltViewModel" || a.eq_ignore_ascii_case("hilt"));
+                let has_inject = class.constructor.as_ref()
+                    .map(|c| c.annotations.iter().any(|a| a.eq_ignore_ascii_case("inject")))
+                    .unwrap_or(false);
+                let has_hilt = has_hilt_annotation || has_inject;
+
+                let store_info = transpiler::StoreInfo {
+                    class_name: class.name.clone(),
+                    source: source_type,
+                    has_vars,
+                    has_hilt,
+                    has_inject,
+                    package: file.package_path.clone(),
+                };
+                registry.insert(class.name.clone(), store_info);
+            }
+
+            // 2. Scan component inline vars (for ComponentInline source)
+            // Check if this is a component/screen file and has var in state
+            if file.file_type == FileType::Component || file.file_type == FileType::Screen {
+                let has_component_vars = ast.state.iter().any(|state| state.mutable);
+
+                if has_component_vars {
+                    // Use component name as class_name (e.g., "CounterScreen" from CounterScreen.wh)
+                    let component_name = file.component_name.clone();
 
                     let store_info = transpiler::StoreInfo {
-                        class_name: class.name.clone(),
-                        is_singleton,
-                        has_vars,
-                        has_hilt,
-                        has_inject,
+                        class_name: component_name.clone(),
+                        source: transpiler::StoreSource::ComponentInline,
+                        has_vars: true,
+                        has_hilt: false,  // Component inline vars don't support Hilt (yet)
+                        has_inject: false,
                         package: file.package_path.clone(),
                     };
-                    registry.insert(class.name.clone(), store_info);
+                    registry.insert(component_name, store_info);
                 }
             }
         }

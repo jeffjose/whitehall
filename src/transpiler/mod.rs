@@ -15,7 +15,7 @@ use optimizer::Optimizer;
 use parser::Parser;
 
 // Re-export types needed by build_pipeline
-pub use analyzer::{StoreRegistry, StoreInfo};
+pub use analyzer::{StoreRegistry, StoreInfo, StoreSource};
 pub use ast::WhitehallFile as AST;
 
 /// Transpile Whitehall source code to Kotlin/Compose
