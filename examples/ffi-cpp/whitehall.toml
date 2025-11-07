@@ -13,3 +13,4 @@ ffi_only = true
 
 [ffi.cpp]
 standard = "17"
+library_name = "math"  # Generated object will be "Math"

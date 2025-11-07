@@ -1,5 +1,5 @@
 [package]
-name = "ffi-rust-math"
+name = "math"  # Generated object will be "Math"
 version = "0.1.0"
 edition = "2021"
 

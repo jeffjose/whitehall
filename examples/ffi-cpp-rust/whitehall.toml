@@ -13,6 +13,7 @@ ffi_only = true
 
 [ffi.cpp]
 standard = "17"
+library_name = "cpp_math"  # Generated object will be "CppMath"
 
 [ffi.rust]
 profile = "release"
