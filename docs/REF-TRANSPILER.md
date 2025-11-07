@@ -205,15 +205,52 @@ Component-specific transformations for Compose idioms:
 
 ```rust
 match (component, prop_name) {
+    // Layout shortcuts
     ("Column", "spacing") => "verticalArrangement = Arrangement.spacedBy({value}.dp)",
     ("Column", "padding") => "modifier = Modifier.padding({value}.dp)",
     ("Row", "spacing") => "horizontalArrangement = Arrangement.spacedBy({value}.dp)",
+    ("Row", "padding") => "modifier = Modifier.padding({value}.dp)",
+    ("LazyColumn", "spacing") => "verticalArrangement = Arrangement.spacedBy({value}.dp)",
+    ("LazyColumn", "padding") => "contentPadding = PaddingValues({value}.dp)",
+
+    // Text shortcuts
     ("Text", "fontSize") => "fontSize = {value}.sp",
     ("Text", "fontWeight") => "fontWeight = FontWeight.{Capitalized}",
-    ("Text", "color") => "color = MaterialTheme.colorScheme.{value}",
+    ("Text", "color") => "color = MaterialTheme.colorScheme.{value}" or "Color(0x...)",
+
+    // Button shortcuts
     ("Button", "text") => "(child) Text(\"{value}\")",
+
+    // TextField shortcuts
     ("TextField", "label") => "label = { Text(\"{value}\") }",
+    ("TextField", "placeholder") => "placeholder = { Text(\"{value}\") }",
+    ("TextField", "type") if value == "password" => "visualTransformation = PasswordVisualTransformation()",
+
+    // Spacer shortcuts
+    ("Spacer", "h") => "modifier = Modifier.height({value}.dp)",
+    ("Spacer", "w") => "modifier = Modifier.width({value}.dp)",
+
+    // Card shortcuts
     ("Card", "backgroundColor") => "colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.{value})",
+    ("Card", "elevation") => "elevation = CardDefaults.cardElevation(defaultElevation = {value}.dp)",
+
+    // Box shortcuts
+    ("Box", "width") | ("Box", "height") => "modifier = Modifier.size({value}.dp)",
+    ("Box", "backgroundColor") => "modifier = Modifier.background(Color.{value})",
+    ("Box", "alignment") => "contentAlignment = Alignment.{value}",
+
+    // Universal padding/margin shortcuts (CSS-like)
+    (_, "p" | "m") => "modifier = Modifier.padding({value}.dp)",
+    (_, "px" | "mx") => "modifier = Modifier.padding(horizontal = {value}.dp)",
+    (_, "py" | "my") => "modifier = Modifier.padding(vertical = {value}.dp)",
+    (_, "pt" | "mt") => "modifier = Modifier.padding(top = {value}.dp)",
+    (_, "pb" | "mb") => "modifier = Modifier.padding(bottom = {value}.dp)",
+    (_, "pl" | "ml") => "modifier = Modifier.padding(start = {value}.dp)",
+    (_, "pr" | "mr") => "modifier = Modifier.padding(end = {value}.dp)",
+
+    // Universal modifiers
+    (_, "fillMaxWidth") => "modifier = Modifier.fillMaxWidth()",
+
     ...
 }
 ```
@@ -226,6 +263,12 @@ match (component, prop_name) {
 - **Numbers:** `16` → `16.dp` or `16.sp` (context-dependent)
 - **Ternary operators:** `condition ? a : b` → `.let { if (condition) a else b }`
 - **$screen.params:** `$screen.params.id` → `id` (extracted as function parameter)
+- **Array literals:** `[1, 2, 3]` → `listOf(1, 2, 3)` (or `mutableListOf()` for `var`)
+- **Hex colors:** `#FF5722` → `Color(0xFFFF5722)`
+- **Theme colors:** `"primary"` → `MaterialTheme.colorScheme.primary`
+- **String resources:** `R.string.app_name` → `stringResource(R.string.app_name)`
+- **String resources with args:** `R.string.greeting(name)` → `stringResource(R.string.greeting, name)`
+- **Escape braces:** `\{literal\}` → `{literal}` (not interpolated)
 
 ### Import Management
 

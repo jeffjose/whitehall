@@ -149,6 +149,7 @@ val nested = listOf(listOf(1, 2), listOf(3, 4))
 
 ### Data Binding
 
+**TextField with bind:value:**
 ```whitehall
 var email = ""
 var password = ""
@@ -163,6 +164,28 @@ TextField(
     value = email,
     onValueChange = { email = it },
     label = { Text("Email") }
+)
+// type="password" adds: visualTransformation = PasswordVisualTransformation()
+```
+
+**Checkbox/Switch with bind:checked:**
+```whitehall
+var isEnabled = false
+var notifications = true
+
+<Checkbox bind:checked={isEnabled} />
+<Switch bind:checked={notifications} />
+```
+
+**Transpiles to:**
+```kotlin
+Checkbox(
+    checked = isEnabled,
+    onCheckedChange = { isEnabled = it }
+)
+Switch(
+    checked = notifications,
+    onCheckedChange = { notifications = it }
 )
 ```
 
@@ -217,6 +240,20 @@ Column(
 ) { ... }
 ```
 
+**Padding/Margin shortcuts (CSS-like):**
+```whitehall
+<Text p={16}>All sides</Text>                    // → .padding(16.dp)
+<Text px={20} py={8}>Horizontal & Vertical</Text> // → .padding(horizontal=20.dp, vertical=8.dp)
+<Text pt={4} pb={12}>Top & Bottom</Text>          // → .padding(top=4.dp, bottom=12.dp)
+<Card pl={8} pr={16}>Left & Right</Card>          // → .padding(start=8.dp, end=16.dp)
+```
+
+**Available shortcuts:**
+- `p` - all sides
+- `px`, `py` - horizontal, vertical
+- `pt`, `pb`, `pl`, `pr` - top, bottom, left (start), right (end)
+- `m*` variants - same as padding (Compose has no margin)
+
 **Text shortcuts:**
 ```whitehall
 <Text fontSize={24} fontWeight="bold" color="primary">
@@ -248,9 +285,22 @@ Button(onClick = { handleClick() }) {
 
 **Spacer shortcuts:**
 ```whitehall
-<Spacer size={16} />           // → Spacer(modifier = Modifier.size(16.dp))
-<Spacer width={100} />         // → Spacer(modifier = Modifier.width(100.dp))
-<Spacer height={50} />         // → Spacer(modifier = Modifier.height(50.dp))
+<Spacer h={16} />    // → Spacer(modifier = Modifier.height(16.dp))
+<Spacer w={24} />    // → Spacer(modifier = Modifier.width(24.dp))
+<Spacer />           // → Spacer(modifier = Modifier.height(8.dp)) - default
+```
+
+**fillMaxWidth:**
+```whitehall
+<Text fillMaxWidth={true}>Full width text</Text>
+```
+
+**Transpiles to:**
+```kotlin
+Text(
+    text = "Full width text",
+    modifier = Modifier.fillMaxWidth()
+)
 ```
 
 ---
@@ -487,16 +537,25 @@ output_dir = "build"
 
 Common patterns auto-transform:
 
-| Whitehall | Kotlin/Compose |
-|-----------|----------------|
-| `<Column spacing={16}>` | `verticalArrangement = Arrangement.spacedBy(16.dp)` |
-| `<Row spacing={8}>` | `horizontalArrangement = Arrangement.spacedBy(8.dp)` |
-| `<Text fontSize={20}>` | `fontSize = 20.sp` |
-| `<Text fontWeight="bold">` | `fontWeight = FontWeight.Bold` |
-| `<Text color="primary">` | `color = MaterialTheme.colorScheme.primary` |
-| `<Column padding={16}>` | `modifier = Modifier.padding(16.dp)` |
-| `<Button text="Click">` | `Button(...) { Text("Click") }` |
-| `<TextField label="Name">` | `label = { Text("Name") }` |
+| Component | Prop | Whitehall | Kotlin/Compose |
+|-----------|------|-----------|----------------|
+| Column/Row | `spacing` | `spacing={16}` | `verticalArrangement = Arrangement.spacedBy(16.dp)` |
+| Column/Row | `padding` | `padding={20}` | `modifier = Modifier.padding(20.dp)` |
+| Text | `fontSize` | `fontSize={20}` | `fontSize = 20.sp` |
+| Text | `fontWeight` | `fontWeight="bold"` | `fontWeight = FontWeight.Bold` |
+| Text | `color` | `color="primary"` | `color = MaterialTheme.colorScheme.primary` |
+| Text | `color` | `color="#FF5722"` | `color = Color(0xFFFF5722)` |
+| Button | `text` | `text="Click"` | `Button(...) { Text("Click") }` |
+| TextField | `label` | `label="Name"` | `label = { Text("Name") }` |
+| TextField | `type` | `type="password"` | `visualTransformation = PasswordVisualTransformation()` |
+| Spacer | `h` | `h={16}` | `modifier = Modifier.height(16.dp)` |
+| Spacer | `w` | `w={24}` | `modifier = Modifier.width(24.dp)` |
+| Any | `p` | `p={16}` | `modifier = Modifier.padding(16.dp)` |
+| Any | `px/py` | `px={20} py={8}` | `modifier = Modifier.padding(horizontal=20.dp, vertical=8.dp)` |
+| Any | `pt/pb/pl/pr` | `pt={4}` | `modifier = Modifier.padding(top=4.dp)` |
+| Any | `fillMaxWidth` | `fillMaxWidth={true}` | `modifier = Modifier.fillMaxWidth()` |
+| Card | `backgroundColor` | `backgroundColor="surface"` | `colors = CardDefaults.cardColors(containerColor = ...)` |
+| LazyColumn | `spacing` | `spacing={8}` | `verticalArrangement = Arrangement.spacedBy(8.dp)` |
 
 ---
 
@@ -527,13 +586,12 @@ onClick={doSomething}              // Direct reference
 
 **Both transpile to:** `onClick = { doSomething() }`
 
-### Escape Braces
+### Data Binding Directives
 
-```whitehall
-<Text>Use \{braces\} literally</Text>
-```
+- `bind:value={var}` → TextField two-way binding (TextField, OutlinedTextField)
+- `bind:checked={bool}` → Checkbox/Switch two-way binding
 
-**Transpiles to:** `Text("Use {braces} literally")`
+Both generate `value/checked` + `onValueChange/onCheckedChange` callbacks
 
 ---
 
@@ -573,17 +631,57 @@ cargo test --test transpiler_examples_test -- 00-minimal-text
 
 ## Advanced Features
 
-### String Resources
+### Colors
 
+**Hex colors:**
 ```whitehall
-<Text text={@string/app_name} />
+<Text color="#FF5722">Orange text</Text>
+<Box backgroundColor="#2196F3">Blue box</Box>
 ```
 
-### Checkbox/Switch
+**Transpiles to:**
+```kotlin
+Text(
+    text = "Orange text",
+    color = Color(0xFFFF5722)
+)
+Box(modifier = Modifier.background(Color(0xFF2196F3)))
+```
+
+**Theme colors:**
+```whitehall
+<Text color="primary">Themed text</Text>
+<Text color="secondary">Secondary text</Text>
+```
+
+**Transpiles to:**
+```kotlin
+Text(
+    text = "Themed text",
+    color = MaterialTheme.colorScheme.primary
+)
+```
+
+### String Resources (i18n)
 
 ```whitehall
-var checked = false
-<Checkbox bind:checked={checked} label="Agree" />
+@prop val userName: String
+@prop val count: Int
+
+<Text>{R.string.welcome_title}</Text>
+<Text>{R.string.greeting(userName)}</Text>
+<Text>{R.string.items_count(count)}</Text>
+<Button text={R.string.action_continue} onClick={handleClick} />
+```
+
+**Transpiles to:**
+```kotlin
+Text(text = "${stringResource(R.string.welcome_title)}")
+Text(text = "${stringResource(R.string.greeting, userName)}")
+Text(text = "${stringResource(R.string.items_count, count)}")
+Button(onClick = { handleClick() }) {
+    Text(text = "${stringResource(R.string.action_continue)}")
+}
 ```
 
 ### derivedStateOf (expensive computations)
@@ -591,6 +689,30 @@ var checked = false
 ```whitehall
 var items = []
 val sortedItems = derivedStateOf { items.sortedBy { it.name } }
+
+<LazyColumn>
+  @for (item in sortedItems, key = { it.id }) {
+    <Text>{item.name}</Text>
+  }
+</LazyColumn>
+```
+
+**Transpiles to:**
+```kotlin
+val sortedItems by remember { derivedStateOf { items.sortedBy { it.name } } }
+```
+
+### Escape Braces
+
+```whitehall
+<Text>Use \{curly braces\} literally in text</Text>
+<Text>Interpolate: {count}, literal: \{not interpolated\}</Text>
+```
+
+**Transpiles to:**
+```kotlin
+Text(text = "Use {curly braces} literally in text")
+Text(text = "Interpolate: $count, literal: {not interpolated}")
 ```
 
 ### AsyncImage
@@ -605,13 +727,6 @@ val sortedItems = derivedStateOf { items.sortedBy { it.name } }
 <Card backgroundColor="surface">
   <Text>Content</Text>
 </Card>
-```
-
-### Inline Lambdas
-
-```whitehall
-<Button onClick={vm.save}>Save</Button>         // Direct ref
-<Button onClick={() => vm.save()}>Save</Button> // Inline lambda
 ```
 
 ---
