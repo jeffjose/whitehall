@@ -72,41 +72,28 @@ Spacer(modifier = Modifier.width(24.dp))
 Spacer(modifier = Modifier.height(8.dp))  // default
 ```
 
-## Proposed Improvements
+## Implemented ✅
 
-### 1. Numeric Range Literals ⭐
-**Impact: Medium | Complexity: Low**
-
+### Numeric Range Literals
 ```kotlin
-// Current - verbose list creation
-var items = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+// Clean range syntax with auto-conversion to lists
+val simple = 1..10              // → (1..10).toList()
+val stepped = 0..10:2           // → (0 rangeTo 10 step 2).toList()
+val countdown = 10..1:-1        // → (10 downTo 1).toList()
 
-// Proposed - range syntax (Kotlin-native)
-val simple = 1..10              // Range literal
-val stepped = (0..100 step 2)   // With step
-val countdown = (10 downTo 1)   // Countdown
-
-// Works in @for loops naturally
-@for (i in 1..5) {
-  <Text>Item {i}</Text>
-}
-
-@for (n in 0..10 step 2) {
-  <Text>Even: {n}</Text>
-}
-
-// Ranges are already Kotlin - just pass through
-val total = (1..100).sum()
+// Example usage
+val numbers = 1..100
+val evens = 0..100:2
+val reversed = 10..1:-1
 ```
 
-**Why:**
-- Kotlin already has ranges, just pass them through the transpiler
-- Zero ambiguity - exact same semantics as Kotlin
-- No transformation needed for ranges in @for loops
-- Cleaner than `listOf(1, 2, 3, ...)` for sequential data
-- Common pattern for examples, tests, and iterations
+**Why:** Cleaner than `listOf(1, 2, 3, ...)` for sequential data. Automatic conversion to lists for variable assignments.
+
+**Test:** `tests/transpiler-examples/00f-range-literals.md`
 
 ---
+
+## Proposed Improvements
 
 ### 2. Image from URL (simpler than AsyncImage)
 **Impact: Medium | Complexity: Low**
