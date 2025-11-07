@@ -9,6 +9,7 @@ pub struct WhitehallFile {
     pub lifecycle_hooks: Vec<LifecycleHook>,
     pub classes: Vec<ClassDeclaration>,  // Store classes (@store annotation)
     pub markup: Markup,
+    pub kotlin_blocks: Vec<KotlinBlock>, // Pass-through Kotlin code blocks
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -71,6 +72,38 @@ pub struct PropertyDeclaration {
     pub initial_value: Option<String>,   // e.g., "\"\"" or "false"
     pub getter: Option<String>,          // Custom getter for derived properties
     pub visibility: Option<String>,      // "private", "protected", "public", or None (default)
+}
+
+/// Represents a block of Kotlin code that passes through unchanged.
+/// These are Kotlin language constructs that don't need Whitehall transformation.
+#[derive(Debug, Clone, PartialEq)]
+pub struct KotlinBlock {
+    /// The raw Kotlin source code content
+    pub content: String,
+    /// Character position in the original file (used for preserving declaration order)
+    pub position: usize,
+    /// A hint about what type of Kotlin construct this is (for debugging/tooling)
+    pub block_type: KotlinBlockType,
+}
+
+/// Categorizes the type of Kotlin construct in a pass-through block.
+/// This is just a hint - the content is not parsed, only captured.
+#[derive(Debug, Clone, PartialEq)]
+pub enum KotlinBlockType {
+    /// Unknown Kotlin construct
+    Unknown,
+    /// Data class declaration (e.g., `data class User(...)`)
+    DataClass,
+    /// Sealed class or sealed interface
+    SealedClass,
+    /// Enum class declaration
+    EnumClass,
+    /// Top-level function (outside of classes)
+    TopLevelFunction,
+    /// Type alias declaration
+    TypeAlias,
+    /// Object declaration (without @store annotation)
+    ObjectDeclaration,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -151,6 +184,7 @@ impl WhitehallFile {
             lifecycle_hooks: Vec::new(),
             classes: Vec::new(),
             markup: Markup::Text(String::new()),
+            kotlin_blocks: Vec::new(),
         }
     }
 }

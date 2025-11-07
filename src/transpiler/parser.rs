@@ -2,7 +2,7 @@
 
 use crate::transpiler::ast::{
     ClassDeclaration, Component, ComponentProp, ConstructorDeclaration, ElseIfBranch,
-    ForLoopBlock, FunctionDeclaration, IfElseBlock, Import, LifecycleHook, Markup,
+    ForLoopBlock, FunctionDeclaration, IfElseBlock, Import, KotlinBlock, LifecycleHook, Markup,
     PropDeclaration, PropertyDeclaration, PropValue, StateDeclaration, WhenBlock, WhenBranch,
     WhitehallFile,
 };
@@ -53,6 +53,7 @@ impl Parser {
         let mut functions = Vec::new();
         let mut lifecycle_hooks = Vec::new();
         let mut classes = Vec::new();
+        let kotlin_blocks: Vec<KotlinBlock> = Vec::new();
         let mut pending_annotations = Vec::new();
 
         // Parse imports, props, state, functions, lifecycle hooks, and classes (before markup)
@@ -135,6 +136,7 @@ impl Parser {
             lifecycle_hooks,
             classes,
             markup,
+            kotlin_blocks,
         })
     }
 

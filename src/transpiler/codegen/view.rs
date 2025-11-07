@@ -516,6 +516,7 @@ mod tests {
                 children: vec![Markup::Text("Hello".to_string())],
                 self_closing: false,
             }),
+            kotlin_blocks: vec![],
         };
 
         let output = backend.generate(&file).unwrap();
@@ -589,6 +590,7 @@ mod tests {
             lifecycle_hooks: vec![],
             imports: vec![],
             classes: vec![],
+            kotlin_blocks: vec![],
             markup: Markup::Component(Component {
                 name: "Text".to_string(),
                 props: vec![],
