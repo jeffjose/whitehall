@@ -74,7 +74,36 @@ Spacer(modifier = Modifier.height(8.dp))  // default
 
 ## Proposed Improvements
 
-### 1. Image from URL (simpler than AsyncImage)
+### 1. Numeric Range Literals ⭐
+**Impact: Medium | Complexity: Low**
+
+```kotlin
+// Current - verbose list creation
+var items = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+
+// Proposed - range syntax (Kotlin-native)
+var items = 1..10        // → (1..10).toList()
+var evens = 0..100:2     // → (0..100 step 2).toList()
+var countdown = 10..1:-1 // → (10 downTo 1).toList()
+
+// Works in @for loops naturally
+@for (i in 1..5) {
+  <Text>Item {i}</Text>
+}
+
+// Still supports list operations
+var doubled = (1..5).map { it * 2 }  // [2, 4, 6, 8, 10]
+```
+
+**Why:**
+- Kotlin already has ranges, just surface them naturally
+- Zero ambiguity - same semantics as Kotlin
+- Cleaner than `listOf(1, 2, 3, ...)` for sequential data
+- Common pattern for examples, tests, and iterations
+
+---
+
+### 2. Image from URL (simpler than AsyncImage)
 **Impact: Medium | Complexity: Low**
 
 ```kotlin
@@ -91,7 +120,7 @@ Spacer(modifier = Modifier.height(8.dp))  // default
 
 ---
 
-### 2. Divider Shorthand ⭐
+### 3. Divider Shorthand ⭐
 **Impact: Medium | Complexity: Low**
 
 ```kotlin
@@ -104,7 +133,7 @@ Spacer(modifier = Modifier.height(8.dp))  // default
 
 ---
 
-### 3. Boolean Props (no ={true}) ⭐
+### 4. Boolean Props (no ={true}) ⭐
 **Impact: Medium | Complexity: Low**
 
 ```kotlin
@@ -122,7 +151,7 @@ Spacer(modifier = Modifier.height(8.dp))  // default
 
 ---
 
-### 4. Smart TextField Variants
+### 5. Smart TextField Variants
 **Impact: Medium | Complexity: Medium**
 
 ```kotlin
@@ -142,7 +171,7 @@ Spacer(modifier = Modifier.height(8.dp))  // default
 
 ---
 
-### 5. Alignment Shortcuts ⭐
+### 6. Alignment Shortcuts ⭐
 **Impact: High | Complexity: Low**
 
 ```kotlin
