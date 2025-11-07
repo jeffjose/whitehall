@@ -13,6 +13,17 @@ transpiler_count=$(echo "$transpiler_output" | grep -oP '✓ All \K\d+/\d+(?= te
 
 echo ""
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo "Running Pass-Through Examples (Expected to Fail)"
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+passthru_output=$(cargo test --test passthru_examples_test tests::examples -- --nocapture 2>&1)
+passthru_exit=$?
+echo "$passthru_output"
+
+# Extract test count from passthru output
+passthru_count=$(echo "$passthru_output" | grep -oP '\K\d+/\d+(?= tests passed!)' || echo "")
+
+echo ""
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo "Running Optimization Examples"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 optimization_output=$(cargo test --test optimization_examples_test -- --nocapture 2>&1)
@@ -42,6 +53,20 @@ else
     fi
 fi
 
+if [ $passthru_exit -eq 0 ]; then
+    if [ -n "$passthru_count" ]; then
+        echo "✅ Pass-through examples: PASSED ($passthru_count)"
+    else
+        echo "✅ Pass-through examples: PASSED"
+    fi
+else
+    if [ -n "$passthru_count" ]; then
+        echo "⚠️  Pass-through examples: EXPECTED FAILURE ($passthru_count) - awaiting implementation"
+    else
+        echo "⚠️  Pass-through examples: EXPECTED FAILURE - awaiting implementation"
+    fi
+fi
+
 if [ $optimization_exit -eq 0 ]; then
     if [ -n "$optimization_count" ]; then
         echo "✅ Optimization examples: PASSED ($optimization_count)"
@@ -58,8 +83,10 @@ fi
 
 echo ""
 
+# Pass-through tests are expected to fail, so exclude from overall pass/fail
 if [ $transpiler_exit -eq 0 ] && [ $optimization_exit -eq 0 ]; then
-    echo "🎉 All example tests passed!"
+    echo "🎉 All implemented example tests passed!"
+    echo "ℹ️  Pass-through tests are expected to fail until architecture is implemented (see docs/PASSTHRU.md)"
     exit 0
 else
     echo "⚠️  Some tests failed"

@@ -1464,16 +1464,54 @@ mod tests {
 
 ### Integration Tests
 
-**Location:** `tests/transpiler-examples/`
+**Location:** `tests/passthru-examples/`
 
-Create test files:
-- `34-passthrough-basic.md` - Simple data classes
-- `35-passthrough-strings.md` - String literals
-- `36-passthrough-comments.md` - Comments
-- `37-passthrough-sealed.md` - Sealed classes
-- `38-passthrough-enum.md` - Enum classes
-- `39-passthrough-mixed.md` - Mix of parsed and pass-through
-- `40-passthrough-complex.md` - Real-world complex example
+**Status:** ✅ Test infrastructure created (2025-11-07)
+
+**Test Files Created:**
+1. **`01-data-class.md`** - Data classes after main class
+   - Tests that `data class` definitions pass through unchanged
+   - Currently errors with "Expected component, found: data class"
+
+2. **`02-sealed-class.md`** - Sealed class hierarchies
+   - Tests sealed classes for state management patterns
+   - Currently errors with "Expected component, found: data class"
+
+3. **`03-enum-class.md`** - Enum classes
+   - Tests enum classes for type-safe constants
+   - Currently errors with "Expected component, found: enum class"
+
+4. **`04-typealias-and-helpers.md`** - Type aliases and top-level functions
+   - Tests type aliases and extension functions
+   - Currently errors with "Expected component, found: typealias"
+
+5. **`05-mixed-constructs.md`** - Multiple Kotlin constructs
+   - Tests mixed data classes, sealed classes, enums, objects, type aliases
+   - Real-world pattern with API store
+   - Currently errors with "Expected component, found: typealias"
+
+**Running Tests:**
+```bash
+# Run just pass-through tests
+cargo test --test passthru_examples_test
+
+# Run with output
+cargo test --test passthru_examples_test -- --nocapture
+
+# Run all tests including pass-through
+./scripts/test-examples.sh
+```
+
+**Expected Behavior:**
+- 🔴 **Currently:** All 5 tests FAIL (expected)
+- 🟢 **After implementation:** All 5 tests PASS
+
+**Additional Tests to Add (Future):**
+- String literals in pass-through blocks
+- Comments in pass-through blocks
+- Nested constructs with complex generics
+- Interface definitions
+- Inline classes
 
 ### Manual Testing
 
