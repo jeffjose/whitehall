@@ -13,8 +13,6 @@ pub fn build_ffi(config: &Config, project_root: &Path) -> Result<()> {
         return Ok(());
     }
 
-    println!("Building FFI components...");
-
     let ffi_dir = project_root.join("src/ffi");
     let build_dir = project_root.join(&config.build.output_dir);
 
@@ -46,24 +44,15 @@ fn should_build_ffi(config: &Config, project_root: &Path) -> bool {
 
 /// Build C++ FFI components
 fn build_cpp_ffi(config: &Config, ffi_dir: &Path, build_dir: &Path) -> Result<()> {
-    println!("  Discovering C++ FFI functions...");
-
     // 1. Discover FFI functions
     let functions = discover_cpp_ffi(ffi_dir)
         .context("Failed to discover C++ FFI functions")?;
 
     if functions.is_empty() {
-        println!("  No @ffi annotated functions found in C++ files");
         return Ok(());
     }
 
-    println!("  Found {} FFI function(s)", functions.len());
-    for func in &functions {
-        println!("    - {}()", func.name);
-    }
-
     // 2. Generate Kotlin bindings
-    println!("  Generating Kotlin bindings...");
     let kotlin_dir = build_dir.join("generated/kotlin");
     let package_path = config.android.package.replace('.', "/");
     let kotlin_package_dir = kotlin_dir.join(&package_path).join("ffi");
@@ -83,10 +72,7 @@ fn build_cpp_ffi(config: &Config, ffi_dir: &Path, build_dir: &Path) -> Result<()
     fs::write(&kotlin_file, kotlin_code)
         .context(format!("Failed to write Kotlin binding: {}", kotlin_file.display()))?;
 
-    println!("    → {}", kotlin_file.display());
-
     // 3. Generate JNI bridge
-    println!("  Generating JNI bridge...");
     let jni_dir = build_dir.join("generated/jni");
     fs::create_dir_all(&jni_dir)
         .context("Failed to create JNI output directory")?;
@@ -108,10 +94,7 @@ fn build_cpp_ffi(config: &Config, ffi_dir: &Path, build_dir: &Path) -> Result<()
     fs::write(&jni_file, jni_code)
         .context(format!("Failed to write JNI bridge: {}", jni_file.display()))?;
 
-    println!("    → {}", jni_file.display());
-
     // 4. Generate CMakeLists.txt
-    println!("  Generating CMake configuration...");
     let cmake_dir = build_dir.join("cmake");
     fs::create_dir_all(&cmake_dir)
         .context("Failed to create CMake output directory")?;
@@ -129,17 +112,12 @@ fn build_cpp_ffi(config: &Config, ffi_dir: &Path, build_dir: &Path) -> Result<()
     fs::write(&cmake_file, cmake_code)
         .context(format!("Failed to write CMakeLists.txt: {}", cmake_file.display()))?;
 
-    println!("    → {}", cmake_file.display());
-
     // 5. TODO: Run CMake build (Phase 1.6)
     // This would require:
     // - Finding Android NDK
     // - Running cmake with proper toolchain file
     // - Running make/ninja
     // - Copying .so files to correct location
-    println!("  CMake build step not yet implemented (Phase 1.6)");
-
-    println!("FFI code generation complete!");
 
     Ok(())
 }
