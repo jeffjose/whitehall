@@ -55,6 +55,10 @@ pub fn execute_build(config: &Config, clean: bool) -> Result<BuildResult> {
             .context("Failed to generate Android project scaffold")?;
     }
 
+    // 4.5. Build FFI components if enabled
+    crate::ffi_build::build_ffi(config, Path::new("."))
+        .context("Failed to build FFI components")?;
+
     // 5. Transpile each file
     let mut errors = Vec::new();
     let mut success_count = 0;

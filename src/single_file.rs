@@ -4,7 +4,7 @@ use sha2::{Digest, Sha256};
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use crate::config::{AndroidConfig, BuildConfig, Config, ProjectConfig, ToolchainConfig};
+use crate::config::{AndroidConfig, BuildConfig, Config, FfiConfig, ProjectConfig, ToolchainConfig};
 
 /// Configuration extracted from single-file frontmatter
 #[derive(Debug, Deserialize)]
@@ -171,6 +171,7 @@ pub fn to_config(single_file_config: &SingleFileConfig, output_dir: &str) -> Con
             optimize_level: "default".to_string(),
         },
         toolchain: ToolchainConfig::default(),
+        ffi: FfiConfig::default(),
     }
 }
 

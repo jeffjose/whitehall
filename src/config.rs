@@ -10,6 +10,8 @@ pub struct Config {
     pub build: BuildConfig,
     #[serde(default)]
     pub toolchain: ToolchainConfig,
+    #[serde(default)]
+    pub ffi: FfiConfig,
 }
 
 #[derive(Debug, Deserialize)]
@@ -87,6 +89,80 @@ fn default_agp() -> String {
 
 fn default_kotlin() -> String {
     crate::toolchain::DEFAULT_KOTLIN.to_string()
+}
+
+#[derive(Debug, Deserialize, Clone)]
+pub struct FfiConfig {
+    /// Enable or disable FFI. If None, auto-detect based on directory existence
+    pub enabled: Option<bool>,
+    #[serde(default)]
+    pub cpp: CppConfig,
+    #[serde(default)]
+    pub rust: RustConfig,
+}
+
+impl Default for FfiConfig {
+    fn default() -> Self {
+        Self {
+            enabled: None, // Auto-detect by default
+            cpp: CppConfig::default(),
+            rust: RustConfig::default(),
+        }
+    }
+}
+
+#[derive(Debug, Deserialize, Clone)]
+pub struct CppConfig {
+    #[serde(default = "default_cpp_standard")]
+    pub standard: String,
+    #[serde(default)]
+    pub flags: Vec<String>,
+    #[serde(default)]
+    pub libraries: Vec<String>,
+}
+
+impl Default for CppConfig {
+    fn default() -> Self {
+        Self {
+            standard: default_cpp_standard(),
+            flags: Vec::new(),
+            libraries: Vec::new(),
+        }
+    }
+}
+
+fn default_cpp_standard() -> String {
+    "17".to_string()
+}
+
+#[derive(Debug, Deserialize, Clone)]
+pub struct RustConfig {
+    #[serde(default = "default_rust_profile")]
+    pub profile: String,
+    #[serde(default = "default_rust_targets")]
+    pub targets: Vec<String>,
+}
+
+impl Default for RustConfig {
+    fn default() -> Self {
+        Self {
+            profile: default_rust_profile(),
+            targets: default_rust_targets(),
+        }
+    }
+}
+
+fn default_rust_profile() -> String {
+    "release".to_string()
+}
+
+fn default_rust_targets() -> Vec<String> {
+    vec![
+        "aarch64-linux-android".to_string(),
+        "armv7-linux-androideabi".to_string(),
+        "x86_64-linux-android".to_string(),
+        "i686-linux-android".to_string(),
+    ]
 }
 
 /// Load and parse whitehall.toml configuration file

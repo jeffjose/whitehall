@@ -76,18 +76,14 @@ double multiply(double a, double b) {
 }
 ```
 
-**Step 2: Enable FFI in `whitehall.toml`**
-```toml
-[ffi]
-enabled = true
-```
-
-**Step 3: Build**
+**Step 2: Build**
 ```bash
 whitehall build
 ```
 
-**Step 4: Use in your Whitehall component**
+**That's it!** Whitehall automatically detects `src/ffi/cpp/` and builds it.
+
+**Step 3: Use in your Whitehall component**
 ```whitehall
 <script>
   import $ffi.cpp.Math
@@ -146,11 +142,14 @@ pub fn multiply(a: f64, b: f64) -> f64 {
 }
 ```
 
-**Step 4: Build and use**
+**Step 4: Build**
 ```bash
 whitehall build
 ```
 
+**That's it!** Whitehall automatically detects `src/ffi/rust/` and builds it.
+
+**Step 5: Use in your component**
 ```whitehall
 <script>
   import $ffi.rust.Math
@@ -688,13 +687,411 @@ fun detectFaces(bitmap: Bitmap): List<Face> {
 
 ### Summary: Two-Tier System
 
-| Aspect | Simple Types | Complex Types |
+| Aspect | Simple Types | Complex Types (ByteArray) |
 |--------|-------------|---------------|
 | **FFI Boundary** | Native types (Int, String, etc.) | `ByteArray` |
 | **Whitehall Generates** | All glue code | All glue code |
 | **You Write (Native)** | Pure logic | Logic + serialization |
 | **You Write (Kotlin)** | Nothing | Wrapper with deserialization |
 | **Transparency** | 100% transparent | 1 wrapper function |
+| **Best For** | All simple operations | Small/medium data (< 1MB) |
+
+---
+
+## Advanced: Opaque Handles (Zero-Copy Pattern)
+
+For large data or stateful operations, you can use **opaque handles** instead of serialization. A handle is just a `Long` (64-bit integer) that represents a pointer or ID to data stored in native memory.
+
+### Why Use Handles?
+
+**Advantages:**
+- ✅ **Zero-copy** - Data stays in native memory
+- ✅ **Better performance** - No serialization overhead
+- ✅ **Streaming access** - Get parts of data on demand
+- ✅ **Stateful operations** - Keep expensive resources loaded (ML models, video decoders, database connections)
+
+**Trade-offs:**
+- ❌ **Manual lifecycle** - Must explicitly release handles
+- ❌ **Memory leak risk** - Forgetting to release = leak
+- ❌ **More complex API** - Object-oriented instead of functional
+
+### C++ Handle Example
+
+**C++ (you write):**
+```cpp
+// src/ffi/cpp/video-decoder.cpp
+
+// Internal storage
+struct VideoDecoder {
+    AVFormatContext* format_ctx;
+    AVCodecContext* codec_ctx;
+    int video_stream_index;
+};
+
+std::unordered_map<int64_t, VideoDecoder> g_decoders;
+int64_t g_next_handle = 1;
+
+// @ffi
+int64_t openVideo(const std::string& path) {
+    VideoDecoder decoder;
+
+    // Open video (expensive!)
+    if (avformat_open_input(&decoder.format_ctx, path.c_str(), nullptr, nullptr) != 0) {
+        return -1;  // Error
+    }
+
+    // ... initialize decoder ...
+
+    // Store and return handle
+    int64_t handle = g_next_handle++;
+    g_decoders[handle] = std::move(decoder);
+    return handle;
+}
+
+// @ffi
+int getFrameCount(int64_t handle) {
+    if (g_decoders.find(handle) == g_decoders.end()) {
+        return -1;
+    }
+    return g_decoders[handle].format_ctx->streams[0]->nb_frames;
+}
+
+// @ffi
+std::vector<uint8_t> getFrame(int64_t handle, int frameIndex) {
+    if (g_decoders.find(handle) == g_decoders.end()) {
+        return {};
+    }
+
+    // Decode specific frame (fast - decoder already open!)
+    return decode_frame(g_decoders[handle], frameIndex);
+}
+
+// @ffi
+void closeVideo(int64_t handle) {
+    if (g_decoders.find(handle) == g_decoders.end()) {
+        return;
+    }
+
+    // Clean up resources
+    VideoDecoder& decoder = g_decoders[handle];
+    avformat_close_input(&decoder.format_ctx);
+
+    g_decoders.erase(handle);
+}
+```
+
+**Kotlin wrapper:**
+```kotlin
+class VideoDecoder(private val handle: Long) : AutoCloseable {
+    val frameCount: Int
+        get() = VideoFFI.getFrameCount(handle)
+
+    fun getFrame(index: Int): Bitmap {
+        val bytes = VideoFFI.getFrame(handle, index)
+        return bytes.toBitmap()
+    }
+
+    override fun close() {
+        VideoFFI.closeVideo(handle)
+    }
+}
+
+// Factory function
+fun openVideo(path: String): VideoDecoder? {
+    val handle = VideoFFI.openVideo(path)
+    return if (handle >= 0) VideoDecoder(handle) else null
+}
+```
+
+**Whitehall usage:**
+```whitehall
+<script>
+  @prop val videoPath: String
+  var decoder: VideoDecoder? = null
+  var currentFrame: Bitmap? = null
+  var frameIndex = 0
+
+  onMount {
+    // Open once, keep decoder loaded
+    decoder = openVideo(videoPath)
+  }
+
+  fun nextFrame() {
+    val dec = decoder ?: return
+    if (frameIndex < dec.frameCount - 1) {
+      frameIndex++
+      currentFrame = dec.getFrame(frameIndex)
+    }
+  }
+
+  fun prevFrame() {
+    val dec = decoder ?: return
+    if (frameIndex > 0) {
+      frameIndex--
+      currentFrame = dec.getFrame(frameIndex)
+    }
+  }
+
+  onUnmount {
+    // CRITICAL: Clean up!
+    decoder?.close()
+  }
+</script>
+
+<Column>
+  @if (currentFrame != null) {
+    <Image bitmap={currentFrame} />
+  }
+
+  <Text>Frame {frameIndex + 1} / {decoder?.frameCount ?: 0}</Text>
+
+  <Row>
+    <Button onClick={prevFrame}>Previous</Button>
+    <Button onClick={nextFrame}>Next</Button>
+  </Row>
+</Column>
+```
+
+### Rust Handle Example (Safer!)
+
+Rust's ownership system makes handles much safer:
+
+**Rust (you write):**
+```rust
+use whitehall_ffi::ffi;
+use std::collections::HashMap;
+use std::sync::{Arc, Mutex};
+
+// Thread-safe global storage
+lazy_static! {
+    static ref DECODERS: Arc<Mutex<HashMap<i64, VideoDecoder>>> =
+        Arc::new(Mutex::new(HashMap::new()));
+    static ref NEXT_HANDLE: Arc<Mutex<i64>> = Arc::new(Mutex::new(1));
+}
+
+struct VideoDecoder {
+    // ... decoder state ...
+}
+
+impl Drop for VideoDecoder {
+    fn drop(&mut self) {
+        // ✅ Automatic cleanup when dropped!
+        println!("Cleaning up decoder");
+    }
+}
+
+#[ffi]
+pub fn open_video(path: String) -> i64 {
+    let decoder = match VideoDecoder::open(&path) {
+        Ok(d) => d,
+        Err(_) => return -1,
+    };
+
+    let mut decoders = DECODERS.lock().unwrap();
+    let mut next = NEXT_HANDLE.lock().unwrap();
+
+    let handle = *next;
+    *next += 1;
+
+    decoders.insert(handle, decoder);
+    handle
+}
+
+#[ffi]
+pub fn get_frame_count(handle: i64) -> i32 {
+    let decoders = DECODERS.lock().unwrap();
+    decoders.get(&handle)
+        .map(|d| d.frame_count())
+        .unwrap_or(-1)
+}
+
+#[ffi]
+pub fn get_frame(handle: i64, frame_index: i32) -> Vec<u8> {
+    let mut decoders = DECODERS.lock().unwrap();
+    decoders.get_mut(&handle)
+        .and_then(|d| d.decode_frame(frame_index).ok())
+        .unwrap_or_default()
+}
+
+#[ffi]
+pub fn close_video(handle: i64) {
+    let mut decoders = DECODERS.lock().unwrap();
+    // ✅ Drop trait automatically cleans up when removed
+    decoders.remove(&handle);
+}
+```
+
+**Rust advantages for handles:**
+1. ✅ **Drop trait** - Automatic cleanup, can't forget
+2. ✅ **Type safety** - Can't use invalid handles (at compile time with proper design)
+3. ✅ **Thread safety** - `Arc<Mutex<T>>` makes it thread-safe
+4. ✅ **No undefined behavior** - Borrow checker prevents use-after-free
+5. ✅ **Option<T>** - Explicit handling of missing handles
+
+---
+
+## Choosing Between Patterns
+
+Both patterns work with Whitehall automatically (they only use simple types). Choose based on your needs:
+
+### Pattern Comparison
+
+| Aspect | ByteArray Serialization | Opaque Handles |
+|--------|------------------------|----------------|
+| **FFI Types Used** | `ByteArray` | `Long` + `ByteArray` |
+| **Whitehall Support** | ✅ Automatic | ✅ Automatic |
+| **Data Copies** | 5 (includes serialization) | 0 (zero-copy) |
+| **Memory Owner** | Kotlin (GC) | Native (manual) |
+| **Lifecycle** | Automatic | Manual (must call release) |
+| **API Style** | Functional (stateless) | Object-oriented (stateful) |
+| **Memory Leak Risk** | None | Medium (C++), Low (Rust) |
+| **Thread Safety** | Easy | Complex (C++), Easy (Rust) |
+| **Performance** | Good (< 1MB) | Excellent (any size) |
+| **Code Complexity** | Low | Medium |
+| **Best For** | Small/medium data, simple operations | Large data, stateful operations, streaming |
+
+### Decision Guide
+
+**Use ByteArray Pattern When:**
+- ✅ Data is small/medium (< 1MB)
+- ✅ Stateless operations (function call → result)
+- ✅ Want simple, safe API
+- ✅ Examples: Image filters, text processing, compression, encryption
+
+**Use Handle Pattern When:**
+- ✅ Data is large (> 1MB)
+- ✅ Expensive to create/load (ML models, video decoders, databases)
+- ✅ Need streaming access (get parts on demand)
+- ✅ Zero-copy critical for performance
+- ✅ Examples: Video playback, ML inference, real-time processing
+
+**Use Both Together:**
+
+You can mix patterns in the same project!
+
+```cpp
+// Handle pattern: Keep expensive resource loaded
+// @ffi
+int64_t loadModel(const std::string& path) { /* ... */ }
+
+// ByteArray pattern: Process data with cached resource
+// @ffi
+std::vector<uint8_t> runInference(
+    int64_t model_handle,
+    const std::vector<uint8_t>& input_tensor
+) { /* ... */ }
+
+// Handle pattern: Clean up
+// @ffi
+void unloadModel(int64_t handle) { /* ... */ }
+```
+
+```whitehall
+<script>
+  var modelHandle: Long? = null
+
+  onMount {
+    // Load expensive model once (handle)
+    modelHandle = ML.loadModel("/path/to/model.tflite")
+  }
+
+  suspend fun analyze(image: Bitmap) {
+    val handle = modelHandle ?: return
+
+    // Pass data in/out efficiently (ByteArray)
+    val input = image.toTensor()
+    val output = ML.runInference(handle, input)
+
+    return Prediction.fromBytes(output)
+  }
+
+  onUnmount {
+    // Clean up
+    modelHandle?.let { ML.unloadModel(it) }
+  }
+</script>
+```
+
+---
+
+## Rust vs C++ for FFI
+
+### C++ FFI
+**Pros:**
+- ✅ Rich ecosystem (OpenCV, FFmpeg, etc.)
+- ✅ Maximum performance
+- ✅ Widely used for Android NDK
+
+**Cons:**
+- ❌ Manual memory management (easy to leak)
+- ❌ No built-in thread safety
+- ❌ Undefined behavior if you mess up
+- ❌ Handle pattern requires careful coding
+
+### Rust FFI
+**Pros:**
+- ✅ **Memory safety enforced** - No leaks, use-after-free, or buffer overflows
+- ✅ **Drop trait** - Automatic cleanup (RAII done right)
+- ✅ **Thread safety** - `Send`/`Sync` traits prevent data races
+- ✅ **Better error handling** - `Result<T, E>` instead of exceptions
+- ✅ **Safer handles** - Borrow checker + type system prevent misuse
+- ✅ **Modern tooling** - Cargo, built-in testing, great docs
+
+**Cons:**
+- ❌ Smaller ecosystem than C++
+- ❌ Steeper learning curve
+- ❌ Longer compile times
+
+### Rust Makes Handles Safer
+
+**C++ handle pattern risks:**
+```cpp
+// ❌ Easy mistakes in C++:
+void processVideo(const std::string& path) {
+    int64_t handle = openVideo(path);
+
+    // Use handle...
+
+    // FORGOT to call closeVideo(handle)!  → LEAK
+}
+
+// ❌ Use after free:
+int64_t handle = openVideo(path);
+closeVideo(handle);
+getFrame(handle, 0);  // CRASH! Handle is invalid
+```
+
+**Rust prevents these at compile time:**
+```rust
+// ✅ Rust enforces cleanup:
+pub fn process_video(path: &str) {
+    let handle = open_video(path);
+
+    // Use handle...
+
+    // Compiler ERROR if you don't call close_video()
+    // (if using proper RAII types)
+}
+
+// ✅ Can encode handle validity in type system:
+pub struct VideoHandle(i64);
+
+impl Drop for VideoHandle {
+    fn drop(&mut self) {
+        close_video(self.0);  // Always cleaned up!
+    }
+}
+
+// Now impossible to forget cleanup or use freed handle!
+```
+
+### Recommendation
+
+- **Use C++** if you need specific libraries (OpenCV, FFmpeg) or maximum performance
+- **Use Rust** if memory safety is critical or you're building from scratch
+- **Use both!** Different parts of your app can use different languages
+
+**Both work identically from Whitehall's perspective** - the choice is based on your native code needs.
 
 ---
 
@@ -1917,32 +2314,676 @@ cargo install cargo-ndk
 
 ---
 
-## Implementation Status
+## Implementation Roadmap
 
-### Phase 1: Design & Documentation ✅
-- [x] Design FFI annotation approach
-- [x] Define supported types
-- [x] Document architecture
-- [ ] Finalize annotation syntax
+This section outlines the concrete, actionable phases for implementing FFI support in Whitehall.
 
-### Phase 2: Basic Code Generation (Planned)
-- [ ] Parse C++ `@ffi` comments
-- [ ] Parse Rust `#[ffi]` attributes
-- [ ] Generate Kotlin bindings
-- [ ] Generate JNI bridge code
-- [ ] Generate CMake configuration
+---
 
-### Phase 3: Type Marshalling (Planned)
-- [ ] Primitives (Int, Long, Float, etc.)
-- [ ] String conversion
-- [ ] Array conversion
-- [ ] Error handling
+## Phase 0: Foundation (Current)
 
-### Phase 4: Advanced Features (Future)
-- [ ] Async FFI
-- [ ] Callback support
-- [ ] Complex type serialization helpers
+**Goal:** Design and document the FFI system architecture.
+
+**Status:** ✅ **COMPLETE**
+
+**Tasks:**
+- [x] Design annotation-based FFI approach (native code is source of truth)
+- [x] Define simple types (primitives, String, arrays)
+- [x] Define complex type patterns (ByteArray serialization, opaque handles)
+- [x] Document complete architecture
+- [x] Create examples for C++ and Rust
+
+**Deliverables:**
+- ✅ Comprehensive FFI.md documentation
+- ✅ Clear design decisions
+- ✅ Examples for all patterns
+
+---
+
+## Phase 1: Minimal Viable FFI (C++ Primitives Only)
+
+**Goal:** Get the simplest possible FFI working end-to-end.
+
+**Success Criteria:**
+```cpp
+// @ffi
+int add(int a, int b) { return a + b; }
+```
+→ Works in Whitehall component with zero manual setup.
+
+### Tasks
+
+#### 1.1: C++ Annotation Parsing
+**File:** `src/ffi_parser/cpp.rs`
+
+```rust
+pub struct CppFfiFunction {
+    pub name: String,
+    pub params: Vec<(String, CppType)>,
+    pub return_type: CppType,
+    pub source_file: PathBuf,
+}
+
+pub enum CppType {
+    Int,
+    Long,
+    Float,
+    Double,
+    Bool,
+}
+
+pub fn discover_cpp_ffi(ffi_dir: &Path) -> Result<Vec<CppFfiFunction>> {
+    // 1. Find all .cpp files in src/ffi/cpp/
+    // 2. Parse each file for // @ffi annotations
+    // 3. Extract function signatures
+    // 4. Return list of discovered functions
+}
+```
+
+**Implementation:**
+- Use regex to find `// @ffi` followed by function signature
+- Parse function signature (can start with simple regex, improve later)
+- Support only primitives in Phase 1
+- Return error for unsupported types
+
+**Test:**
+```rust
+#[test]
+fn test_parse_simple_function() {
+    let cpp = r#"
+        // @ffi
+        int add(int a, int b) {
+            return a + b;
+        }
+    "#;
+
+    let functions = parse_cpp_ffi_from_string(cpp).unwrap();
+    assert_eq!(functions.len(), 1);
+    assert_eq!(functions[0].name, "add");
+}
+```
+
+---
+
+#### 1.2: Kotlin Binding Generation
+**File:** `src/ffi_codegen/kotlin_binding.rs`
+
+```rust
+pub fn generate_kotlin_binding(
+    function: &CppFfiFunction,
+    package: &str,
+) -> String {
+    // Generate:
+    // external fun add(a: Int, b: Int): Int
+}
+
+pub fn generate_kotlin_object(
+    functions: &[CppFfiFunction],
+    package: &str,
+    library_name: &str,
+) -> String {
+    // Generate:
+    // object Math {
+    //     external fun add(a: Int, b: Int): Int
+    //     init { System.loadLibrary("math") }
+    // }
+}
+```
+
+**Output Example:**
+```kotlin
+// Generated: build/kotlin/com/example/ffi/Math.kt
+package com.example.ffi
+
+object Math {
+    external fun add(a: Int, b: Int): Int
+    external fun multiply(a: Int, b: Int): Int
+
+    init {
+        System.loadLibrary("math")
+    }
+}
+```
+
+---
+
+#### 1.3: JNI Bridge Generation
+**File:** `src/ffi_codegen/jni_bridge.rs`
+
+```rust
+pub fn generate_jni_bridge(
+    function: &CppFfiFunction,
+    package: &str,
+) -> String {
+    // Generate C++ JNI wrapper
+}
+```
+
+**Output Example:**
+```cpp
+// Generated: build/jni/math_bridge.cpp
+#include <jni.h>
+
+// Forward declarations from user code
+int add(int a, int b);
+int multiply(int a, int b);
+
+extern "C" JNIEXPORT jint JNICALL
+Java_com_example_ffi_Math_add(
+    JNIEnv* env,
+    jobject thiz,
+    jint a,
+    jint b
+) {
+    return add(a, b);
+}
+
+extern "C" JNIEXPORT jint JNICALL
+Java_com_example_ffi_Math_multiply(
+    JNIEnv* env,
+    jobject thiz,
+    jint a,
+    jint b
+) {
+    return multiply(a, b);
+}
+```
+
+**Key Points:**
+- Primitives map directly (jint → int)
+- No error handling needed yet (Phase 2)
+- No memory management needed (primitives are values)
+
+---
+
+#### 1.4: CMake Generation
+**File:** `src/ffi_codegen/cmake.rs`
+
+```rust
+pub fn generate_cmake(
+    library_name: &str,
+    source_files: &[PathBuf],
+    bridge_file: &Path,
+) -> String {
+    // Generate CMakeLists.txt
+}
+```
+
+**Output Example:**
+```cmake
+# Generated: build/cmake/CMakeLists.txt
+cmake_minimum_required(VERSION 3.22.1)
+project("math")
+
+add_library(math SHARED
+    ${CMAKE_SOURCE_DIR}/src/ffi/cpp/math.cpp
+    ${CMAKE_CURRENT_BINARY_DIR}/math_bridge.cpp
+)
+
+find_library(log-lib log)
+target_link_libraries(math ${log-lib})
+
+set(CMAKE_CXX_STANDARD 17)
+```
+
+---
+
+#### 1.5: Build Integration
+**File:** `src/build/ffi.rs`
+
+```rust
+pub fn build_ffi(config: &Config) -> Result<()> {
+    if !config.ffi.enabled {
+        return Ok(());
+    }
+
+    // 1. Discover FFI functions
+    let functions = discover_cpp_ffi(&config.ffi_dir)?;
+
+    // 2. Generate Kotlin bindings
+    let kotlin_code = generate_kotlin_bindings(&functions, &config.package)?;
+    write_file("build/kotlin/.../Math.kt", &kotlin_code)?;
+
+    // 3. Generate JNI bridge
+    let jni_code = generate_jni_bridge(&functions, &config.package)?;
+    write_file("build/jni/math_bridge.cpp", &jni_code)?;
+
+    // 4. Generate CMakeLists.txt
+    let cmake_code = generate_cmake("math", &["src/ffi/cpp/math.cpp"], "build/jni/math_bridge.cpp")?;
+    write_file("build/cmake/CMakeLists.txt", &cmake_code)?;
+
+    // 5. Run CMake + Make
+    run_cmake_build(&config)?;
+
+    Ok(())
+}
+```
+
+---
+
+#### 1.6: Import Resolution
+**File:** `src/transpiler/imports.rs`
+
+```rust
+// Resolve $ffi.cpp.Math to com.example.ffi.Math
+pub fn resolve_ffi_import(import: &str, package: &str) -> Option<String> {
+    if import.starts_with("$ffi.") {
+        // $ffi.cpp.Math → com.example.ffi.Math
+        let rest = &import[5..]; // Remove "$ffi."
+        return Some(format!("{}.ffi.{}", package, rest));
+    }
+    None
+}
+```
+
+---
+
+### Phase 1 Test Case
+
+**Input: `src/ffi/cpp/math.cpp`**
+```cpp
+// @ffi
+int add(int a, int b) {
+    return a + b;
+}
+
+// @ffi
+int multiply(int a, int b) {
+    return a * b;
+}
+```
+
+**Input: `src/components/Calculator.wh`**
+```whitehall
+<script>
+  import $ffi.cpp.Math
+
+  var result = 0
+
+  onMount {
+    result = Math.add(5, 3)  // Should equal 8
+  }
+</script>
+
+<Text>Result: {result}</Text>
+```
+
+**Command:**
+```bash
+whitehall build
+```
+
+**Expected Output:**
+- Generates `build/kotlin/com/example/ffi/Math.kt`
+- Generates `build/jni/math_bridge.cpp`
+- Generates `build/cmake/CMakeLists.txt`
+- Compiles `libmath.so`
+- Bundles in APK
+- App runs, displays "Result: 8"
+
+**Phase 1 Complete When:** This test case works end-to-end! ✅
+
+---
+
+## Phase 2: String Support
+
+**Goal:** Add String type marshalling with automatic memory management.
+
+**Success Criteria:**
+```cpp
+// @ffi
+std::string greet(const std::string& name) {
+    return "Hello, " + name;
+}
+```
+→ Works automatically with proper memory management.
+
+### Tasks
+
+#### 2.1: Extend Type System
+```rust
+pub enum CppType {
+    Int, Long, Float, Double, Bool,
+    String,  // ← New
+}
+```
+
+#### 2.2: JNI Bridge for Strings
+**Template:**
+```cpp
+extern "C" JNIEXPORT jstring JNICALL
+Java_..._greet(JNIEnv* env, jobject thiz, jstring j_name) {
+    // 1. Null check
+    if (j_name == nullptr) {
+        return env->NewStringUTF("");
+    }
+
+    // 2. Convert to C++ string
+    const char* c_name = env->GetStringUTFChars(j_name, nullptr);
+    if (c_name == nullptr) {
+        return nullptr;
+    }
+
+    // 3. Call user function
+    std::string result = greet(std::string(c_name));
+
+    // 4. Release memory
+    env->ReleaseStringUTFChars(j_name, c_name);
+
+    // 5. Convert result
+    return env->NewStringUTF(result.c_str());
+}
+```
+
+**Code Generator:**
+```rust
+fn generate_string_param_conversion(param_name: &str) -> String {
+    format!(r#"
+    if ({0} == nullptr) {{
+        // Handle null - throw exception or return default
+    }}
+    const char* c_{0} = env->GetStringUTFChars({0}, nullptr);
+    if (c_{0} == nullptr) {{
+        return nullptr;  // OutOfMemoryError
+    }}
+    std::string cpp_{0}(c_{0});
+    env->ReleaseStringUTFChars({0}, c_{0});
+    "#, param_name)
+}
+
+fn generate_string_return(expr: &str) -> String {
+    format!(r#"
+    std::string result = {0};
+    jstring j_result = env->NewStringUTF(result.c_str());
+    if (j_result == nullptr) {{
+        return nullptr;  // OutOfMemoryError
+    }}
+    return j_result;
+    "#, expr)
+}
+```
+
+#### 2.3: Test Case
+```cpp
+// @ffi
+std::string greet(const std::string& name) {
+    return "Hello, " + name;
+}
+
+// @ffi
+std::string toUpper(const std::string& text) {
+    std::string result = text;
+    for (char& c : result) c = toupper(c);
+    return result;
+}
+```
+
+```whitehall
+<script>
+  import $ffi.cpp.Text
+
+  var greeting = Text.greet("Alice")  // "Hello, Alice"
+  var upper = Text.toUpper("hello")    // "HELLO"
+</script>
+```
+
+**Phase 2 Complete When:** String marshalling works with no memory leaks! ✅
+
+---
+
+## Phase 3: Array Support
+
+**Goal:** Add array type marshalling (IntArray, FloatArray, ByteArray).
+
+**Success Criteria:**
+```cpp
+// @ffi
+std::vector<int32_t> doubleArray(const std::vector<int32_t>& arr) {
+    std::vector<int32_t> result;
+    for (int val : arr) result.push_back(val * 2);
+    return result;
+}
+```
+→ Works with automatic memory management.
+
+### Tasks
+
+#### 3.1: Extend Type System
+```rust
+pub enum CppType {
+    Int, Long, Float, Double, Bool, String,
+    IntArray,     // ← New
+    FloatArray,   // ← New
+    ByteArray,    // ← New
+}
+```
+
+#### 3.2: JNI Bridge for Arrays
+**Template for IntArray:**
+```cpp
+extern "C" JNIEXPORT jintArray JNICALL
+Java_..._doubleArray(JNIEnv* env, jobject thiz, jintArray j_arr) {
+    if (j_arr == nullptr) {
+        return env->NewIntArray(0);
+    }
+
+    jsize length = env->GetArrayLength(j_arr);
+    jint* elements = env->GetIntArrayElements(j_arr, nullptr);
+    if (elements == nullptr) {
+        return nullptr;
+    }
+
+    std::vector<int32_t> vec(elements, elements + length);
+    std::vector<int32_t> result = doubleArray(vec);
+
+    env->ReleaseIntArrayElements(j_arr, elements, JNI_ABORT);
+
+    jintArray j_result = env->NewIntArray(result.size());
+    env->SetIntArrayRegion(j_result, 0, result.size(), result.data());
+
+    return j_result;
+}
+```
+
+**Phase 3 Complete When:** All array types work! ✅
+
+---
+
+## Phase 4: Rust Support
+
+**Goal:** Add Rust FFI with same functionality as C++.
+
+### Tasks
+
+#### 4.1: Rust Annotation Parsing
+**File:** `src/ffi_parser/rust.rs`
+
+Use `syn` crate to parse Rust AST:
+```rust
+pub fn discover_rust_ffi(ffi_dir: &Path) -> Result<Vec<RustFfiFunction>> {
+    // 1. Find all .rs files
+    // 2. Parse with syn
+    // 3. Find functions with #[ffi] attribute
+    // 4. Extract signatures
+}
+```
+
+#### 4.2: Rust JNI Bridge Generation
+Generate Rust code instead of C++:
+```rust
+// Generated bridge
+use jni::JNIEnv;
+use jni::objects::JClass;
+use jni::sys::jint;
+
+#[no_mangle]
+pub extern "system" fn Java_com_example_ffi_Math_add(
+    _env: JNIEnv,
+    _class: JClass,
+    a: jint,
+    b: jint,
+) -> jint {
+    crate::add(a, b)
+}
+```
+
+#### 4.3: Cargo Integration
+Generate/modify `Cargo.toml`:
+```toml
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+jni = "0.21"
+```
+
+Build with `cargo ndk`.
+
+**Phase 4 Complete When:** Rust FFI works identically to C++! ✅
+
+---
+
+## Phase 5: Error Handling
+
+**Goal:** Automatic exception propagation across FFI boundary.
+
+### Tasks
+
+#### 5.1: Exception Mapping
+```rust
+fn exception_type_for_cpp(cpp_exception: &str) -> &str {
+    match cpp_exception {
+        "std::invalid_argument" => "java/lang/IllegalArgumentException",
+        "std::runtime_error" => "java/lang/RuntimeException",
+        "std::exception" => "java/lang/RuntimeException",
+        _ => "java/lang/RuntimeException",
+    }
+}
+```
+
+#### 5.2: Try-Catch Generation
+Wrap all user function calls:
+```cpp
+extern "C" JNIEXPORT jint JNICALL
+Java_..._divide(JNIEnv* env, jobject thiz, jint a, jint b) {
+    try {
+        return divide(a, b);
+    } catch (const std::invalid_argument& e) {
+        jclass exClass = env->FindClass("java/lang/IllegalArgumentException");
+        env->ThrowNew(exClass, e.what());
+        return 0;
+    } catch (const std::exception& e) {
+        jclass exClass = env->FindClass("java/lang/RuntimeException");
+        env->ThrowNew(exClass, e.what());
+        return 0;
+    }
+}
+```
+
+#### 5.3: Rust Result<T, E> Support
+```rust
+#[ffi]
+pub fn divide(a: i32, b: i32) -> Result<i32, String> {
+    if b == 0 {
+        Err("Division by zero".to_string())
+    } else {
+        Ok(a / b)
+    }
+}
+```
+
+Bridge converts `Err` to exception automatically.
+
+**Phase 5 Complete When:** Exceptions propagate correctly from native to Kotlin! ✅
+
+---
+
+## Phase 6: Documentation & Polish
+
+**Goal:** Production-ready FFI system.
+
+### Tasks
+
+- [ ] Write comprehensive error messages
+- [ ] Add validation for unsupported types
+- [ ] Improve parser error reporting
+- [ ] Add debugging flags (`WHITEHALL_FFI_DEBUG=1`)
 - [ ] Performance profiling
+- [ ] Memory leak detection in tests
+- [ ] Complete user guide with troubleshooting
+- [ ] Add CI tests for FFI
+
+---
+
+## Future Phases (Post-MVP)
+
+### Phase 7: Advanced Features
+- [ ] Async FFI (suspend functions)
+- [ ] Callback support (native → Kotlin)
+- [ ] Struct/dataclass helpers
+- [ ] Proc macro for Rust (better DX)
+
+### Phase 8: Optimization
+- [ ] Zero-copy string views
+- [ ] Direct buffer access
+- [ ] JNI local frame management
+- [ ] Parallel JNI calls
+
+### Phase 9: Ecosystem
+- [ ] Common serialization helpers (JSON, Protobuf)
+- [ ] Image conversion utilities
+- [ ] Audio buffer helpers
+- [ ] Video frame utilities
+
+---
+
+## Current Status
+
+| Phase | Status | Progress |
+|-------|--------|----------|
+| Phase 0: Foundation | ✅ Complete | 100% |
+| Phase 1: C++ Primitives | ✅ Complete | 100% |
+| Phase 2: Strings | ⏸️ Not Started | 0% |
+| Phase 3: Arrays | ⏸️ Not Started | 0% |
+| Phase 4: Rust | ⏸️ Not Started | 0% |
+| Phase 5: Errors | ⏸️ Not Started | 0% |
+| Phase 6: Polish | ⏸️ Not Started | 0% |
+
+### Phase 1 Complete! 🎉
+- ✅ Phase 1.1: C++ Annotation Parser - Complete
+- ✅ Phase 1.2: Kotlin Binding Generator - Complete
+- ✅ Phase 1.3: JNI Bridge Generator - Complete
+- ✅ Phase 1.4: CMake Generator - Complete
+- ✅ Phase 1.5: Build System Integration - Complete
+- ✅ Phase 1.6: End-to-End Testing - Complete
+
+**What Works Now:**
+- C++ functions with `@ffi` annotations are automatically discovered
+- Kotlin bindings are generated automatically
+- JNI bridge code is generated with proper type conversions
+- CMake configuration is generated
+- Supports all primitive types: int, long, float, double, bool, void
+- Full integration with `whitehall build` command
+- Comprehensive test coverage
+
+---
+
+## Next Actions
+
+**Phase 1 Complete! Next: Phase 2 - String Support**
+
+To start Phase 2:
+
+1. Extend `CppType` enum to include String type
+2. Update JNI bridge generator to handle string conversions:
+   - `jstring` → `const char*` → `std::string`
+   - `std::string` → `const char*` → `jstring`
+   - Proper memory management (GetStringUTFChars/ReleaseStringUTFChars)
+3. Add null safety checks
+4. Write comprehensive tests
+5. Update integration tests
+
+**Current Milestone:** Phase 2 - String marshalling with automatic memory management
 
 ---
 
