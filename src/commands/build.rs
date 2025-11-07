@@ -1,4 +1,4 @@
-use anyhow::Result;
+use anyhow::{Context, Result};
 use colored::Colorize;
 use std::env;
 use std::fs;
@@ -9,6 +9,7 @@ use crate::build_pipeline;
 use crate::config;
 use crate::single_file;
 use crate::commands::{detect_target, Target};
+use crate::toolchain::Toolchain;
 
 pub fn execute(target: &str) -> Result<()> {
     // Detect if we're building a project or single file
@@ -42,11 +43,9 @@ fn execute_single_file(file_path: &str) -> Result<()> {
     // Run build pipeline
     let result = build_pipeline::execute_build(&config, true)?;
 
-    // Restore original directory
-    env::set_current_dir(&original_dir)?;
-
     // Report results
     if !result.errors.is_empty() {
+        env::set_current_dir(&original_dir)?;
         eprintln!("{} build failed with {} error(s)", "error:".red().bold(), result.errors.len());
         for error in &result.errors {
             eprintln!("  {} - {}", error.file.display(), error.message);
@@ -54,9 +53,23 @@ fn execute_single_file(file_path: &str) -> Result<()> {
         anyhow::bail!("Build failed");
     }
 
-    let elapsed = start.elapsed();
-    println!("   {} `{}` v{} ({}) in {:.2}s",
+    println!("   {} transpilation for `{}`",
         "Finished".green().bold(),
+        single_config.app.name
+    );
+
+    // Initialize toolchain and build APK
+    let toolchain = Toolchain::new()?;
+    toolchain.ensure_all_parallel(&config.toolchain.java, &config.toolchain.gradle)?;
+
+    build_with_gradle(&toolchain, &config, &result.output_dir)?;
+
+    // Restore original directory
+    env::set_current_dir(&original_dir)?;
+
+    let elapsed = start.elapsed();
+    println!("   {} APK for `{}` v{} ({}) in {:.2}s",
+        "Built".green().bold(),
         single_config.app.name,
         config.project.version,
         single_config.app.package,
@@ -104,13 +117,11 @@ fn execute_project(manifest_path: &str) -> Result<()> {
     // 3. Run build pipeline (with clean)
     let result = build_pipeline::execute_build(&config, true)?;
 
-    // 4. Restore original directory if we changed it
-    if project_dir != original_dir {
-        env::set_current_dir(&original_dir)?;
-    }
-
-    // 5. Report results
+    // 4. Report results
     if !result.errors.is_empty() {
+        if project_dir != original_dir {
+            env::set_current_dir(&original_dir)?;
+        }
         eprintln!("{} build failed with {} error(s)", "error:".red().bold(), result.errors.len());
         for error in &result.errors {
             eprintln!("  {} - {}", error.file.display(), error.message);
@@ -118,14 +129,46 @@ fn execute_project(manifest_path: &str) -> Result<()> {
         anyhow::bail!("Build failed");
     }
 
-    let elapsed = start.elapsed();
-    println!("   {} `{}` v{} ({}) in {:.2}s",
+    println!("   {} transpilation for `{}`",
         "Finished".green().bold(),
+        config.project.name
+    );
+
+    // 5. Initialize toolchain and build APK
+    let toolchain = Toolchain::new()?;
+    toolchain.ensure_all_parallel(&config.toolchain.java, &config.toolchain.gradle)?;
+
+    build_with_gradle(&toolchain, &config, &result.output_dir)?;
+
+    // 6. Restore original directory if we changed it
+    if project_dir != original_dir {
+        env::set_current_dir(&original_dir)?;
+    }
+
+    let elapsed = start.elapsed();
+    println!("   {} APK for `{}` v{} ({}) in {:.2}s",
+        "Built".green().bold(),
         config.project.name,
         config.project.version,
         config.android.package,
         elapsed.as_secs_f64()
     );
+
+    Ok(())
+}
+
+fn build_with_gradle(toolchain: &Toolchain, config: &crate::config::Config, output_dir: &Path) -> Result<()> {
+    let mut gradle = toolchain.gradle_cmd(&config.toolchain.java, &config.toolchain.gradle)?;
+
+    let status = gradle
+        .current_dir(output_dir)
+        .args(&["assembleDebug", "--console=plain", "--quiet"])
+        .status()
+        .context("Failed to run Gradle")?;
+
+    if !status.success() {
+        anyhow::bail!("Gradle build failed");
+    }
 
     Ok(())
 }

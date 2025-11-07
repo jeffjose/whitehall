@@ -18,18 +18,20 @@ enum Commands {
         /// Name of the project
         name: String,
     },
-    /// Transpile a single .wh file to Kotlin (no Android project generation)
+    /// Transpile to Kotlin (no APK build)
+    /// Works with both project directories (whitehall.toml) and single .wh files
     Compile {
-        /// Path to .wh file
-        file: String,
-        /// Custom package name (default: com.example.app)
+        /// Path to project directory or .wh file (defaults to current directory)
+        #[arg(default_value = ".")]
+        target: String,
+        /// Custom package name (default: com.example.app) - only for single files
         #[arg(long)]
         package: Option<String>,
-        /// Omit package declaration (for pasting into existing files)
+        /// Omit package declaration (for pasting) - only for single files
         #[arg(long)]
         no_package: bool,
     },
-    /// Build the project (transpile .wh files to Kotlin + generate Android project)
+    /// Transpile + build APK
     /// Works with both project directories (whitehall.toml) and single .wh files
     Build {
         /// Path to project directory or .wh file (defaults to current directory)
@@ -116,8 +118,8 @@ fn main() {
         Commands::Init { name } => {
             commands::init::execute(&name)
         }
-        Commands::Compile { file, package, no_package } => {
-            commands::compile::execute(&file, package.as_deref(), no_package)
+        Commands::Compile { target, package, no_package } => {
+            commands::compile::execute(&target, package.as_deref(), no_package)
         }
         Commands::Build { target } => {
             commands::build::execute(&target)
