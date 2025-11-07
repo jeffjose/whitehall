@@ -170,7 +170,7 @@ impl ComposeBackend {
 
         if let Some(class) = store_class {
             // Generate ViewModel or singleton code based on registry info
-            let kotlin_code = self.generate_store_class(class)?;
+            let kotlin_code = self.generate_store_class(file, class)?;
             return Ok(crate::transpiler::TranspileResult::Single(kotlin_code));
         }
 
@@ -3023,7 +3023,7 @@ impl ComposeBackend {
     }
 
     /// Phase 1: Generate ViewModel or Singleton code for reactive class
-    fn generate_store_class(&self, class: &ClassDeclaration) -> Result<String, String> {
+    fn generate_store_class(&self, file: &WhitehallFile, class: &ClassDeclaration) -> Result<String, String> {
         // Check if this is a singleton (@store object) or ViewModel (class/component with var)
         let source = if let Some(registry) = &self.store_registry {
             registry.get(&class.name)
@@ -3035,25 +3035,43 @@ impl ComposeBackend {
 
         if source == crate::transpiler::analyzer::StoreSource::Singleton {
             // Generate singleton StateFlow code
-            self.generate_singleton_store(class)
+            self.generate_singleton_store(file, class)
         } else {
             // Generate ViewModel code (for both Class and ComponentInline sources)
-            self.generate_view_model_store(class)
+            self.generate_view_model_store(file, class)
         }
     }
 
     /// Generate singleton StateFlow code for @store object
-    fn generate_singleton_store(&self, class: &ClassDeclaration) -> Result<String, String> {
+    fn generate_singleton_store(&self, file: &WhitehallFile, class: &ClassDeclaration) -> Result<String, String> {
         let mut output = String::new();
 
         // Package declaration
         output.push_str(&format!("package {}\n\n", self.package));
 
+        // Collect all imports
+        let mut imports = Vec::new();
+
         // Imports (no ViewModel, no viewModelScope)
-        output.push_str("import kotlinx.coroutines.flow.MutableStateFlow\n");
-        output.push_str("import kotlinx.coroutines.flow.StateFlow\n");
-        output.push_str("import kotlinx.coroutines.flow.asStateFlow\n");
-        output.push_str("import kotlinx.coroutines.flow.update\n");
+        imports.push("kotlinx.coroutines.flow.MutableStateFlow".to_string());
+        imports.push("kotlinx.coroutines.flow.StateFlow".to_string());
+        imports.push("kotlinx.coroutines.flow.asStateFlow".to_string());
+        imports.push("kotlinx.coroutines.flow.update".to_string());
+
+        // Add user imports from file
+        for import in &file.imports {
+            let resolved = self.resolve_import(&import.path);
+            imports.push(resolved);
+        }
+
+        // Sort and deduplicate
+        imports.sort();
+        imports.dedup();
+
+        // Write imports
+        for import in imports {
+            output.push_str(&format!("import {}\n", import));
+        }
         output.push('\n');
 
         // Object declaration (not class!)
@@ -3125,20 +3143,23 @@ impl ComposeBackend {
     }
 
     /// Generate ViewModel code for reactive class
-    fn generate_view_model_store(&self, class: &ClassDeclaration) -> Result<String, String> {
+    fn generate_view_model_store(&self, file: &WhitehallFile, class: &ClassDeclaration) -> Result<String, String> {
         let mut output = String::new();
 
         // Package declaration
         output.push_str(&format!("package {}\n\n", self.package));
 
-        // Imports
-        output.push_str("import androidx.lifecycle.ViewModel\n");
-        output.push_str("import androidx.lifecycle.viewModelScope\n");
-        output.push_str("import kotlinx.coroutines.flow.MutableStateFlow\n");
-        output.push_str("import kotlinx.coroutines.flow.StateFlow\n");
-        output.push_str("import kotlinx.coroutines.flow.asStateFlow\n");
-        output.push_str("import kotlinx.coroutines.flow.update\n");
-        output.push_str("import kotlinx.coroutines.launch\n");
+        // Collect all imports
+        let mut imports = Vec::new();
+
+        // Core ViewModel imports
+        imports.push("androidx.lifecycle.ViewModel".to_string());
+        imports.push("androidx.lifecycle.viewModelScope".to_string());
+        imports.push("kotlinx.coroutines.flow.MutableStateFlow".to_string());
+        imports.push("kotlinx.coroutines.flow.StateFlow".to_string());
+        imports.push("kotlinx.coroutines.flow.asStateFlow".to_string());
+        imports.push("kotlinx.coroutines.flow.update".to_string());
+        imports.push("kotlinx.coroutines.launch".to_string());
 
         // Check if Hilt is needed (either @hilt annotation or @inject constructor)
         let has_hilt_annotation = class.annotations.iter().any(|a| {
@@ -3151,10 +3172,24 @@ impl ComposeBackend {
 
         // Add Hilt imports if needed
         if needs_hilt {
-            output.push_str("import dagger.hilt.android.lifecycle.HiltViewModel\n");
-            output.push_str("import javax.inject.Inject\n");
+            imports.push("dagger.hilt.android.lifecycle.HiltViewModel".to_string());
+            imports.push("javax.inject.Inject".to_string());
         }
 
+        // Add user imports from file
+        for import in &file.imports {
+            let resolved = self.resolve_import(&import.path);
+            imports.push(resolved);
+        }
+
+        // Sort and deduplicate
+        imports.sort();
+        imports.dedup();
+
+        // Write imports
+        for import in imports {
+            output.push_str(&format!("import {}\n", import));
+        }
         output.push('\n');
 
         // Class annotations

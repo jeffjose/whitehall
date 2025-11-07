@@ -4,25 +4,27 @@ Issues discovered during Pokemon app example development.
 
 ## Parser Limitations
 
-### 1. Top-level Kotlin code not supported
+### 1. Top-level Kotlin imports ~~not supported~~ ✅ FIXED
 
-**Issue:** Parser expects Whitehall component/class, can't parse raw Kotlin before class definition
+**Issue:** ~~Parser expects Whitehall component/class, can't parse raw Kotlin before class definition~~
 
 **Example:**
 ```kotlin
-import kotlinx.serialization.Serializable  // ❌ Parser error
-import okhttp3.OkHttpClient                // ❌ Parser error
+import kotlinx.serialization.Serializable  // ✅ Now works!
+import okhttp3.OkHttpClient                // ✅ Now works!
 
 class MyStore {
     // ...
 }
 ```
 
-**Current State:** ❌ Not supported
-**Location:** `src/stores/PokemonStore.wh:1-3`
-**Error:** `Expected component, found: "import kotlinx.serialization"`
+**Current State:** ✅ **FIXED** - Top-level imports now supported and pass through to generated Kotlin
+**Fixed:** 2025-11-07
+**Details:** Parser already supported import statements, but codegen was not including user imports in generated ViewModel/Store classes. Now all user imports are included and alphabetically sorted in the output.
 
-**Workaround:** None - must move imports inside Kotlin blocks
+~~**Location:** `src/stores/PokemonStore.wh:1-3`~~
+~~**Error:** `Expected component, found: "import kotlinx.serialization"`~~
+~~**Workaround:** None - must move imports inside Kotlin blocks~~
 
 ---
 
@@ -159,7 +161,7 @@ Box(modifier = Modifier.size(48.dp, 48.dp))
 3. Private val fields with initialization
 
 **Medium Priority:**
-4. Top-level imports (Kotlin interop)
+4. ~~Top-level imports (Kotlin interop)~~ ✅ FIXED
 5. Box width/height transformation
 
 **Low Priority:**
