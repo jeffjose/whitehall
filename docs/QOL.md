@@ -82,22 +82,27 @@ Spacer(modifier = Modifier.height(8.dp))  // default
 var items = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
 
 // Proposed - range syntax (Kotlin-native)
-var items = 1..10        // → (1..10).toList()
-var evens = 0..100:2     // → (0..100 step 2).toList()
-var countdown = 10..1:-1 // → (10 downTo 1).toList()
+val simple = 1..10              // Range literal
+val stepped = (0..100 step 2)   // With step
+val countdown = (10 downTo 1)   // Countdown
 
 // Works in @for loops naturally
 @for (i in 1..5) {
   <Text>Item {i}</Text>
 }
 
-// Still supports list operations
-var doubled = (1..5).map { it * 2 }  // [2, 4, 6, 8, 10]
+@for (n in 0..10 step 2) {
+  <Text>Even: {n}</Text>
+}
+
+// Ranges are already Kotlin - just pass through
+val total = (1..100).sum()
 ```
 
 **Why:**
-- Kotlin already has ranges, just surface them naturally
-- Zero ambiguity - same semantics as Kotlin
+- Kotlin already has ranges, just pass them through the transpiler
+- Zero ambiguity - exact same semantics as Kotlin
+- No transformation needed for ranges in @for loops
 - Cleaner than `listOf(1, 2, 3, ...)` for sequential data
 - Common pattern for examples, tests, and iterations
 
