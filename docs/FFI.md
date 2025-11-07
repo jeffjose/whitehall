@@ -1,7 +1,7 @@
 # FFI (Foreign Function Interface) Integration
 
-**Status**: 🚧 In Development (Phases 1-2 Complete, Phase 3 Planned)
-**Last Updated**: 2025-01-05
+**Status**: 🚧 In Development (Design Phase)
+**Last Updated**: 2025-01-07
 
 ---
 
@@ -9,88 +9,30 @@
 
 Whitehall supports calling code written in **C++**, **Rust**, or other systems languages through FFI (Foreign Function Interface). This enables performance-critical operations, reuse of existing libraries, and integration with low-level system APIs.
 
-**Philosophy**: Language-agnostic FFI. Write performance-critical code in the best language for the job, import it seamlessly into Whitehall components.
+**Philosophy**: Write performance-critical code in the best language for the job. Annotate functions with `@ffi` or `#[ffi]`, and Whitehall automatically generates all the JNI glue code and Kotlin bindings.
+
+**Key Innovation**: You write clean C++/Rust code with simple annotations. Whitehall handles all the complex JNI boilerplate, memory management, type conversions, and error handling automatically.
 
 ## Table of Contents
 
 - [Why FFI?](#why-ffi)
 - [Quick Start](#quick-start)
-- [FFI in Standard Kotlin Android Apps](#ffi-in-standard-kotlin-android-apps)
-- [FFI in Whitehall](#ffi-in-whitehall)
+- [The Whitehall FFI Advantage](#the-whitehall-ffi-advantage)
+- [How It Works](#how-it-works)
+- [Simple Types (Automatic)](#simple-types-automatic)
+- [Complex Types (Manual Serialization)](#complex-types-manual-serialization)
 - [Project Structure](#project-structure)
 - [Configuration](#configuration)
-- [Type Marshalling Guide](#type-marshalling-guide)
+- [Complete Examples](#complete-examples)
+- [Type Mapping Reference](#type-mapping-reference)
+- [Understanding JNI Complexity](#understanding-jni-complexity)
 - [Memory Management](#memory-management)
 - [Thread Safety](#thread-safety)
 - [Error Handling](#error-handling)
-- [Complete Examples](#complete-examples)
 - [Debugging Native Code](#debugging-native-code)
 - [Security Best Practices](#security-best-practices)
 - [Testing FFI Code](#testing-ffi-code)
 - [Troubleshooting](#troubleshooting)
-- [Performance Optimization](#performance-optimization)
-- [Implementation Plan](#implementation-plan)
-
----
-
-## Quick Start
-
-**Want to add FFI to your Whitehall app? Here's the 30-second version:**
-
-### For C++:
-```bash
-# 1. Create FFI directory
-mkdir -p src/ffi
-
-# 2. Add your C++ code
-cat > src/ffi/MyNative.cpp << 'EOF'
-#include <jni.h>
-extern "C" JNIEXPORT jstring JNICALL
-Java_com_yourapp_ffi_MyNative_hello(JNIEnv* env, jobject) {
-    return env->NewStringUTF("Hello from C++!");
-}
-EOF
-
-# 3. Add CMakeLists.txt
-cat > src/ffi/CMakeLists.txt << 'EOF'
-cmake_minimum_required(VERSION 3.22.1)
-add_library(mynative SHARED MyNative.cpp)
-EOF
-
-# 4. Enable in whitehall.toml
-echo '[ffi]
-enabled = true' >> whitehall.toml
-
-# 5. Build!
-whitehall build
-```
-
-### For Rust:
-```bash
-# 1. Create FFI directory
-mkdir -p src/ffi
-
-# 2. Initialize Rust library
-cd src/ffi && cargo init --lib && cd ../..
-
-# 3. Configure Cargo.toml
-cat >> src/ffi/Cargo.toml << 'EOF'
-[lib]
-crate-type = ["cdylib"]
-
-[dependencies]
-jni = "0.21"
-EOF
-
-# 4. Enable in whitehall.toml
-echo '[ffi]
-enabled = true' >> whitehall.toml
-
-# 5. Build!
-whitehall build
-```
-
-Now jump to [Complete Examples](#complete-examples) to see real-world usage!
 
 ---
 
@@ -106,7 +48,7 @@ Now jump to [Complete Examples](#complete-examples) to see real-world usage!
 
 2. **Reusing existing libraries**
    - C/C++ libraries: OpenCV, SQLite, libpng, zlib
-   - Rust crates: image, tokio, serde (via Rust-JNI)
+   - Rust crates: image, tokio, serde
 
 3. **Platform-specific optimizations**
    - SIMD instructions (AVX, NEON)
@@ -115,28 +57,176 @@ Now jump to [Complete Examples](#complete-examples) to see real-world usage!
 
 ---
 
-## FFI in Standard Kotlin Android Apps
+## Quick Start
 
-### C++ Integration (via JNI)
+### C++ Example (30 seconds)
 
-**1. Write C++ code** (`src/main/cpp/native-lib.cpp`):
+**Step 1: Write your C++ code with `@ffi` annotation**
+
+Create `src/ffi/cpp/math.cpp`:
+```cpp
+// @ffi
+int add(int a, int b) {
+    return a + b;
+}
+
+// @ffi
+double multiply(double a, double b) {
+    return a * b;
+}
+```
+
+**Step 2: Enable FFI in `whitehall.toml`**
+```toml
+[ffi]
+enabled = true
+```
+
+**Step 3: Build**
+```bash
+whitehall build
+```
+
+**Step 4: Use in your Whitehall component**
+```whitehall
+<script>
+  import $ffi.cpp.Math
+
+  var result = 0
+
+  onMount {
+    result = Math.add(5, 3)  // Calls C++!
+  }
+</script>
+
+<Text>Result: {result}</Text>
+```
+
+**That's it!** Whitehall automatically:
+- ✅ Discovers your `@ffi` annotated functions
+- ✅ Generates JNI bridge code
+- ✅ Generates Kotlin bindings
+- ✅ Configures CMake build
+- ✅ Compiles and bundles the native library
+
+---
+
+### Rust Example (30 seconds)
+
+**Step 1: Initialize Rust project**
+```bash
+mkdir -p src/ffi/rust
+cd src/ffi/rust
+cargo init --lib
+```
+
+**Step 2: Configure `Cargo.toml`**
+```toml
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+whitehall-ffi = "0.1"
+```
+
+**Step 3: Write Rust code with `#[ffi]` annotation**
+
+Create `src/ffi/rust/lib.rs`:
+```rust
+use whitehall_ffi::ffi;
+
+#[ffi]
+pub fn add(a: i32, b: i32) -> i32 {
+    a + b
+}
+
+#[ffi]
+pub fn multiply(a: f64, b: f64) -> f64 {
+    a * b
+}
+```
+
+**Step 4: Build and use**
+```bash
+whitehall build
+```
+
+```whitehall
+<script>
+  import $ffi.rust.Math
+
+  var result = 0
+
+  onMount {
+    result = Math.add(10, 7)  // Calls Rust!
+  }
+</script>
+
+<Text>Result: {result}</Text>
+```
+
+---
+
+## The Whitehall FFI Advantage
+
+### Traditional Android JNI (Manual Hell)
+
+**You must write:**
+
+1. **C++ with JNI boilerplate** (100+ lines):
 ```cpp
 #include <jni.h>
 #include <string>
 
-extern "C" JNIEXPORT jstring JNICALL
-Java_com_example_myapp_MainActivity_stringFromJNI(
+extern "C" JNIEXPORT jint JNICALL
+Java_com_example_myapp_NativeLib_add(
     JNIEnv* env,
-    jobject /* this */) {
-    std::string hello = "Hello from C++";
-    return env->NewStringUTF(hello.c_str());
+    jobject /* this */,
+    jint a,
+    jint b) {
+    return a + b;
+}
+
+extern "C" JNIEXPORT jstring JNICALL
+Java_com_example_myapp_NativeLib_greet(
+    JNIEnv* env,
+    jobject /* this */,
+    jstring name) {
+
+    // Manual null check
+    if (name == nullptr) {
+        return env->NewStringUTF("");
+    }
+
+    // Manual type conversion
+    const char* nativeName = env->GetStringUTFChars(name, nullptr);
+    if (nativeName == nullptr) {
+        return nullptr;
+    }
+
+    // Actual logic
+    std::string result = "Hello, " + std::string(nativeName);
+
+    // Manual cleanup (memory leak if forgotten!)
+    env->ReleaseStringUTFChars(name, nativeName);
+
+    return env->NewStringUTF(result.c_str());
 }
 ```
 
-**2. Declare native method in Kotlin**:
+2. **CMakeLists.txt**:
+```cmake
+cmake_minimum_required(VERSION 3.22.1)
+add_library(native-lib SHARED native-lib.cpp)
+find_library(log-lib log)
+target_link_libraries(native-lib ${log-lib})
+```
+
+3. **Kotlin external declarations**:
 ```kotlin
-class MainActivity : ComponentActivity() {
-    external fun stringFromJNI(): String
+class NativeLib {
+    external fun add(a: Int, b: Int): Int
+    external fun greet(name: String): String
 
     companion object {
         init {
@@ -146,26 +236,9 @@ class MainActivity : ComponentActivity() {
 }
 ```
 
-**3. Configure CMake** (`CMakeLists.txt`):
-```cmake
-cmake_minimum_required(VERSION 3.22.1)
-project("myapp")
-
-add_library(native-lib SHARED native-lib.cpp)
-find_library(log-lib log)
-target_link_libraries(native-lib ${log-lib})
-```
-
-**4. Configure Gradle** (`build.gradle.kts`):
+4. **Gradle configuration**:
 ```kotlin
 android {
-    defaultConfig {
-        externalNativeBuild {
-            cmake {
-                cppFlags += "-std=c++17"
-            }
-        }
-    }
     externalNativeBuild {
         cmake {
             path = file("src/main/cpp/CMakeLists.txt")
@@ -174,74 +247,482 @@ android {
 }
 ```
 
-### Rust Integration (via cargo-ndk)
+**Total: ~150 lines of boilerplate for 2 simple functions!**
 
-**1. Write Rust code** (`src/ffi/rust/lib.rs`):
-```rust
-use jni::JNIEnv;
-use jni::objects::{JClass, JString};
-use jni::sys::jstring;
+---
 
-#[no_mangle]
-pub extern "system" fn Java_com_example_myapp_RustLib_processImage(
-    env: JNIEnv,
-    _class: JClass,
-    input: JString
-) -> jstring {
-    // Rust image processing
-    let output = env.new_string("Processed by Rust").unwrap();
-    output.into_raw()
+### Whitehall FFI (Automatic)
+
+**You write:**
+
+```cpp
+// src/ffi/cpp/math.cpp
+
+// @ffi
+int add(int a, int b) {
+    return a + b;
+}
+
+// @ffi
+std::string greet(const std::string& name) {
+    return "Hello, " + name;
 }
 ```
 
-**2. Configure Cargo** (`Cargo.toml`):
-```toml
-[lib]
-crate-type = ["cdylib"]
+**That's it! 10 lines total.**
 
-[dependencies]
-jni = "0.21"
+Whitehall generates all 150+ lines of boilerplate automatically.
+
+---
+
+## How It Works
+
+### Build Process
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│  1. Developer writes C++/Rust with @ffi annotations         │
+└─────────────────────────┬───────────────────────────────────┘
+                          │
+                          ▼
+┌─────────────────────────────────────────────────────────────┐
+│  2. Whitehall scans src/ffi/ for annotations                │
+│     - Finds: @ffi int add(int, int)                         │
+│     - Finds: #[ffi] pub fn multiply(f64, f64) -> f64        │
+└─────────────────────────┬───────────────────────────────────┘
+                          │
+                          ▼
+┌─────────────────────────────────────────────────────────────┐
+│  3. Generates Kotlin bindings                               │
+│     → build/kotlin/com/example/ffi/Math.kt                  │
+│       object Math {                                         │
+│         external fun add(a: Int, b: Int): Int               │
+│       }                                                     │
+└─────────────────────────┬───────────────────────────────────┘
+                          │
+                          ▼
+┌─────────────────────────────────────────────────────────────┐
+│  4. Generates JNI bridge code                               │
+│     → build/jni/math_bridge.cpp                             │
+│       extern "C" JNIEXPORT jint JNICALL                     │
+│       Java_com_example_ffi_Math_add(...) {                  │
+│         return add(a, b); // Calls your function            │
+│       }                                                     │
+└─────────────────────────┬───────────────────────────────────┘
+                          │
+                          ▼
+┌─────────────────────────────────────────────────────────────┐
+│  5. Compiles native code                                    │
+│     → libmath.so                                            │
+└─────────────────────────┬───────────────────────────────────┘
+                          │
+                          ▼
+┌─────────────────────────────────────────────────────────────┐
+│  6. Whitehall components import and use                     │
+│     import $ffi.cpp.Math                                    │
+│     Math.add(5, 3)                                          │
+└─────────────────────────────────────────────────────────────┘
 ```
 
-**3. Build with cargo-ndk**:
-```bash
-cargo ndk -t armeabi-v7a -t arm64-v8a -o ../jniLibs build --release
+### What Gets Generated
+
+For this simple C++ function:
+```cpp
+// @ffi
+int add(int a, int b) {
+    return a + b;
+}
+```
+
+Whitehall generates:
+
+**1. Kotlin binding** (`build/kotlin/com/example/ffi/Math.kt`):
+```kotlin
+package com.example.ffi
+
+object Math {
+    external fun add(a: Int, b: Int): Int
+
+    init {
+        System.loadLibrary("math")
+    }
+}
+```
+
+**2. JNI bridge** (`build/jni/math_bridge.cpp`):
+```cpp
+#include <jni.h>
+#include "math.cpp"
+
+extern "C" JNIEXPORT jint JNICALL
+Java_com_example_ffi_Math_add(
+    JNIEnv* env,
+    jobject thiz,
+    jint a,
+    jint b
+) {
+    // Auto-generated type conversions
+    // Auto-generated null checks
+    // Auto-generated error handling
+
+    return add(a, b);
+
+    // Auto-generated cleanup
+}
+```
+
+**3. CMake configuration** (`build/cmake/CMakeLists.txt`):
+```cmake
+cmake_minimum_required(VERSION 3.22.1)
+project("math")
+
+add_library(math SHARED
+    ${CMAKE_SOURCE_DIR}/src/ffi/cpp/math.cpp
+    ${CMAKE_CURRENT_BINARY_DIR}/math_bridge.cpp
+)
+
+find_library(log-lib log)
+target_link_libraries(math ${log-lib})
 ```
 
 ---
 
-## FFI in Whitehall
+## Simple Types (Automatic)
 
-### Architecture: Auto-Detection
+Whitehall automatically handles these types with zero boilerplate:
 
-Whitehall automatically detects FFI languages by file extensions and generates appropriate build configuration.
+### Supported Types
 
-**Detection rules:**
-- `*.cpp`, `*.cc`, `*.h`, `*.hpp` + `CMakeLists.txt` → **C++**
-- `*.rs` + `Cargo.toml` → **Rust**
-- `*.c` + `CMakeLists.txt` → **C**
+| Whitehall/Kotlin | C++ | Rust | Notes |
+|------------------|-----|------|-------|
+| `Int` | `int32_t` / `int` | `i32` | 32-bit integer |
+| `Long` | `int64_t` / `long long` | `i64` | 64-bit integer |
+| `Float` | `float` | `f32` | 32-bit float |
+| `Double` | `double` | `f64` | 64-bit float |
+| `Boolean` | `bool` | `bool` | True/false |
+| `String` | `std::string` | `String` | UTF-8 text |
+| `ByteArray` | `std::vector<uint8_t>` | `Vec<u8>` | Binary data |
+| `IntArray` | `std::vector<int32_t>` | `Vec<i32>` | Integer array |
+| `FloatArray` | `std::vector<float>` | `Vec<f32>` | Float array |
 
-**Both can coexist in the same project!**
+### Example: All Simple Types
+
+**C++:**
+```cpp
+// @ffi
+int addInts(int a, int b) {
+    return a + b;
+}
+
+// @ffi
+double addDoubles(double a, double b) {
+    return a + b;
+}
+
+// @ffi
+bool isPositive(int n) {
+    return n > 0;
+}
+
+// @ffi
+std::string toUpper(const std::string& text) {
+    std::string result = text;
+    for (char& c : result) c = toupper(c);
+    return result;
+}
+
+// @ffi
+std::vector<int32_t> doubleArray(const std::vector<int32_t>& arr) {
+    std::vector<int32_t> result;
+    for (int val : arr) result.push_back(val * 2);
+    return result;
+}
+```
+
+**Rust:**
+```rust
+use whitehall_ffi::ffi;
+
+#[ffi]
+pub fn add_ints(a: i32, b: i32) -> i32 {
+    a + b
+}
+
+#[ffi]
+pub fn add_doubles(a: f64, b: f64) -> f64 {
+    a + b
+}
+
+#[ffi]
+pub fn is_positive(n: i32) -> bool {
+    n > 0
+}
+
+#[ffi]
+pub fn to_upper(text: String) -> String {
+    text.to_uppercase()
+}
+
+#[ffi]
+pub fn double_array(arr: Vec<i32>) -> Vec<i32> {
+    arr.iter().map(|x| x * 2).collect()
+}
+```
+
+**Usage:**
+```whitehall
+<script>
+  import $ffi.cpp.Math
+
+  onMount {
+    val sum = Math.addInts(5, 3)              // 8
+    val dsum = Math.addDoubles(1.5, 2.5)      // 4.0
+    val pos = Math.isPositive(-3)             // false
+    val upper = Math.toUpper("hello")         // "HELLO"
+    val doubled = Math.doubleArray(intArrayOf(1, 2, 3))  // [2, 4, 6]
+  }
+</script>
+```
+
+**Zero boilerplate!** Just write your logic, Whitehall handles everything else.
+
+---
+
+## Complex Types (Manual Serialization)
+
+For custom types (data classes, complex objects), use `ByteArray` for the FFI boundary and handle serialization yourself.
+
+### Why This Approach?
+
+**Problem:** Complex types don't map cleanly across FFI boundaries:
+```kotlin
+data class Face(
+  val bounds: Rect,
+  val confidence: Float,
+  val landmarks: List<Point>  // Variable size!
+)
+```
+
+Automatically marshalling this would require:
+- JVM object allocation from C++
+- Reflection-based constructor calls
+- Recursive handling of nested objects
+- Complex memory management
+
+**Solution:** Use `ByteArray` as the FFI boundary. You control serialization.
+
+### Example: Image Processing with Custom Types
+
+**Step 1: Define FFI boundary with ByteArray**
+
+**C++:**
+```cpp
+// src/ffi/cpp/vision.cpp
+
+// @ffi
+std::vector<uint8_t> detectFacesRaw(const std::vector<uint8_t>& imageBytes) {
+    // 1. Deserialize image
+    cv::Mat image = cv::imdecode(imageBytes, cv::IMREAD_COLOR);
+
+    // 2. Detect faces (your logic)
+    std::vector<cv::Rect> faces = detectFaces(image);
+
+    // 3. Serialize results to bytes
+    return serializeFaces(faces);
+}
+
+// Helper: Serialize faces to bytes
+std::vector<uint8_t> serializeFaces(const std::vector<cv::Rect>& faces) {
+    std::vector<uint8_t> bytes;
+
+    // Write count
+    int count = faces.size();
+    bytes.insert(bytes.end(),
+                 reinterpret_cast<uint8_t*>(&count),
+                 reinterpret_cast<uint8_t*>(&count) + sizeof(count));
+
+    // Write each face
+    for (const auto& face : faces) {
+        bytes.insert(bytes.end(),
+                     reinterpret_cast<const uint8_t*>(&face),
+                     reinterpret_cast<const uint8_t*>(&face) + sizeof(face));
+    }
+
+    return bytes;
+}
+```
+
+**Rust:**
+```rust
+use whitehall_ffi::ffi;
+
+#[ffi]
+pub fn detect_faces_raw(image_bytes: Vec<u8>) -> Vec<u8> {
+    // 1. Deserialize image
+    let image = image::load_from_memory(&image_bytes).unwrap();
+
+    // 2. Detect faces (your logic)
+    let faces = detect_faces(&image);
+
+    // 3. Serialize results
+    serialize_faces(&faces)
+}
+
+fn serialize_faces(faces: &[Face]) -> Vec<u8> {
+    let mut bytes = Vec::new();
+
+    // Write count
+    bytes.extend_from_slice(&(faces.len() as i32).to_le_bytes());
+
+    // Write each face
+    for face in faces {
+        bytes.extend_from_slice(&face.x.to_le_bytes());
+        bytes.extend_from_slice(&face.y.to_le_bytes());
+        bytes.extend_from_slice(&face.width.to_le_bytes());
+        bytes.extend_from_slice(&face.height.to_le_bytes());
+        bytes.extend_from_slice(&face.confidence.to_le_bytes());
+    }
+
+    bytes
+}
+```
+
+**Step 2: Create Kotlin wrapper with serialization**
+
+```kotlin
+// Kotlin data class
+data class Face(
+    val x: Int,
+    val y: Int,
+    val width: Int,
+    val height: Int,
+    val confidence: Float
+) {
+    companion object {
+        fun listFromBytes(bytes: ByteArray): List<Face> {
+            val buffer = ByteBuffer.wrap(bytes).order(ByteOrder.LITTLE_ENDIAN)
+            val count = buffer.int
+
+            return (0 until count).map {
+                Face(
+                    x = buffer.int,
+                    y = buffer.int,
+                    width = buffer.int,
+                    height = buffer.int,
+                    confidence = buffer.float
+                )
+            }
+        }
+    }
+
+    fun toBytes(): ByteArray {
+        return ByteBuffer.allocate(20)
+            .order(ByteOrder.LITTLE_ENDIAN)
+            .putInt(x)
+            .putInt(y)
+            .putInt(width)
+            .putInt(height)
+            .putFloat(confidence)
+            .array()
+    }
+}
+
+// Helper function wrapping the FFI call
+fun detectFaces(bitmap: Bitmap): List<Face> {
+    // Convert Bitmap to ByteArray
+    val stream = ByteArrayOutputStream()
+    bitmap.compress(Bitmap.CompressFormat.PNG, 100, stream)
+    val imageBytes = stream.toByteArray()
+
+    // Call FFI (Whitehall handles the glue)
+    val resultBytes = Vision.detectFacesRaw(imageBytes)
+
+    // Deserialize results
+    return Face.listFromBytes(resultBytes)
+}
+```
+
+**Step 3: Use in Whitehall component**
+
+```whitehall
+<script>
+  import $ffi.cpp.Vision
+
+  @prop val image: Bitmap
+  var faces: List<Face> = emptyList()
+  var isProcessing = false
+
+  suspend fun detectFaces() {
+    isProcessing = true
+
+    // High-level API (handles serialization)
+    faces = detectFaces(image)
+
+    isProcessing = false
+  }
+
+  onMount {
+    launch { detectFaces() }
+  }
+</script>
+
+<Column>
+  @if (isProcessing) {
+    <LoadingSpinner />
+  } @else {
+    <Text>Found {faces.size} faces</Text>
+
+    @for (face in faces) {
+      <Text>
+        Face at ({face.x}, {face.y})
+        confidence: {face.confidence}
+      </Text>
+    }
+  }
+
+  <Button onClick={launch { detectFaces() }}>
+    Detect Again
+  </Button>
+</Column>
+```
+
+### Summary: Two-Tier System
+
+| Aspect | Simple Types | Complex Types |
+|--------|-------------|---------------|
+| **FFI Boundary** | Native types (Int, String, etc.) | `ByteArray` |
+| **Whitehall Generates** | All glue code | All glue code |
+| **You Write (Native)** | Pure logic | Logic + serialization |
+| **You Write (Kotlin)** | Nothing | Wrapper with deserialization |
+| **Transparency** | 100% transparent | 1 wrapper function |
 
 ---
 
 ## Project Structure
 
-### Basic C++ FFI
+### Single Language (C++)
 
 ```
 my-app/
 ├── whitehall.toml
 ├── src/
 │   ├── components/
-│   │   └── VideoPlayer.wh         # Uses FFI
-│   └── ffi/                        # FFI code directory
-│       ├── CMakeLists.txt
-│       ├── video-decoder.cpp
-│       └── video-decoder.h
+│   │   └── VideoPlayer.wh
+│   └── ffi/
+│       └── cpp/
+│           ├── video-decoder.cpp     # Your code with @ffi
+│           └── video-decoder.h
+└── build/                             # Generated by Whitehall
+    ├── kotlin/
+    │   └── com/example/ffi/
+    │       └── VideoDecoder.kt        # Generated binding
+    ├── jni/
+    │   └── video_decoder_bridge.cpp   # Generated JNI glue
+    └── cmake/
+        └── CMakeLists.txt             # Generated build config
 ```
 
-### Basic Rust FFI
+### Single Language (Rust)
 
 ```
 my-app/
@@ -250,26 +731,39 @@ my-app/
 │   ├── components/
 │   │   └── ImageProcessor.wh
 │   └── ffi/
-│       ├── Cargo.toml
-│       └── lib.rs
+│       └── rust/
+│           ├── Cargo.toml            # You create once
+│           └── lib.rs                # Your code with #[ffi]
+└── build/                            # Generated by Whitehall
+    ├── kotlin/
+    │   └── com/example/ffi/
+    │       └── ImageProcessor.kt     # Generated binding
+    └── jni/
+        └── rust_bridge.rs            # Generated JNI glue
 ```
 
-### Mixed C++ + Rust FFI
+### Mixed C++ + Rust
 
 ```
 my-app/
 ├── whitehall.toml
 ├── src/
 │   ├── components/
-│   │   ├── VideoPlayer.wh         # Uses C++ FFI
-│   │   └── ImageProcessor.wh      # Uses Rust FFI
+│   │   ├── VideoPlayer.wh            # Uses C++ FFI
+│   │   └── ImageProcessor.wh         # Uses Rust FFI
 │   └── ffi/
-│       ├── cpp/                    # C++ subdirectory
-│       │   ├── CMakeLists.txt
+│       ├── cpp/
 │       │   └── video-decoder.cpp
-│       └── rust/                   # Rust subdirectory
+│       └── rust/
 │           ├── Cargo.toml
 │           └── lib.rs
+└── build/
+    └── kotlin/
+        └── com/example/ffi/
+            ├── cpp/
+            │   └── VideoDecoder.kt
+            └── rust/
+                └── ImageProcessor.kt
 ```
 
 ---
@@ -300,74 +794,125 @@ libraries = ["opencv", "ffmpeg"]    # System libraries to link
 # Optional: Rust configuration
 [ffi.rust]
 profile = "release"                 # Build profile (debug, release)
-targets = ["arm64-v8a", "armeabi-v7a"]  # Target architectures
+targets = [                         # Target architectures
+    "arm64-v8a",
+    "armeabi-v7a"
+]
+```
+
+### Annotation Syntax
+
+#### C++ (Comment-Based)
+
+```cpp
+// @ffi
+int myFunction(int a, int b) {
+    return a + b;
+}
+
+// @ffi(name = "custom_name")  // Optional: custom export name
+int internalFunction(int x) {
+    return x * 2;
+}
+```
+
+#### Rust (Attribute Macro)
+
+```rust
+use whitehall_ffi::ffi;
+
+#[ffi]
+pub fn my_function(a: i32, b: i32) -> i32 {
+    a + b
+}
+
+#[ffi(name = "custom_name")]  // Optional: custom export name
+pub fn internal_function(x: i32) -> i32 {
+    x * 2
+}
 ```
 
 ---
 
 ## Complete Examples
 
-### Example 1: C++ Video Decoder
+### Example 1: Math Library (C++)
 
-**src/ffi/CMakeLists.txt:**
-```cmake
-cmake_minimum_required(VERSION 3.22.1)
-project("video-decoder")
-
-add_library(video-decoder SHARED video-decoder.cpp)
-find_library(log-lib log)
-target_link_libraries(video-decoder ${log-lib})
-```
-
-**src/ffi/video-decoder.cpp:**
+**`src/ffi/cpp/math.cpp`:**
 ```cpp
-#include <jni.h>
-#include <android/bitmap.h>
+#include <cmath>
+#include <vector>
+#include <algorithm>
 
-extern "C" JNIEXPORT jobject JNICALL
-Java_com_example_myapp_ffi_VideoDecoder_decodeFrame(
-    JNIEnv* env,
-    jobject thiz,
-    jstring videoUrl,
-    jint frameIndex) {
+// @ffi
+int add(int a, int b) {
+    return a + b;
+}
 
-    // Fast C++ video decoding with FFmpeg
-    // ... implementation ...
+// @ffi
+int multiply(int a, int b) {
+    return a * b;
+}
 
-    return processedBitmap;
+// @ffi
+double sqrt(double n) {
+    return std::sqrt(n);
+}
+
+// @ffi
+int sum(const std::vector<int32_t>& numbers) {
+    return std::accumulate(numbers.begin(), numbers.end(), 0);
+}
+
+// @ffi
+std::vector<int32_t> fibonacci(int n) {
+    std::vector<int32_t> result;
+    if (n <= 0) return result;
+
+    result.push_back(0);
+    if (n == 1) return result;
+
+    result.push_back(1);
+    for (int i = 2; i < n; i++) {
+        result.push_back(result[i-1] + result[i-2]);
+    }
+
+    return result;
 }
 ```
 
-**src/components/VideoPlayer.wh:**
+**Usage:**
 ```whitehall
-import $ffi.VideoDecoder
-
 <script>
-  @prop val videoUrl: String
-  var currentFrame: Bitmap? = null
-  var frameIndex = 0
+  import $ffi.cpp.Math
 
-  fun nextFrame() {
-    currentFrame = VideoDecoder.decodeFrame(videoUrl, frameIndex++)
+  var result = 0
+  var fibNumbers: IntArray = intArrayOf()
+
+  fun calculate() {
+    result = Math.add(Math.multiply(3, 4), 5)  // (3 * 4) + 5 = 17
+
+    val numbers = intArrayOf(1, 2, 3, 4, 5)
+    val total = Math.sum(numbers)  // 15
+
+    fibNumbers = Math.fibonacci(10)  // [0, 1, 1, 2, 3, 5, 8, 13, 21, 34]
   }
 
   onMount {
-    nextFrame()
+    calculate()
   }
 </script>
 
-<Column spacing={16}>
-  @if (currentFrame != null) {
-    <Image bitmap={currentFrame} />
-  }
-
-  <Button onClick={nextFrame}>Next Frame</Button>
+<Column>
+  <Text>Result: {result}</Text>
+  <Text>Fibonacci: {fibNumbers.joinToString(", ")}</Text>
+  <Button onClick={calculate}>Calculate</Button>
 </Column>
 ```
 
-### Example 2: Rust Image Processing
+### Example 2: Image Processing (Rust)
 
-**src/ffi/Cargo.toml:**
+**`src/ffi/rust/Cargo.toml`:**
 ```toml
 [package]
 name = "image-processor"
@@ -377,574 +922,484 @@ version = "0.1.0"
 crate-type = ["cdylib"]
 
 [dependencies]
-jni = "0.21"
+whitehall-ffi = "0.1"
 image = "0.24"
 ```
 
-**src/ffi/lib.rs:**
+**`src/ffi/rust/lib.rs`:**
 ```rust
-use jni::JNIEnv;
-use jni::objects::{JClass, JString, JByteArray};
-use jni::sys::jbyteArray;
-use image::{ImageBuffer, Rgba};
+use whitehall_ffi::ffi;
+use image::{ImageBuffer, Rgba, DynamicImage, GenericImageView};
 
-#[no_mangle]
-pub extern "system" fn Java_com_example_myapp_ffi_ImageProcessor_applyFilter(
-    env: JNIEnv,
-    _class: JClass,
-    image_bytes: JByteArray,
-) -> jbyteArray {
-    // Fast Rust image filtering
-    let bytes = env.convert_byte_array(image_bytes).unwrap();
-    let img = image::load_from_memory(&bytes).unwrap();
+#[ffi]
+pub fn blur(image_bytes: Vec<u8>, radius: f32) -> Vec<u8> {
+    // Decode image
+    let img = image::load_from_memory(&image_bytes).unwrap();
 
-    // Apply filter (e.g., gaussian blur)
-    let filtered = img.blur(2.0);
+    // Apply blur
+    let blurred = img.blur(radius);
 
-    // Convert back to bytes and return
-    let output_bytes = filtered.to_bytes();
-    env.byte_array_from_slice(&output_bytes).unwrap()
+    // Encode back to bytes
+    let mut bytes = Vec::new();
+    blurred.write_to(&mut std::io::Cursor::new(&mut bytes), image::ImageFormat::Png)
+        .unwrap();
+
+    bytes
+}
+
+#[ffi]
+pub fn grayscale(image_bytes: Vec<u8>) -> Vec<u8> {
+    let img = image::load_from_memory(&image_bytes).unwrap();
+    let gray = img.grayscale();
+
+    let mut bytes = Vec::new();
+    gray.write_to(&mut std::io::Cursor::new(&mut bytes), image::ImageFormat::Png)
+        .unwrap();
+
+    bytes
+}
+
+#[ffi]
+pub fn resize(image_bytes: Vec<u8>, width: i32, height: i32) -> Vec<u8> {
+    let img = image::load_from_memory(&image_bytes).unwrap();
+    let resized = img.resize(width as u32, height as u32, image::imageops::FilterType::Lanczos3);
+
+    let mut bytes = Vec::new();
+    resized.write_to(&mut std::io::Cursor::new(&mut bytes), image::ImageFormat::Png)
+        .unwrap();
+
+    bytes
 }
 ```
 
-**src/components/ImageProcessor.wh:**
-```whitehall
-import $ffi.ImageProcessor
+**Helper (Kotlin):**
+```kotlin
+// Bitmap conversion helpers
+fun Bitmap.toByteArray(): ByteArray {
+    val stream = ByteArrayOutputStream()
+    compress(Bitmap.CompressFormat.PNG, 100, stream)
+    return stream.toByteArray()
+}
 
+fun ByteArray.toBitmap(): Bitmap {
+    return BitmapFactory.decodeByteArray(this, 0, size)
+}
+```
+
+**Usage:**
+```whitehall
 <script>
-  @prop val imageUrl: String
-  var processed: Bitmap? = null
+  import $ffi.rust.ImageProcessor
+
+  @prop val originalImage: Bitmap
+  var processedImage: Bitmap? = null
   var isProcessing = false
 
-  fun applyFilter() {
+  suspend fun applyBlur() {
     isProcessing = true
-    launch {
-      val original = loadImage(imageUrl)
-      val bytes = original.toByteArray()
-      val filtered = ImageProcessor.applyFilter(bytes)
-      processed = Bitmap.fromByteArray(filtered)
-      isProcessing = false
-    }
+
+    val imageBytes = originalImage.toByteArray()
+    val blurred = ImageProcessor.blur(imageBytes, 5.0f)
+    processedImage = blurred.toBitmap()
+
+    isProcessing = false
   }
 
-  onMount {
-    applyFilter()
+  suspend fun applyGrayscale() {
+    isProcessing = true
+
+    val imageBytes = originalImage.toByteArray()
+    val gray = ImageProcessor.grayscale(imageBytes)
+    processedImage = gray.toBitmap()
+
+    isProcessing = false
+  }
+
+  suspend fun resize() {
+    isProcessing = true
+
+    val imageBytes = originalImage.toByteArray()
+    val resized = ImageProcessor.resize(imageBytes, 512, 512)
+    processedImage = resized.toBitmap()
+
+    isProcessing = false
   }
 </script>
 
 <Column spacing={16}>
+  <Row>
+    <Image bitmap={originalImage} width={200} height={200} />
+    @if (processedImage != null) {
+      <Image bitmap={processedImage} width={200} height={200} />
+    }
+  </Row>
+
   @if (isProcessing) {
     <LoadingSpinner />
-  } @else if (processed != null) {
-    <Image bitmap={processed} />
+  } @else {
+    <Row spacing={8}>
+      <Button onClick={launch { applyBlur() }}>Blur</Button>
+      <Button onClick={launch { applyGrayscale() }}>Grayscale</Button>
+      <Button onClick={launch { resize() }}>Resize</Button>
+    </Row>
   }
-
-  <Button onClick={applyFilter}>Re-apply Filter</Button>
 </Column>
 ```
 
-### Example 3: Mixed C++ and Rust
+### Example 3: Video Decoder (C++ with FFmpeg)
 
-**Project structure:**
-```
-src/ffi/
-├── cpp/
-│   ├── CMakeLists.txt
-│   └── video-decoder.cpp
-└── rust/
-    ├── Cargo.toml
-    └── lib.rs
+**`src/ffi/cpp/video-decoder.cpp`:**
+```cpp
+extern "C" {
+#include <libavformat/avformat.h>
+#include <libavcodec/avcodec.h>
+#include <libswscale/swscale.h>
+}
+
+#include <vector>
+#include <string>
+
+// @ffi
+std::vector<uint8_t> decodeFrame(const std::string& videoPath, int frameIndex) {
+    AVFormatContext* formatCtx = nullptr;
+
+    // Open video file
+    if (avformat_open_input(&formatCtx, videoPath.c_str(), nullptr, nullptr) != 0) {
+        return {};
+    }
+
+    if (avformat_find_stream_info(formatCtx, nullptr) < 0) {
+        avformat_close_input(&formatCtx);
+        return {};
+    }
+
+    // Find video stream
+    int videoStream = -1;
+    for (unsigned i = 0; i < formatCtx->nb_streams; i++) {
+        if (formatCtx->streams[i]->codecpar->codec_type == AVMEDIA_TYPE_VIDEO) {
+            videoStream = i;
+            break;
+        }
+    }
+
+    if (videoStream == -1) {
+        avformat_close_input(&formatCtx);
+        return {};
+    }
+
+    // Decode frame at index
+    // ... FFmpeg decoding logic ...
+
+    // Convert to RGBA bytes
+    std::vector<uint8_t> frameBytes;
+    // ... conversion logic ...
+
+    avformat_close_input(&formatCtx);
+    return frameBytes;
+}
+
+// @ffi
+int getFrameCount(const std::string& videoPath) {
+    AVFormatContext* formatCtx = nullptr;
+
+    if (avformat_open_input(&formatCtx, videoPath.c_str(), nullptr, nullptr) != 0) {
+        return -1;
+    }
+
+    if (avformat_find_stream_info(formatCtx, nullptr) < 0) {
+        avformat_close_input(&formatCtx);
+        return -1;
+    }
+
+    int videoStream = -1;
+    for (unsigned i = 0; i < formatCtx->nb_streams; i++) {
+        if (formatCtx->streams[i]->codecpar->codec_type == AVMEDIA_TYPE_VIDEO) {
+            videoStream = i;
+            break;
+        }
+    }
+
+    int frameCount = formatCtx->streams[videoStream]->nb_frames;
+
+    avformat_close_input(&formatCtx);
+    return frameCount;
+}
 ```
 
-**Usage in component:**
+**Usage:**
 ```whitehall
-import $ffi.cpp.VideoDecoder
-import $ffi.rust.ImageProcessor
-
 <script>
-  var frame: Bitmap? = null
-  var filtered: Bitmap? = null
+  import $ffi.cpp.VideoDecoder
+
+  @prop val videoPath: String
+  var currentFrame: Bitmap? = null
+  var frameIndex = 0
+  var totalFrames = 0
+
+  suspend fun loadFrame(index: Int) {
+    val frameBytes = VideoDecoder.decodeFrame(videoPath, index)
+    if (frameBytes.isNotEmpty()) {
+      currentFrame = frameBytes.toBitmap()
+      frameIndex = index
+    }
+  }
 
   onMount {
-    launch {
-      // Decode with C++ (FFmpeg)
-      frame = VideoDecoder.decodeFrame(videoUrl, 0)
+    totalFrames = VideoDecoder.getFrameCount(videoPath)
+    launch { loadFrame(0) }
+  }
 
-      // Process with Rust (image crate)
-      filtered = ImageProcessor.applyFilter(frame.toByteArray())
+  fun nextFrame() {
+    if (frameIndex < totalFrames - 1) {
+      launch { loadFrame(frameIndex + 1) }
+    }
+  }
+
+  fun prevFrame() {
+    if (frameIndex > 0) {
+      launch { loadFrame(frameIndex - 1) }
     }
   }
 </script>
 
-<Image bitmap={filtered} />
+<Column spacing={16}>
+  @if (currentFrame != null) {
+    <Image bitmap={currentFrame} />
+  }
+
+  <Text>Frame {frameIndex + 1} of {totalFrames}</Text>
+
+  <Row spacing={8}>
+    <Button onClick={prevFrame} enabled={frameIndex > 0}>
+      Previous
+    </Button>
+    <Button onClick={nextFrame} enabled={frameIndex < totalFrames - 1}>
+      Next
+    </Button>
+  </Row>
+</Column>
 ```
 
 ---
 
-## Import Resolution
-
-### Syntax
-
-| Import Statement | Resolved Kotlin Path | Notes |
-|------------------|---------------------|-------|
-| `$ffi.VideoDecoder` | `com.example.app.ffi.VideoDecoder` | Auto-detected language |
-| `$ffi.cpp.VideoDecoder` | `com.example.app.ffi.cpp.VideoDecoder` | Explicit C++ |
-| `$ffi.rust.ImageProcessor` | `com.example.app.ffi.rust.ImageProcessor` | Explicit Rust |
-
-### Generated Kotlin Bindings
-
-**Current State (Phases 1-2)**: You write Kotlin wrapper code manually.
-
-**Future (Phase 3)**: Auto-generation from annotations or manifest files.
-
-**What Whitehall does now:**
-1. ✅ Copies FFI code to build directory
-2. ✅ Generates CMake/Cargo build configuration
-3. ✅ Resolves `$ffi.*` imports to proper Kotlin package paths
-4. ✅ Adds `System.loadLibrary()` calls to generated code
-
-**What you write manually:**
-```kotlin
-// You create: src/ffi/VideoDecoder.kt
-package com.example.app.ffi
-
-import android.graphics.Bitmap
-
-object VideoDecoder {
-    external fun decodeFrame(videoUrl: String, frameIndex: Int): Bitmap
-
-    init {
-        System.loadLibrary("video-decoder")
-    }
-}
-```
-
-**Import Resolution Rules:**
-
-| Project Structure | Import | Resolves To |
-|-------------------|--------|-------------|
-| `src/ffi/` (single lang) | `$ffi.MyClass` | `com.example.app.ffi.MyClass` |
-| `src/ffi/cpp/` | `$ffi.cpp.MyClass` | `com.example.app.ffi.cpp.MyClass` |
-| `src/ffi/rust/` | `$ffi.rust.MyClass` | `com.example.app.ffi.rust.MyClass` |
-
-**Name Conflict Resolution:**
-
-If both C++ and Rust define the same class name:
-```
-src/ffi/
-├── cpp/
-│   └── ImageProcessor.kt  # Must use explicit import
-└── rust/
-    └── ImageProcessor.kt  # Must use explicit import
-```
-
-```whitehall
-// ❌ Ambiguous - will fail
-import $ffi.ImageProcessor
-
-// ✅ Explicit - works
-import $ffi.cpp.ImageProcessor
-import $ffi.rust.ImageProcessor as RustImageProcessor
-```
-
-**Recommendation**: Use explicit paths (`$ffi.cpp.*`, `$ffi.rust.*`) in mixed-language projects.
-
----
-
-## Requirements
-
-### Minimum Versions
-
-| Component | Minimum Version | Recommended | Notes |
-|-----------|----------------|-------------|-------|
-| **Android NDK** | 25.0 | 26.0+ | For C/C++ compilation |
-| **CMake** | 3.22.1 | 3.28+ | Bundled with Android SDK |
-| **Android API** | 24 (Nougat) | 26+ | `min_sdk` in whitehall.toml |
-| **Rust** | 1.70 | 1.75+ | For Rust FFI |
-| **cargo-ndk** | 3.0 | 3.5+ | Install: `cargo install cargo-ndk` |
-| **JNI crate** | 0.21 | Latest | For Rust JNI bindings |
-
-### Installation Check
-
-```bash
-# Check NDK
-ls $ANDROID_HOME/ndk/
-
-# Check CMake
-cmake --version
-
-# Check Rust toolchain
-rustc --version
-cargo --version
-
-# Install cargo-ndk (if using Rust)
-cargo install cargo-ndk
-
-# Add Android targets for Rust
-rustup target add aarch64-linux-android
-rustup target add armv7-linux-androideabi
-rustup target add i686-linux-android
-rustup target add x86_64-linux-android
-```
-
-### Supported Architectures
-
-Whitehall builds for these Android ABIs by default:
-
-| ABI | CPU Architecture | Notes |
-|-----|------------------|-------|
-| `arm64-v8a` | ARMv8 64-bit | **Primary target** (95% of devices) |
-| `armeabi-v7a` | ARMv7 32-bit | Legacy devices |
-| `x86_64` | Intel 64-bit | Emulators only |
-| `x86` | Intel 32-bit | Deprecated, emulators |
-
-**Smart Default**: Debug builds only compile for `arm64-v8a` (faster iteration). Release builds compile for all targets.
-
----
-
-## Type Marshalling Guide
-
-### The Challenge
-
-JNI requires converting between Kotlin/Java types and C/C++/Rust types. This is **the most error-prone part of FFI**.
+## Type Mapping Reference
 
 ### Complete Type Mapping Table
 
-| Kotlin Type | JNI Type | C++ Type | Rust Type | Example |
-|-------------|----------|----------|-----------|---------|
-| `Boolean` | `jboolean` | `uint8_t` | `u8` | `0` or `1` |
-| `Byte` | `jbyte` | `int8_t` | `i8` | `-128` to `127` |
-| `Char` | `jchar` | `uint16_t` | `u16` | Unicode character |
-| `Short` | `jshort` | `int16_t` | `i16` | `-32768` to `32767` |
-| `Int` | `jint` | `int32_t` | `i32` | 32-bit integer |
-| `Long` | `jlong` | `int64_t` | `i64` | 64-bit integer |
-| `Float` | `jfloat` | `float` | `f32` | 32-bit float |
-| `Double` | `jdouble` | `double` | `f64` | 64-bit float |
-| `String` | `jstring` | `jstring` | `JString` | See [String Handling](#string-handling) |
-| `ByteArray` | `jbyteArray` | `jbyteArray` | `JByteArray` | See [Array Handling](#array-handling) |
-| `IntArray` | `jintArray` | `jintArray` | `JIntArray` | See [Array Handling](#array-handling) |
-| `List<T>` | `jobject` | `jobject` | `JObject` | See [Collections](#collection-handling) |
-| `Bitmap` | `jobject` | `jobject` | `JObject` | See [Bitmap Handling](#bitmap-handling) |
-| `Unit` (void) | `void` | `void` | `()` | No return value |
-| `Any?` (nullable) | `jobject` | `jobject` | `JObject` | Can be null |
+| Kotlin Type | JNI Type | C++ Type | Rust Type | Auto-Marshalled | Notes |
+|-------------|----------|----------|-----------|-----------------|-------|
+| `Unit` | `void` | `void` | `()` | ✅ | No return value |
+| `Boolean` | `jboolean` | `bool` | `bool` | ✅ | True/false |
+| `Byte` | `jbyte` | `int8_t` | `i8` | ✅ | -128 to 127 |
+| `Short` | `jshort` | `int16_t` | `i16` | ✅ | -32768 to 32767 |
+| `Int` | `jint` | `int32_t` / `int` | `i32` | ✅ | 32-bit integer |
+| `Long` | `jlong` | `int64_t` / `long long` | `i64` | ✅ | 64-bit integer |
+| `Float` | `jfloat` | `float` | `f32` | ✅ | 32-bit float |
+| `Double` | `jdouble` | `double` | `f64` | ✅ | 64-bit float |
+| `String` | `jstring` | `std::string` | `String` | ✅ | UTF-8 text |
+| `ByteArray` | `jbyteArray` | `std::vector<uint8_t>` | `Vec<u8>` | ✅ | Binary data |
+| `IntArray` | `jintArray` | `std::vector<int32_t>` | `Vec<i32>` | ✅ | Integer array |
+| `LongArray` | `jlongArray` | `std::vector<int64_t>` | `Vec<i64>` | ✅ | Long array |
+| `FloatArray` | `jfloatArray` | `std::vector<float>` | `Vec<f32>` | ✅ | Float array |
+| `DoubleArray` | `jdoubleArray` | `std::vector<double>` | `Vec<f64>` | ✅ | Double array |
+| `Bitmap` | - | - | - | ❌ | Use ByteArray + conversion |
+| `List<T>` | - | - | - | ❌ | Use ByteArray + serialization |
+| Custom types | - | - | - | ❌ | Use ByteArray + serialization |
 
-### String Handling
+### Conversion Examples
 
-#### C++ String Example
-
+**Primitives (Direct mapping):**
 ```cpp
-#include <jni.h>
-#include <string>
-
-extern "C" JNIEXPORT jstring JNICALL
-Java_com_example_ffi_StringUtils_reverseString(
-    JNIEnv* env,
-    jobject /* this */,
-    jstring input) {
-
-    // ⚠️  ALWAYS check for null!
-    if (input == nullptr) {
-        return env->NewStringUTF("");
-    }
-
-    // Convert jstring to C++ string
-    const char* nativeString = env->GetStringUTFChars(input, nullptr);
-    if (nativeString == nullptr) {
-        return nullptr;  // OutOfMemoryError thrown
-    }
-
-    // Process the string
-    std::string str(nativeString);
-    std::reverse(str.begin(), str.end());
-
-    // ⚠️  CRITICAL: Release the UTF chars!
-    env->ReleaseStringUTFChars(input, nativeString);
-
-    // Convert back to jstring
-    return env->NewStringUTF(str.c_str());
-}
+// @ffi
+int add(int a, int b) { return a + b; }
+```
+```kotlin
+Math.add(5, 3)  // Direct call, no conversion
 ```
 
-#### Rust String Example
-
-```rust
-use jni::JNIEnv;
-use jni::objects::{JClass, JString};
-use jni::sys::jstring;
-
-#[no_mangle]
-pub extern "system" fn Java_com_example_ffi_StringUtils_reverseString(
-    mut env: JNIEnv,
-    _class: JClass,
-    input: JString,
-) -> jstring {
-    // Convert JString to Rust String
-    let input_str: String = match env.get_string(&input) {
-        Ok(s) => s.into(),
-        Err(_) => return JString::default().into_raw(),
-    };
-
-    // Process the string
-    let reversed: String = input_str.chars().rev().collect();
-
-    // Convert back to JString
-    let output = env.new_string(reversed)
-        .expect("Couldn't create Java string!");
-
-    output.into_raw()
-}
-```
-
-### Array Handling
-
-#### C++ Array Example
-
+**Strings (Automatic):**
 ```cpp
-extern "C" JNIEXPORT jint JNICALL
-Java_com_example_ffi_ArrayUtils_sumArray(
-    JNIEnv* env,
-    jobject /* this */,
-    jintArray array) {
-
-    if (array == nullptr) {
-        return 0;
-    }
-
-    // Get array length
-    jsize length = env->GetArrayLength(array);
-
-    // Get array elements (copy)
-    jint* elements = env->GetIntArrayElements(array, nullptr);
-    if (elements == nullptr) {
-        return 0;
-    }
-
-    // Process array
-    jint sum = 0;
-    for (jsize i = 0; i < length; i++) {
-        sum += elements[i];
-    }
-
-    // ⚠️  CRITICAL: Release array!
-    // JNI_ABORT = don't copy back changes (we didn't modify)
-    env->ReleaseIntArrayElements(array, elements, JNI_ABORT);
-
-    return sum;
-}
-```
-
-#### Rust Array Example
-
-```rust
-use jni::JNIEnv;
-use jni::objects::{JClass, JIntArray};
-use jni::sys::jint;
-
-#[no_mangle]
-pub extern "system" fn Java_com_example_ffi_ArrayUtils_sumArray(
-    mut env: JNIEnv,
-    _class: JClass,
-    array: JIntArray,
-) -> jint {
-    // Convert to Rust Vec
-    let elements: Vec<i32> = match env.get_int_array_elements(&array, jni::objects::ReleaseMode::NoCopyBack) {
-        Ok(arr) => arr.to_vec(),
-        Err(_) => return 0,
-    };
-
-    // Process
-    elements.iter().sum()
-}
-```
-
-### Bitmap Handling
-
-**This is the most requested feature for image/video processing!**
-
-#### Complete C++ Bitmap Example
-
-```cpp
-#include <jni.h>
-#include <android/bitmap.h>
-#include <android/log.h>
-
-#define LOG_TAG "BitmapNative"
-#define LOGI(...) __android_log_print(ANDROID_LOG_INFO, LOG_TAG, __VA_ARGS__)
-#define LOGE(...) __android_log_print(ANDROID_LOG_ERROR, LOG_TAG, __VA_ARGS__)
-
-extern "C" JNIEXPORT jobject JNICALL
-Java_com_example_ffi_ImageProcessor_grayscale(
-    JNIEnv* env,
-    jobject /* this */,
-    jobject bitmapIn) {
-
-    AndroidBitmapInfo info;
-    void* pixels;
-
-    // Get bitmap info
-    if (AndroidBitmap_getInfo(env, bitmapIn, &info) < 0) {
-        LOGE("Failed to get bitmap info");
-        return nullptr;
-    }
-
-    // Verify format (RGBA_8888)
-    if (info.format != ANDROID_BITMAP_FORMAT_RGBA_8888) {
-        LOGE("Bitmap format is not RGBA_8888");
-        return nullptr;
-    }
-
-    // Lock pixels for reading
-    if (AndroidBitmap_lockPixels(env, bitmapIn, &pixels) < 0) {
-        LOGE("Failed to lock bitmap pixels");
-        return nullptr;
-    }
-
-    // Create output bitmap
-    jclass bitmapClass = env->FindClass("android/graphics/Bitmap");
-    jmethodID createBitmapMethod = env->GetStaticMethodID(
-        bitmapClass,
-        "createBitmap",
-        "(IILandroid/graphics/Bitmap$Config;)Landroid/graphics/Bitmap;"
-    );
-
-    jclass configClass = env->FindClass("android/graphics/Bitmap$Config");
-    jfieldID rgba8888Field = env->GetStaticFieldID(
-        configClass,
-        "ARGB_8888",
-        "Landroid/graphics/Bitmap$Config;"
-    );
-    jobject rgba8888 = env->GetStaticObjectField(configClass, rgba8888Field);
-
-    jobject bitmapOut = env->CallStaticObjectMethod(
-        bitmapClass,
-        createBitmapMethod,
-        info.width,
-        info.height,
-        rgba8888
-    );
-
-    void* pixelsOut;
-    AndroidBitmap_lockPixels(env, bitmapOut, &pixelsOut);
-
-    // Process pixels (convert to grayscale)
-    uint32_t* pixelIn = (uint32_t*)pixels;
-    uint32_t* pixelOut = (uint32_t*)pixelsOut;
-
-    for (uint32_t y = 0; y < info.height; y++) {
-        for (uint32_t x = 0; x < info.width; x++) {
-            uint32_t pixel = pixelIn[y * info.width + x];
-
-            // Extract RGBA components
-            uint8_t r = (pixel >> 16) & 0xFF;
-            uint8_t g = (pixel >> 8) & 0xFF;
-            uint8_t b = pixel & 0xFF;
-            uint8_t a = (pixel >> 24) & 0xFF;
-
-            // Grayscale using luminosity method
-            uint8_t gray = (uint8_t)(0.299 * r + 0.587 * g + 0.114 * b);
-
-            // Reconstruct pixel
-            pixelOut[y * info.width + x] =
-                (a << 24) | (gray << 16) | (gray << 8) | gray;
-        }
-    }
-
-    // ⚠️  CRITICAL: Unlock pixels!
-    AndroidBitmap_unlockPixels(env, bitmapIn);
-    AndroidBitmap_unlockPixels(env, bitmapOut);
-
-    return bitmapOut;
-}
-```
-
-#### CMakeLists.txt for Bitmap
-
-```cmake
-cmake_minimum_required(VERSION 3.22.1)
-project("imageprocessor")
-
-add_library(imageprocessor SHARED ImageProcessor.cpp)
-
-# ⚠️  CRITICAL: Link against jnigraphics for Bitmap support!
-find_library(log-lib log)
-find_library(jnigraphics-lib jnigraphics)
-
-target_link_libraries(imageprocessor
-    ${log-lib}
-    ${jnigraphics-lib}
-)
-```
-
-#### Rust Bitmap Example
-
-Rust doesn't have direct Bitmap API support, so you work with byte arrays:
-
-```rust
-use jni::JNIEnv;
-use jni::objects::{JClass, JByteArray};
-use jni::sys::jbyteArray;
-
-#[no_mangle]
-pub extern "system" fn Java_com_example_ffi_ImageProcessor_grayscaleBytes(
-    mut env: JNIEnv,
-    _class: JClass,
-    image_bytes: JByteArray,
-    width: i32,
-    height: i32,
-) -> jbyteArray {
-    // Convert to Rust Vec<u8>
-    let bytes = env.convert_byte_array(image_bytes)
-        .expect("Failed to convert byte array");
-
-    // Process RGBA bytes
-    let mut output = Vec::with_capacity(bytes.len());
-
-    for chunk in bytes.chunks(4) {  // RGBA = 4 bytes per pixel
-        let r = chunk[0];
-        let g = chunk[1];
-        let b = chunk[2];
-        let a = chunk[3];
-
-        // Grayscale
-        let gray = ((0.299 * r as f32) + (0.587 * g as f32) + (0.114 * b as f32)) as u8;
-
-        output.extend_from_slice(&[gray, gray, gray, a]);
-    }
-
-    // Convert back to JByteArray
-    env.byte_array_from_slice(&output)
-        .expect("Failed to create byte array")
-}
-```
-
-### Collection Handling
-
-For complex types like `List<String>` or `Map<String, Int>`, you need to use JNI reflection:
-
-```cpp
-// Example: Get List<String> from Kotlin/Java
-std::vector<std::string> getStringList(JNIEnv* env, jobject list) {
-    std::vector<std::string> result;
-
-    jclass listClass = env->GetObjectClass(list);
-    jmethodID sizeMethod = env->GetMethodID(listClass, "size", "()I");
-    jmethodID getMethod = env->GetMethodID(listClass, "get", "(I)Ljava/lang/Object;");
-
-    jint size = env->CallIntMethod(list, sizeMethod);
-
-    for (jint i = 0; i < size; i++) {
-        jstring str = (jstring)env->CallObjectMethod(list, getMethod, i);
-        const char* cstr = env->GetStringUTFChars(str, nullptr);
-        result.push_back(std::string(cstr));
-        env->ReleaseStringUTFChars(str, cstr);
-        env->DeleteLocalRef(str);
-    }
-
+// @ffi
+std::string toUpper(const std::string& text) {
+    std::string result = text;
+    for (char& c : result) c = toupper(c);
     return result;
 }
 ```
+```kotlin
+val upper = Text.toUpper("hello")  // "HELLO"
+```
 
-**Recommendation**: Avoid complex collections in FFI. Prefer simple types (primitives, strings, byte arrays).
+Whitehall generates:
+- `jstring` → `const char*` → `std::string`
+- `std::string` → `const char*` → `jstring`
+- Automatic memory management
+
+**Arrays (Automatic):**
+```cpp
+// @ffi
+std::vector<int32_t> doubleValues(const std::vector<int32_t>& input) {
+    std::vector<int32_t> result;
+    for (int val : input) result.push_back(val * 2);
+    return result;
+}
+```
+```kotlin
+val doubled = Arrays.doubleValues(intArrayOf(1, 2, 3))  // [2, 4, 6]
+```
+
+Whitehall generates:
+- `jintArray` → `jint*` → `std::vector<int32_t>`
+- `std::vector<int32_t>` → `jint*` → `jintArray`
+- Automatic memory management
+
+---
+
+## Understanding JNI Complexity
+
+This section explains **why** FFI is complex, so you appreciate what Whitehall automates for you.
+
+### The Problem: Two Different Worlds
+
+**Kotlin/Java side:**
+- Garbage collected memory
+- Objects on the heap
+- Immutable strings
+- Exceptions for errors
+
+**C++/Rust side:**
+- Manual memory management
+- Raw pointers
+- Null-terminated char arrays
+- Return codes or crashes
+
+### What Makes JNI Hard
+
+#### 1. Manual Type Conversions
+
+**Without Whitehall:**
+```cpp
+// Every string requires 3+ operations
+extern "C" JNIEXPORT jstring JNICALL
+Java_..._process(JNIEnv* env, jobject, jstring input) {
+    // 1. Check null
+    if (input == nullptr) return nullptr;
+
+    // 2. Convert to C string
+    const char* cStr = env->GetStringUTFChars(input, nullptr);
+    if (cStr == nullptr) return nullptr;  // OutOfMemoryError
+
+    // 3. Do work
+    std::string result = process(cStr);
+
+    // 4. MUST release (or memory leak!)
+    env->ReleaseStringUTFChars(input, cStr);
+
+    // 5. Convert back
+    return env->NewStringUTF(result.c_str());
+}
+```
+
+**With Whitehall:**
+```cpp
+// @ffi
+std::string process(const std::string& input) {
+    return doWork(input);  // Just your logic!
+}
+```
+
+#### 2. Memory Management Hell
+
+**Without Whitehall:**
+```cpp
+// ❌ MEMORY LEAK: Unreleased local references
+for (int i = 0; i < 10000; i++) {
+    jobject item = env->GetObjectArrayElement(array, i);
+    // Process...
+    // FORGOT: env->DeleteLocalRef(item);  // Leak!
+}
+```
+
+**With Whitehall:**
+- Automatic `DeleteLocalRef` calls
+- Automatic `Release*` calls for arrays/strings
+- Guaranteed cleanup even on errors
+
+#### 3. Thread Safety Nightmare
+
+**Without Whitehall:**
+```cpp
+JNIEnv* env = /* ... */;
+
+std::thread([env]() {  // ❌ CRASH: env is thread-local!
+    env->CallVoidMethod(...);
+}).detach();
+
+// Must manually attach thread:
+JNIEnv* newEnv;
+g_jvm->AttachCurrentThread(&newEnv, nullptr);
+// ... do work ...
+g_jvm->DetachCurrentThread();
+```
+
+**With Whitehall:**
+- Handles thread attachment automatically
+- Manages `JavaVM*` globally
+- Safe callback mechanisms
+
+#### 4. Name Mangling
+
+**Without Whitehall:**
+```cpp
+// Must match EXACTLY:
+extern "C" JNIEXPORT jint JNICALL
+Java_com_example_myapp_ffi_Math_add(...)
+//    └─ package ──┘ └─ class ─┘ └─ method
+```
+
+One typo = `UnsatisfiedLinkError` at runtime.
+
+**With Whitehall:**
+- Automatic name generation
+- Compile-time verification
+- No manual string munging
+
+#### 5. Silent Failures
+
+**Without Whitehall:**
+```cpp
+// ❌ If NewStringUTF fails, returns nullptr but no exception!
+jstring str = env->NewStringUTF(data);
+return str;  // Might be null!
+
+// Must check EVERYTHING:
+if (env->ExceptionCheck()) {
+    env->ExceptionDescribe();
+    env->ExceptionClear();
+    return nullptr;
+}
+```
+
+**With Whitehall:**
+- Automatic exception checks
+- Automatic error propagation
+- Guaranteed error handling
+
+### What Whitehall Automates
+
+For every `@ffi` function, Whitehall generates:
+
+1. ✅ **JNI function signature** with correct name mangling
+2. ✅ **Type conversions** (jstring ↔ std::string, etc.)
+3. ✅ **Null safety checks**
+4. ✅ **Memory management** (Get* + Release* pairs)
+5. ✅ **Exception handling**
+6. ✅ **Thread safety** (when needed)
+7. ✅ **Build configuration** (CMake/Cargo)
+8. ✅ **Kotlin bindings** (external declarations)
+9. ✅ **Library loading** (System.loadLibrary)
+
+**Result:** You write 10 lines of clean C++/Rust, Whitehall generates 150+ lines of bulletproof JNI glue.
 
 ---
 
@@ -952,147 +1407,109 @@ std::vector<std::string> getStringList(JNIEnv* env, jobject list) {
 
 ### The Golden Rule
 
-**JNI memory is NOT garbage collected automatically!** You must manually manage:
+**JNI memory is NOT garbage collected!** You must manually manage:
 - Local references
 - Global references
 - String/array buffers
 
-### Reference Types
+**Whitehall handles all of this automatically.**
 
-| Reference Type | Scope | When to Use | How to Delete |
-|----------------|-------|-------------|---------------|
-| **Local Reference** | Single JNI function call | Most objects | Auto-deleted, or `DeleteLocalRef()` |
-| **Global Reference** | Until explicitly deleted | Caching objects across calls | `DeleteGlobalRef()` |
-| **Weak Global Reference** | Until explicitly deleted or GC'd | Caching without preventing GC | `DeleteWeakGlobalRef()` |
+### What Whitehall Does
 
-### Local References
+For every FFI function, Whitehall generates proper cleanup:
 
+**Example: String parameter**
 ```cpp
-// ⚠️  PROBLEM: Memory leak in loop!
-extern "C" JNIEXPORT void JNICALL
-Java_com_example_Leak_processMany(JNIEnv* env, jobject, jobjectArray items) {
-    jsize count = env->GetArrayLength(items);
-
-    for (jsize i = 0; i < count; i++) {
-        jobject item = env->GetObjectArrayElement(items, i);
-
-        // Process item...
-
-        // ❌ BAD: Local reference not deleted!
-        // If count is large (10,000+), this will run out of memory!
-    }
+// Your code:
+// @ffi
+std::string reverse(const std::string& input) {
+    return std::string(input.rbegin(), input.rend());
 }
 
-// ✅ SOLUTION: Delete local references
-extern "C" JNIEXPORT void JNICALL
-Java_com_example_Good_processMany(JNIEnv* env, jobject, jobjectArray items) {
-    jsize count = env->GetArrayLength(items);
-
-    for (jsize i = 0; i < count; i++) {
-        jobject item = env->GetObjectArrayElement(items, i);
-
-        // Process item...
-
-        // ✅ GOOD: Delete local reference
-        env->DeleteLocalRef(item);
+// Whitehall generates:
+extern "C" JNIEXPORT jstring JNICALL
+Java_..._reverse(JNIEnv* env, jobject, jstring input) {
+    if (input == nullptr) {
+        return env->NewStringUTF("");
     }
+
+    const char* cStr = env->GetStringUTFChars(input, nullptr);
+    if (cStr == nullptr) {
+        return nullptr;
+    }
+
+    std::string result = reverse(std::string(cStr));
+
+    // ✅ Auto-generated: Release string
+    env->ReleaseStringUTFChars(input, cStr);
+
+    return env->NewStringUTF(result.c_str());
 }
 ```
 
-### Global References
-
+**Example: Array parameter**
 ```cpp
-// Example: Cache a class reference for repeated use
-jclass gBitmapClass = nullptr;
-
-extern "C" JNIEXPORT void JNICALL
-Java_com_example_Native_init(JNIEnv* env, jobject) {
-    // Find class and create global reference
-    jclass localClass = env->FindClass("android/graphics/Bitmap");
-    gBitmapClass = (jclass)env->NewGlobalRef(localClass);
-    env->DeleteLocalRef(localClass);  // Delete local after creating global
+// Your code:
+// @ffi
+int sum(const std::vector<int32_t>& numbers) {
+    return std::accumulate(numbers.begin(), numbers.end(), 0);
 }
 
-extern "C" JNIEXPORT void JNICALL
-Java_com_example_Native_cleanup(JNIEnv* env, jobject) {
-    // ⚠️  CRITICAL: Delete global reference when done!
-    if (gBitmapClass != nullptr) {
-        env->DeleteGlobalRef(gBitmapClass);
-        gBitmapClass = nullptr;
+// Whitehall generates:
+extern "C" JNIEXPORT jint JNICALL
+Java_..._sum(JNIEnv* env, jobject, jintArray array) {
+    if (array == nullptr) {
+        return 0;
     }
+
+    jsize length = env->GetArrayLength(array);
+    jint* elements = env->GetIntArrayElements(array, nullptr);
+    if (elements == nullptr) {
+        return 0;
+    }
+
+    std::vector<int32_t> vec(elements, elements + length);
+    int result = sum(vec);
+
+    // ✅ Auto-generated: Release array
+    // JNI_ABORT = don't copy back (we didn't modify)
+    env->ReleaseIntArrayElements(array, elements, JNI_ABORT);
+
+    return result;
 }
 ```
 
-### Common Memory Leaks
+### Common Memory Leaks (That Whitehall Prevents)
 
 #### Leak 1: Unreleased String UTF Chars
-
 ```cpp
-// ❌ BAD
-jstring getName(JNIEnv* env, jstring input) {
-    const char* name = env->GetStringUTFChars(input, nullptr);
-    std::string processed = std::string(name) + " processed";
-    // ❌ MEMORY LEAK: Never released!
-    return env->NewStringUTF(processed.c_str());
-}
+// ❌ Manual JNI: Easy to forget release
+const char* name = env->GetStringUTFChars(input, nullptr);
+return env->NewStringUTF(name);  // LEAK!
 
-// ✅ GOOD
-jstring getName(JNIEnv* env, jstring input) {
-    const char* name = env->GetStringUTFChars(input, nullptr);
-    std::string processed = std::string(name) + " processed";
-    env->ReleaseStringUTFChars(input, name);  // ✅ Released!
-    return env->NewStringUTF(processed.c_str());
-}
+// ✅ Whitehall: Always releases
 ```
 
 #### Leak 2: Unreleased Array Elements
-
 ```cpp
-// ❌ BAD
-void processArray(JNIEnv* env, jintArray arr) {
-    jint* elements = env->GetIntArrayElements(arr, nullptr);
-    // Process...
-    // ❌ MEMORY LEAK: Never released!
-}
+// ❌ Manual JNI: Easy to forget release
+jint* elements = env->GetIntArrayElements(arr, nullptr);
+// ... process ...
+return result;  // LEAK!
 
-// ✅ GOOD
-void processArray(JNIEnv* env, jintArray arr) {
-    jint* elements = env->GetIntArrayElements(arr, nullptr);
-    // Process...
-    env->ReleaseIntArrayElements(arr, elements, 0);  // ✅ Released!
-}
+// ✅ Whitehall: Always releases
 ```
 
-### Rust Memory Management
+#### Leak 3: Local References in Loops
+```cpp
+// ❌ Manual JNI: Leaks in large loops
+for (int i = 0; i < 10000; i++) {
+    jobject item = env->GetObjectArrayElement(array, i);
+    // LEAK! (JVM has limited local reference slots)
+}
 
-Good news: Rust's RAII handles most of this automatically!
-
-```rust
-use jni::JNIEnv;
-use jni::objects::JString;
-
-// ✅ Rust automatically manages memory
-#[no_mangle]
-pub extern "system" fn Java_com_example_Native_process(
-    mut env: JNIEnv,
-    _: JClass,
-    input: JString
-) -> jstring {
-    // get_string() borrows, automatically released when dropped
-    let rust_str: String = env.get_string(&input)
-        .expect("Failed to get string")
-        .into();
-
-    let output = format!("{} processed", rust_str);
-
-    // new_string() creates a new JString, returned as raw pointer
-    env.new_string(output)
-        .expect("Failed to create string")
-        .into_raw()
-}  // ✅ Rust's Drop trait handles cleanup
+// ✅ Whitehall: Auto-deletes local refs
 ```
-
-**Recommendation**: Use Rust for FFI if memory safety is a concern!
 
 ---
 
@@ -1103,130 +1520,40 @@ pub extern "system" fn Java_com_example_Native_process(
 **`JNIEnv*` is thread-local!** You CANNOT:
 - Store `JNIEnv*` in a global variable
 - Pass `JNIEnv*` to another thread
-- Use `JNIEnv*` from a thread you created
+- Use `JNIEnv*` from a C++ thread you created
 
-### Calling Java from Native Threads
+### Whitehall's Thread Safety
 
-If you create threads in C++ (e.g., for async processing), you must attach them to the JVM:
+**Current design: Simple functions are single-threaded**
 
+If you need async/threaded operations:
+
+**Option 1: Return immediately, process in Kotlin coroutines**
 ```cpp
-#include <jni.h>
-#include <pthread.h>
-
-// Global JavaVM pointer (thread-safe)
-static JavaVM* g_jvm = nullptr;
-
-// Called once when library loads
-extern "C" JNIEXPORT jint JNICALL
-JNI_OnLoad(JavaVM* vm, void* reserved) {
-    g_jvm = vm;  // Cache JavaVM pointer
-    return JNI_VERSION_1_6;
-}
-
-// Background thread function
-void* backgroundWork(void* arg) {
-    JNIEnv* env = nullptr;
-
-    // ⚠️  CRITICAL: Attach thread to JVM!
-    jint result = g_jvm->AttachCurrentThread(&env, nullptr);
-    if (result != JNI_OK) {
-        // Handle error
-        return nullptr;
-    }
-
-    // Now you can use JNI calls
-    jclass cls = env->FindClass("com/example/MyClass");
-    // ... do work ...
-
-    // ⚠️  CRITICAL: Detach when done!
-    g_jvm->DetachCurrentThread();
-
-    return nullptr;
-}
-
-// Start background thread
-extern "C" JNIEXPORT void JNICALL
-Java_com_example_Native_startBackground(JNIEnv* env, jobject) {
-    pthread_t thread;
-    pthread_create(&thread, nullptr, backgroundWork, nullptr);
-    pthread_detach(thread);
+// @ffi
+std::vector<uint8_t> processImage(const std::vector<uint8_t>& image) {
+    // Fast C++ processing (single-threaded)
+    return result;
 }
 ```
 
-### Calling Kotlin from C++ Callbacks
-
-```cpp
-// Example: Call Kotlin callback from C++ async operation
-jobject g_callback = nullptr;  // Global reference to callback
-
-extern "C" JNIEXPORT void JNICALL
-Java_com_example_Native_setCallback(JNIEnv* env, jobject, jobject callback) {
-    // Store global reference to callback
-    if (g_callback != nullptr) {
-        env->DeleteGlobalRef(g_callback);
-    }
-    g_callback = env->NewGlobalRef(callback);
-}
-
-void* asyncOperation(void* arg) {
-    JNIEnv* env = nullptr;
-    g_jvm->AttachCurrentThread(&env, nullptr);
-
-    // Simulate work
-    sleep(2);
-
-    // Call Kotlin callback
-    if (g_callback != nullptr) {
-        jclass callbackClass = env->GetObjectClass(g_callback);
-        jmethodID onCompleteMethod = env->GetMethodID(
-            callbackClass,
-            "onComplete",
-            "(Ljava/lang/String;)V"
-        );
-
-        jstring result = env->NewStringUTF("Work completed!");
-        env->CallVoidMethod(g_callback, onCompleteMethod, result);
-        env->DeleteLocalRef(result);
-    }
-
-    g_jvm->DetachCurrentThread();
-    return nullptr;
+```kotlin
+// Handle async in Kotlin
+suspend fun processImageAsync(bitmap: Bitmap): Bitmap = withContext(Dispatchers.Default) {
+    val bytes = bitmap.toByteArray()
+    val processed = ImageProcessor.processImage(bytes)  // FFI call
+    processed.toBitmap()
 }
 ```
 
-### Rust Thread Safety
-
-```rust
-use jni::{JavaVM, JNIEnv};
-use std::thread;
-use std::sync::Arc;
-
-// Store JavaVM (thread-safe)
-static mut JAVA_VM: Option<Arc<JavaVM>> = None;
-
-#[no_mangle]
-pub extern "system" fn JNI_OnLoad(vm: JavaVM, _reserved: *mut std::ffi::c_void) -> jint {
-    unsafe {
-        JAVA_VM = Some(Arc::new(vm));
-    }
-    jni::sys::JNI_VERSION_1_6
-}
-
-#[no_mangle]
-pub extern "system" fn Java_com_example_Native_startBackground(
-    _env: JNIEnv,
-    _class: JClass
-) {
-    thread::spawn(move || {
-        let jvm = unsafe { JAVA_VM.as_ref().unwrap().clone() };
-
-        // Attach to current thread
-        let mut env = jvm.attach_current_thread()
-            .expect("Failed to attach thread");
-
-        // Do JNI work...
-
-        // env is automatically detached when dropped
+**Option 2: Future support for async FFI**
+```cpp
+// Future syntax (not implemented yet)
+// @ffi(async = true)
+std::future<std::vector<uint8_t>> processImageAsync(const std::vector<uint8_t>& image) {
+    return std::async([image]() {
+        // Whitehall handles thread attachment
+        return processInBackground(image);
     });
 }
 ```
@@ -1235,514 +1562,208 @@ pub extern "system" fn Java_com_example_Native_startBackground(
 
 ## Error Handling
 
-### JNI Exception Handling
+### Exception Propagation
 
-**Critical**: JNI functions can fail silently! You must check for exceptions.
+Whitehall automatically propagates exceptions across the FFI boundary.
 
+**C++:**
 ```cpp
-#include <jni.h>
-#include <android/log.h>
-
-#define LOGE(...) __android_log_print(ANDROID_LOG_ERROR, "Native", __VA_ARGS__)
-
-// ❌ BAD: No error handling
-jstring bad_function(JNIEnv* env, jstring input) {
-    const char* str = env->GetStringUTFChars(input, nullptr);
-    // What if this fails? Returns nullptr, but no error handling!
-    return env->NewStringUTF(str);
-}
-
-// ✅ GOOD: Proper error handling
-jstring good_function(JNIEnv* env, jstring input) {
-    // Check for pending exception first
-    if (env->ExceptionCheck()) {
-        env->ExceptionDescribe();  // Print to logcat
-        env->ExceptionClear();
-        return nullptr;
-    }
-
-    // Check for null input
-    if (input == nullptr) {
-        // Throw Java exception
-        jclass exClass = env->FindClass("java/lang/NullPointerException");
-        env->ThrowNew(exClass, "Input string cannot be null");
-        return nullptr;
-    }
-
-    // Get string
-    const char* str = env->GetStringUTFChars(input, nullptr);
-    if (str == nullptr) {
-        // OutOfMemoryError already thrown by JVM
-        return nullptr;
-    }
-
-    // Create output
-    jstring result = env->NewStringUTF(str);
-    env->ReleaseStringUTFChars(input, str);
-
-    if (result == nullptr) {
-        LOGE("Failed to create output string");
-        return nullptr;
-    }
-
-    return result;
-}
-```
-
-### Throwing Exceptions to Kotlin
-
-```cpp
-void throwException(JNIEnv* env, const char* className, const char* message) {
-    jclass exClass = env->FindClass(className);
-    if (exClass != nullptr) {
-        env->ThrowNew(exClass, message);
-    }
-}
-
-extern "C" JNIEXPORT jint JNICALL
-Java_com_example_Native_divide(JNIEnv* env, jobject, jint a, jint b) {
+// @ffi
+int divide(int a, int b) {
     if (b == 0) {
-        throwException(env, "java/lang/ArithmeticException", "Division by zero");
-        return 0;  // Return value is ignored when exception is thrown
+        throw std::invalid_argument("Division by zero");
     }
     return a / b;
 }
 ```
 
-### Rust Error Handling
-
-```rust
-use jni::JNIEnv;
-use jni::objects::JClass;
-
-#[no_mangle]
-pub extern "system" fn Java_com_example_Native_divide(
-    mut env: JNIEnv,
-    _class: JClass,
-    a: i32,
-    b: i32
-) -> i32 {
-    if b == 0 {
-        // Throw exception to Kotlin
-        env.throw_new(
-            "java/lang/ArithmeticException",
-            "Division by zero"
-        ).expect("Failed to throw exception");
+**Whitehall generates:**
+```cpp
+extern "C" JNIEXPORT jint JNICALL
+Java_..._divide(JNIEnv* env, jobject, jint a, jint b) {
+    try {
+        return divide(a, b);
+    } catch (const std::invalid_argument& e) {
+        // Auto-generated: Throw to Kotlin
+        jclass exClass = env->FindClass("java/lang/IllegalArgumentException");
+        env->ThrowNew(exClass, e.what());
+        return 0;
+    } catch (const std::exception& e) {
+        jclass exClass = env->FindClass("java/lang/RuntimeException");
+        env->ThrowNew(exClass, e.what());
         return 0;
     }
-    a / b
 }
+```
 
-// Better: Use Result type
-fn divide_safe(a: i32, b: i32) -> Result<i32, String> {
+**Kotlin:**
+```kotlin
+try {
+    val result = Math.divide(10, 0)
+} catch (e: IllegalArgumentException) {
+    // Exception from C++!
+    println("Error: ${e.message}")  // "Division by zero"
+}
+```
+
+**Rust:**
+```rust
+#[ffi]
+pub fn divide(a: i32, b: i32) -> Result<i32, String> {
     if b == 0 {
         Err("Division by zero".to_string())
     } else {
         Ok(a / b)
     }
 }
-
-#[no_mangle]
-pub extern "system" fn Java_com_example_Native_divideChecked(
-    mut env: JNIEnv,
-    _class: JClass,
-    a: i32,
-    b: i32
-) -> i32 {
-    match divide_safe(a, b) {
-        Ok(result) => result,
-        Err(msg) => {
-            env.throw_new("java/lang/ArithmeticException", msg)
-                .expect("Failed to throw exception");
-            0
-        }
-    }
-}
 ```
 
-### Error Handling Best Practices
-
-1. **Always check for null** before dereferencing
-2. **Always check exceptions** after calling Java methods
-3. **Use logging** (`__android_log_print` in C++, `android_logger` in Rust)
-4. **Throw meaningful exceptions** to Kotlin/Java layer
-5. **Document error conditions** in function comments
+Whitehall converts `Result<T, String>` to exceptions automatically.
 
 ---
 
 ## Debugging Native Code
 
-### The Challenge
-
-Native crashes don't provide Kotlin stack traces! You see:
-```
-A/libc: Fatal signal 11 (SIGSEGV), code 1, fault addr 0x0 in tid 12345
-```
-
-### Enable Debug Symbols
-
-**CMakeLists.txt:**
-```cmake
-cmake_minimum_required(VERSION 3.22.1)
-project("mylib")
-
-# Enable debug symbols
-set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -g -O0")
-set(CMAKE_C_FLAGS_DEBUG "${CMAKE_C_FLAGS_DEBUG} -g -O0")
-
-# Disable optimization for debug builds
-add_compile_options(-fno-omit-frame-pointer)
-
-add_library(mylib SHARED mylib.cpp)
-```
-
-**Cargo.toml** (Rust):
-```toml
-[profile.dev]
-debug = true
-opt-level = 0
-
-[profile.release]
-debug = true  # Keep symbols in release
-```
-
-### Using Android Studio Debugger
-
-1. **Attach LLDB Debugger**:
-   - Run → Debug → Select process
-   - Or use "Attach Debugger to Android Process"
-
-2. **Set Breakpoints**:
-   - Open C++/Rust source files in Android Studio
-   - Click gutter to set breakpoints
-   - Debugger stops at native breakpoints!
-
-3. **Inspect Variables**:
-   - View native variables in Variables pane
-   - Use LLDB console for advanced queries
-
-### Command-Line Debugging with ndk-stack
-
-```bash
-# Capture logcat during crash
-adb logcat > crash.log
-
-# Symbolicate the stack trace
-$ANDROID_NDK/ndk-stack -sym build/app/obj/local/arm64-v8a -dump crash.log
-```
-
-**Output:**
-```
-*** *** *** *** *** *** *** *** *** *** *** *** *** *** *** ***
-Build fingerprint: '...'
-Revision: '0'
-ABI: 'arm64'
-pid: 12345, tid: 12345, name: com.example.app  >>> com.example.app <<<
-signal 11 (SIGSEGV), code 1 (SEGV_MAPERR), fault addr 0x0
-    #00 pc 00001234  /data/app/.../lib/arm64/libmylib.so (myFunction+56)
-    #01 pc 00005678  /data/app/.../lib/arm64/libmylib.so (Java_com_example_Native_process+12)
-```
-
-### Using addr2line
-
-```bash
-# Get function name and line number from address
-$ANDROID_NDK/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-addr2line \
-  -e build/app/obj/local/arm64-v8a/libmylib.so \
-  0x1234
-```
-
-**Output:**
-```
-/path/to/mylib.cpp:42
-```
-
 ### Logging from Native Code
 
-#### C++ Logging
-
+**C++:**
 ```cpp
 #include <android/log.h>
 
 #define LOG_TAG "MyNative"
-#define LOGV(...) __android_log_print(ANDROID_LOG_VERBOSE, LOG_TAG, __VA_ARGS__)
 #define LOGD(...) __android_log_print(ANDROID_LOG_DEBUG, LOG_TAG, __VA_ARGS__)
-#define LOGI(...) __android_log_print(ANDROID_LOG_INFO, LOG_TAG, __VA_ARGS__)
-#define LOGW(...) __android_log_print(ANDROID_LOG_WARN, LOG_TAG, __VA_ARGS__)
 #define LOGE(...) __android_log_print(ANDROID_LOG_ERROR, LOG_TAG, __VA_ARGS__)
 
-extern "C" JNIEXPORT void JNICALL
-Java_com_example_Native_debug(JNIEnv* env, jobject) {
-    LOGD("Debug message: value=%d", 42);
-    LOGI("Processing started");
-    LOGW("Warning: unusual condition");
-    LOGE("Error occurred!");
-}
-```
+// @ffi
+int processData(const std::vector<uint8_t>& data) {
+    LOGD("Processing %zu bytes", data.size());
 
-**CMakeLists.txt** (link log library):
-```cmake
-find_library(log-lib log)
-target_link_libraries(mylib ${log-lib})
-```
+    int result = compute(data);
 
-#### Rust Logging
-
-```toml
-# Cargo.toml
-[dependencies]
-android_logger = "0.13"
-log = "0.4"
-```
-
-```rust
-use android_logger::Config;
-use log::{debug, info, warn, error, LevelFilter};
-
-#[no_mangle]
-pub extern "system" fn JNI_OnLoad(vm: JavaVM, _: *mut std::ffi::c_void) -> jint {
-    // Initialize logger
-    android_logger::init_once(
-        Config::default()
-            .with_max_level(LevelFilter::Debug)
-            .with_tag("MyRustLib")
-    );
-
-    debug!("Rust library loaded");
-    jni::sys::JNI_VERSION_1_6
-}
-
-#[no_mangle]
-pub extern "system" fn Java_com_example_Native_process(/*...*/) {
-    debug!("Processing started");
-    info!("Value: {}", 42);
-    warn!("Unusual condition");
-    error!("Error occurred!");
-}
-```
-
-### Common Crash Causes
-
-#### 1. Null Pointer Dereference
-
-```cpp
-// ❌ CRASH: Segmentation fault
-jstring bad(JNIEnv* env, jstring input) {
-    const char* str = env->GetStringUTFChars(input, nullptr);
-    return env->NewStringUTF(str);  // Crashes if input is null!
-}
-
-// ✅ SAFE
-jstring good(JNIEnv* env, jstring input) {
-    if (input == nullptr) {
-        return env->NewStringUTF("");
+    if (result < 0) {
+        LOGE("Processing failed with code %d", result);
     }
-    const char* str = env->GetStringUTFChars(input, nullptr);
-    if (str == nullptr) {
-        return nullptr;
-    }
-    jstring result = env->NewStringUTF(str);
-    env->ReleaseStringUTFChars(input, str);
+
     return result;
 }
 ```
 
-#### 2. Use After Free
+**Rust:**
+```rust
+use android_logger::{Config, FilterBuilder};
+use log::{debug, error, info};
 
-```cpp
-// ❌ CRASH: Use after delete
-extern "C" JNIEXPORT void JNICALL
-Java_com_example_Bad_crash(JNIEnv* env, jobject, jstring str) {
-    const char* cstr = env->GetStringUTFChars(str, nullptr);
-    env->ReleaseStringUTFChars(str, cstr);
-    printf("%s", cstr);  // ❌ CRASH: Already released!
+#[ffi]
+pub fn process_data(data: Vec<u8>) -> i32 {
+    debug!("Processing {} bytes", data.len());
+
+    let result = compute(&data);
+
+    if result < 0 {
+        error!("Processing failed with code {}", result);
+    }
+
+    result
 }
 ```
 
-#### 3. Stack Overflow
+### Using Android Studio Debugger
 
-```cpp
-// ❌ CRASH: Stack overflow
-void recursive(int n) {
-    char buffer[1024 * 1024];  // 1MB on stack!
-    if (n > 0) recursive(n - 1);
-}
+1. **Set breakpoints** in C++/Rust source files
+2. **Attach LLDB debugger**: Run → Debug
+3. **Step through code** and inspect variables
+4. **View native stack traces**
 
-// ✅ SAFE: Use heap
-void safe(int n) {
-    std::vector<char> buffer(1024 * 1024);  // On heap
-    if (n > 0) safe(n - 1);
-}
+### Command-Line Debugging
+
+```bash
+# Capture crash log
+adb logcat > crash.log
+
+# Symbolicate with ndk-stack
+$ANDROID_NDK/ndk-stack -sym build/intermediates/cmake/debug/obj/arm64-v8a -dump crash.log
 ```
 
 ### Memory Leak Detection
 
-#### Using AddressSanitizer (ASan)
-
-**whitehall.toml:**
+**Enable AddressSanitizer:**
 ```toml
+# whitehall.toml
 [ffi.cpp]
 flags = ["-fsanitize=address", "-fno-omit-frame-pointer"]
 ```
 
-**CMakeLists.txt:**
-```cmake
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fsanitize=address -fno-omit-frame-pointer")
-target_link_options(mylib PRIVATE -fsanitize=address)
-```
-
-Run app, ASan will report leaks and memory errors in logcat!
+ASan will detect:
+- Memory leaks
+- Buffer overflows
+- Use-after-free
+- Double-free
 
 ---
 
 ## Security Best Practices
 
-### Why Security Matters
-
-Native code bypasses Android's sandbox and memory safety. A vulnerability here can:
-- Crash the entire app (not just isolate exceptions)
-- Allow memory corruption exploits
-- Expose sensitive data
-- Enable privilege escalation
-
 ### Input Validation
 
-**Always validate at the JNI boundary!**
+Always validate at the FFI boundary:
 
 ```cpp
-extern "C" JNIEXPORT void JNICALL
-Java_com_example_Native_processFile(JNIEnv* env, jobject, jstring path) {
-    // ✅ VALIDATE: Check for null
-    if (path == nullptr) {
-        throwException(env, "java/lang/IllegalArgumentException", "Path cannot be null");
-        return;
+// @ffi
+std::string processFile(const std::string& path) {
+    // Validate path
+    if (path.empty()) {
+        throw std::invalid_argument("Path cannot be empty");
     }
 
-    const char* cpath = env->GetStringUTFChars(path, nullptr);
-
-    // ✅ VALIDATE: Check path traversal
-    if (strstr(cpath, "..") != nullptr) {
-        env->ReleaseStringUTFChars(path, cpath);
-        throwException(env, "java/lang/SecurityException", "Path traversal detected");
-        return;
+    // Check for path traversal
+    if (path.find("..") != std::string::npos) {
+        throw std::invalid_argument("Path traversal detected");
     }
 
-    // ✅ VALIDATE: Check allowed directories
-    if (strncmp(cpath, "/data/data/com.example", 22) != 0) {
-        env->ReleaseStringUTFChars(path, cpath);
-        throwException(env, "java/lang/SecurityException", "Access denied");
-        return;
+    // Check allowed directory
+    if (path.find("/data/data/com.example") != 0) {
+        throw std::invalid_argument("Access denied");
     }
 
-    // Now safe to use
-    FILE* file = fopen(cpath, "r");
-    // ...
-
-    env->ReleaseStringUTFChars(path, cpath);
+    // Safe to proceed
+    return processFileImpl(path);
 }
 ```
 
 ### Buffer Overflow Prevention
 
+**C++ (Use std::string and std::vector):**
 ```cpp
-// ❌ DANGEROUS: Buffer overflow
-void bad_copy(const char* input) {
-    char buffer[64];
-    strcpy(buffer, input);  // No bounds checking!
-}
+// ✅ SAFE: Bounds-checked
+std::vector<uint8_t> data(size);
+data[i] = value;  // Throws if out of bounds in debug
 
-// ✅ SAFE: Bounded copy
-void safe_copy(const char* input) {
-    char buffer[64];
-    strncpy(buffer, input, sizeof(buffer) - 1);
-    buffer[sizeof(buffer) - 1] = '\0';  // Ensure null termination
-}
-
-// ✅ BETTER: Use std::string
-void modern_copy(const char* input) {
-    std::string buffer(input);  // Automatic bounds checking
-}
+// ❌ DANGEROUS: Manual buffer
+uint8_t buffer[64];
+strcpy(buffer, input);  // Buffer overflow!
 ```
 
-### Integer Overflow Prevention
-
-```cpp
-// ❌ DANGEROUS: Integer overflow
-extern "C" JNIEXPORT jint JNICALL
-Java_com_example_Native_allocate(JNIEnv* env, jobject, jint size) {
-    void* buffer = malloc(size * 4);  // Overflow if size > INT_MAX/4!
-    // ...
-}
-
-// ✅ SAFE: Check for overflow
-extern "C" JNIEXPORT jint JNICALL
-Java_com_example_Native_allocateSafe(JNIEnv* env, jobject, jint size) {
-    if (size <= 0 || size > INT_MAX / 4) {
-        throwException(env, "java/lang/IllegalArgumentException", "Invalid size");
-        return -1;
-    }
-    void* buffer = malloc(size * 4);
-    // ...
-}
-```
-
-### Format String Vulnerabilities
-
-```cpp
-// ❌ DANGEROUS: Format string attack
-void bad_log(const char* user_input) {
-    __android_log_print(ANDROID_LOG_INFO, "TAG", user_input);  // Exploitable!
-}
-
-// ✅ SAFE: Use format specifier
-void safe_log(const char* user_input) {
-    __android_log_print(ANDROID_LOG_INFO, "TAG", "%s", user_input);
-}
+**Rust (Automatic bounds checking):**
+```rust
+// ✅ Rust panics on out-of-bounds access
+let mut data = vec![0u8; size];
+data[i] = value;  // Safe
 ```
 
 ### Secure Data Handling
 
+**Zero sensitive data after use:**
 ```cpp
-// ❌ DANGEROUS: Leaves sensitive data in memory
-void bad_password(const char* password) {
-    std::string pwd(password);
-    // Use password...
-    // String lingers in memory!
-}
+// @ffi
+bool verifyPassword(const std::string& password) {
+    bool valid = checkPassword(password);
 
-// ✅ SAFE: Zero memory after use
-void safe_password(const char* password) {
-    size_t len = strlen(password);
-    char* pwd = new char[len + 1];
-    strcpy(pwd, password);
+    // Zero memory
+    std::fill(const_cast<char*>(password.data()),
+              const_cast<char*>(password.data()) + password.size(),
+              0);
 
-    // Use password...
-
-    // Overwrite memory
-    memset(pwd, 0, len);
-    delete[] pwd;
-}
-```
-
-### Rust Security Advantages
-
-Rust prevents entire classes of vulnerabilities:
-- **No buffer overflows** (bounds-checked by default)
-- **No null pointer dereferences** (Option<T> type system)
-- **No use-after-free** (ownership system)
-- **No data races** (borrow checker)
-
-```rust
-// ✅ Rust prevents common vulnerabilities automatically
-pub fn process_data(data: &[u8]) -> Vec<u8> {
-    let mut output = Vec::new();
-
-    // Bounds-checked (panics instead of memory corruption)
-    for byte in data {
-        output.push(*byte);
-    }
-
-    output
+    return valid;
 }
 ```
 
@@ -1752,49 +1773,32 @@ pub fn process_data(data: &[u8]) -> Vec<u8> {
 
 ### Strategy
 
-1. **Unit test native code** separately (C++ with Google Test, Rust with built-in tests)
-2. **Integration test** JNI boundary (Kotlin ↔ Native)
-3. **Mock FFI** in Kotlin tests
+1. **Unit test native code** (C++ with Google Test, Rust with cargo test)
+2. **Integration test** FFI boundary (Kotlin JUnit)
+3. **Mock FFI** in UI tests
 
-### C++ Unit Testing with Google Test
+### C++ Unit Testing
 
-**tests/native_test.cpp:**
 ```cpp
+// tests/math_test.cpp
 #include <gtest/gtest.h>
-#include "mylib.h"
+#include "math.cpp"
 
-TEST(MyLibTest, BasicFunctionality) {
-    int result = add(2, 3);
-    EXPECT_EQ(result, 5);
+TEST(MathTest, Addition) {
+    EXPECT_EQ(add(2, 3), 5);
+    EXPECT_EQ(add(-1, 1), 0);
 }
 
-TEST(MyLibTest, EdgeCase) {
-    int result = add(INT_MAX, 1);
-    // Test overflow handling
+TEST(MathTest, Division) {
+    EXPECT_THROW(divide(10, 0), std::invalid_argument);
 }
-```
-
-**CMakeLists.txt:**
-```cmake
-# Add Google Test
-enable_testing()
-add_subdirectory(googletest)
-
-add_executable(native_test tests/native_test.cpp mylib.cpp)
-target_link_libraries(native_test gtest gtest_main)
-```
-
-**Run tests:**
-```bash
-cmake --build build/tests
-./build/tests/native_test
 ```
 
 ### Rust Unit Testing
 
 ```rust
 // lib.rs
-
+#[ffi]
 pub fn add(a: i32, b: i32) -> i32 {
     a + b
 }
@@ -1806,177 +1810,73 @@ mod tests {
     #[test]
     fn test_add() {
         assert_eq!(add(2, 3), 5);
-    }
-
-    #[test]
-    fn test_overflow() {
-        let result = add(i32::MAX, 1);
-        // Test overflow behavior
+        assert_eq!(add(-1, 1), 0);
     }
 }
 ```
 
-**Run tests:**
-```bash
-cd src/ffi
-cargo test
-```
+Run: `cargo test`
 
-### Integration Testing (Kotlin ↔ Native)
+### Integration Testing (Kotlin)
 
-**src/test/kotlin/FfiTest.kt:**
 ```kotlin
-import org.junit.Test
-import org.junit.Assert.*
-
-class FfiTest {
-    @Test
-    fun testNativeFunction() {
-        System.loadLibrary("mylib")
-
-        val result = MyNative.add(2, 3)
-        assertEquals(5, result)
-    }
-
-    @Test(expected = IllegalArgumentException::class)
-    fun testNativeValidation() {
-        MyNative.processData(null)  // Should throw
-    }
-}
-```
-
-### Mocking FFI for Faster Tests
-
-**src/main/kotlin/MyNative.kt:**
-```kotlin
-interface NativeInterface {
-    fun add(a: Int, b: Int): Int
-    fun processData(data: ByteArray): ByteArray
+@Test
+fun testNativeAdd() {
+    val result = Math.add(2, 3)
+    assertEquals(5, result)
 }
 
-object MyNative : NativeInterface {
-    external override fun add(a: Int, b: Int): Int
-    external override fun processData(data: ByteArray): ByteArray
-
-    init {
-        System.loadLibrary("mylib")
-    }
+@Test(expected = IllegalArgumentException::class)
+fun testNativeDivideByZero() {
+    Math.divide(10, 0)  // Should throw
 }
-```
-
-**src/test/kotlin/MockedTest.kt:**
-```kotlin
-class MockNative : NativeInterface {
-    override fun add(a: Int, b: Int) = a + b  // Pure Kotlin mock
-    override fun processData(data: ByteArray) = data
-}
-
-class BusinessLogicTest {
-    @Test
-    fun testWithMock() {
-        val mockNative: NativeInterface = MockNative()
-        val result = mockNative.add(2, 3)
-        assertEquals(5, result)
-    }
-}
-```
-
-### Performance Benchmarking
-
-**C++ Benchmarking with Google Benchmark:**
-```cpp
-#include <benchmark/benchmark.h>
-#include "mylib.h"
-
-static void BM_ProcessImage(benchmark::State& state) {
-    // Setup
-    std::vector<uint8_t> image(1920 * 1080 * 4);
-
-    for (auto _ : state) {
-        processImage(image.data(), 1920, 1080);
-    }
-
-    state.SetBytesProcessed(state.iterations() * image.size());
-}
-
-BENCHMARK(BM_ProcessImage);
-BENCHMARK_MAIN();
-```
-
-**Rust Benchmarking with Criterion:**
-```toml
-[dev-dependencies]
-criterion = "0.5"
-```
-
-```rust
-use criterion::{black_box, criterion_group, criterion_main, Criterion};
-
-fn process_benchmark(c: &mut Criterion) {
-    let data = vec![0u8; 1920 * 1080 * 4];
-
-    c.bench_function("process_image", |b| {
-        b.iter(|| process_image(black_box(&data)))
-    });
-}
-
-criterion_group!(benches, process_benchmark);
-criterion_main!(benches);
 ```
 
 ---
 
 ## Troubleshooting
 
-### Common Errors
+### "Library not found: libmath.so"
 
-#### 1. "Library not found: libmylib.so"
-
-**Cause**: Library not built or not included in APK.
+**Cause:** Library not built or not included in APK.
 
 **Solution:**
 ```bash
 # Check if library exists
-find build/app -name "*.so"
+find build -name "*.so"
 
-# Check whitehall.toml
+# Verify ffi.enabled in whitehall.toml
 [ffi]
-enabled = true  # Must be enabled!
+enabled = true
 
-# Rebuild
+# Clean rebuild
 whitehall build --clean
 ```
 
-#### 2. "UnsatisfiedLinkError: No implementation found"
+### "UnsatisfiedLinkError: No implementation found"
 
-**Cause**: JNI function name mismatch.
+**Cause:** JNI function name mismatch.
 
-**Expected:**
-```cpp
-Java_com_example_myapp_ffi_MyClass_myFunction
-```
+**Solution:** This shouldn't happen with Whitehall auto-generation. If it does, file a bug report with:
+- Your `@ffi` annotation
+- The function signature
+- Build logs
 
-**Check package name:**
-```kotlin
-// In MyClass.kt
-package com.example.myapp.ffi  // Must match C++ function name!
-```
+### "SIGSEGV (Segmentation fault)"
 
-#### 3. "SIGSEGV (Segmentation fault)"
-
-**Cause**: Null pointer, buffer overflow, use-after-free.
+**Cause:** Memory corruption (null pointer, buffer overflow, use-after-free).
 
 **Debug:**
 ```bash
-# Use ndk-stack to symbolicate
-adb logcat | $ANDROID_NDK/ndk-stack -sym build/app/obj/local/arm64-v8a
+# Use ndk-stack
+adb logcat | $ANDROID_NDK/ndk-stack -sym build/obj/arm64-v8a
 
-# Or use AddressSanitizer
-# Add to CMakeLists.txt:
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fsanitize=address")
+# Or enable AddressSanitizer
+[ffi.cpp]
+flags = ["-fsanitize=address"]
 ```
 
-#### 4. "cargo-ndk: command not found"
+### "cargo-ndk: command not found"
 
 **Solution:**
 ```bash
@@ -1987,1226 +1887,108 @@ rustup target add aarch64-linux-android
 rustup target add armv7-linux-androideabi
 ```
 
-#### 5. "CMake Error: NDK not found"
+---
 
-**Solution:**
+## Requirements
+
+### Minimum Versions
+
+| Component | Minimum | Recommended |
+|-----------|---------|-------------|
+| **Android NDK** | 25.0 | 26.0+ |
+| **CMake** | 3.22.1 | 3.28+ |
+| **Android API** | 24 | 26+ |
+| **Rust** | 1.70 | 1.75+ |
+| **cargo-ndk** | 3.0 | 3.5+ |
+
+### Installation
+
 ```bash
-# Install NDK via Android Studio or:
-sdkmanager --install "ndk;26.0.10792818"
+# Check NDK
+ls $ANDROID_HOME/ndk/
 
-# Set ANDROID_NDK_HOME
-export ANDROID_NDK_HOME=$ANDROID_HOME/ndk/26.0.10792818
+# Install Rust toolchain
+rustup target add aarch64-linux-android
+rustup target add armv7-linux-androideabi
+
+# Install cargo-ndk
+cargo install cargo-ndk
 ```
-
-#### 6. Slow Native Builds
-
-**Solutions:**
-- Use `ccache` for C++: `export CMAKE_CXX_COMPILER_LAUNCHER=ccache`
-- Use `sccache` for Rust: Add to `~/.cargo/config.toml`:
-  ```toml
-  [build]
-  rustc-wrapper = "sccache"
-  ```
-- Debug builds: Only compile for `arm64-v8a` (fastest)
-
-### Debugging Checklist
-
-When FFI isn't working:
-
-- [ ] FFI enabled in `whitehall.toml`?
-- [ ] CMakeLists.txt or Cargo.toml present?
-- [ ] JNI function names match package structure?
-- [ ] `System.loadLibrary()` called with correct name?
-- [ ] NDK and CMake installed?
-- [ ] Checked logcat for errors?
-- [ ] Tried clean build? (`whitehall build --clean`)
 
 ---
 
-## Performance Optimization
+## Implementation Status
 
-### When to Use FFI
+### Phase 1: Design & Documentation ✅
+- [x] Design FFI annotation approach
+- [x] Define supported types
+- [x] Document architecture
+- [ ] Finalize annotation syntax
 
-**Use FFI when:**
-- ✅ CPU-intensive loops (image processing, compression)
-- ✅ Existing C/C++ libraries to reuse
-- ✅ SIMD/GPU acceleration needed
-- ✅ Real-time performance critical (audio/video)
+### Phase 2: Basic Code Generation (Planned)
+- [ ] Parse C++ `@ffi` comments
+- [ ] Parse Rust `#[ffi]` attributes
+- [ ] Generate Kotlin bindings
+- [ ] Generate JNI bridge code
+- [ ] Generate CMake configuration
 
-**Don't use FFI when:**
-- ❌ Simple business logic
-- ❌ Kotlin performance is sufficient
-- ❌ JNI overhead dominates (many small calls)
+### Phase 3: Type Marshalling (Planned)
+- [ ] Primitives (Int, Long, Float, etc.)
+- [ ] String conversion
+- [ ] Array conversion
+- [ ] Error handling
 
-### JNI Call Overhead
+### Phase 4: Advanced Features (Future)
+- [ ] Async FFI
+- [ ] Callback support
+- [ ] Complex type serialization helpers
+- [ ] Performance profiling
 
-**Rule of thumb**: JNI calls take ~100-200ns. Only worth it if native work is >> 1µs.
+---
 
-```kotlin
-// ❌ BAD: JNI overhead dominates
-fun processArray(data: IntArray) {
-    for (i in data.indices) {
-        data[i] = MyNative.add(data[i], 1)  // 1M calls = 100ms overhead!
-    }
-}
+## Summary
 
-// ✅ GOOD: Batch processing
-fun processArray(data: IntArray) {
-    MyNative.addToAll(data, 1)  // 1 call, native loops over array
-}
-```
+### What You Write
 
-### Batch Operations
-
+**C++:**
 ```cpp
-// ✅ Process entire array in one call
-extern "C" JNIEXPORT void JNICALL
-Java_com_example_Native_addToAll(
-    JNIEnv* env,
-    jobject,
-    jintArray array,
-    jint value) {
-
-    jsize length = env->GetArrayLength(array);
-    jint* elements = env->GetIntArrayElements(array, nullptr);
-
-    // Fast native loop
-    for (jsize i = 0; i < length; i++) {
-        elements[i] += value;
-    }
-
-    env->ReleaseIntArrayElements(array, elements, 0);
-}
-```
-
-### SIMD Optimization
-
-```cpp
-#include <arm_neon.h>  // ARM NEON SIMD
-
-// ✅ SIMD: 4x faster on ARM
-void addToAllSIMD(int32_t* data, int32_t value, size_t length) {
-    int32x4_t valueVec = vdupq_n_s32(value);
-
-    size_t i = 0;
-    for (; i + 4 <= length; i += 4) {
-        int32x4_t dataVec = vld1q_s32(&data[i]);
-        dataVec = vaddq_s32(dataVec, valueVec);
-        vst1q_s32(&data[i], dataVec);
-    }
-
-    // Handle remainder
-    for (; i < length; i++) {
-        data[i] += value;
-    }
-}
-```
-
-### Parallel Processing
-
-**C++ with OpenMP:**
-```cpp
-#include <omp.h>
-
-void processParallel(float* data, size_t length) {
-    #pragma omp parallel for
-    for (size_t i = 0; i < length; i++) {
-        data[i] = expensiveComputation(data[i]);
-    }
-}
-```
-
-**Rust with Rayon:**
-```toml
-[dependencies]
-rayon = "1.7"
-```
-
-```rust
-use rayon::prelude::*;
-
-pub fn process_parallel(data: &mut [f32]) {
-    data.par_iter_mut().for_each(|x| {
-        *x = expensive_computation(*x);
-    });
-}
-```
-
-### Build Optimizations
-
-**CMakeLists.txt:**
-```cmake
-# Release optimizations
-set(CMAKE_CXX_FLAGS_RELEASE "-O3 -DNDEBUG -flto")
-
-# Enable link-time optimization
-set(CMAKE_INTERPROCEDURAL_OPTIMIZATION TRUE)
-
-# Architecture-specific optimizations
-if(ANDROID_ABI STREQUAL "arm64-v8a")
-    add_compile_options(-march=armv8-a+crypto)
-endif()
-```
-
-**Cargo.toml:**
-```toml
-[profile.release]
-opt-level = 3
-lto = true  # Link-time optimization
-codegen-units = 1  # Better optimization, slower compile
-```
-
----
-
-## Migration Path
-
-### From Simple to Mixed FFI
-
-**Scenario**: You started with C++ in `src/ffi/`, now want to add Rust.
-
-**Step 1: Create subdirectories**
-```bash
-mkdir -p src/ffi/cpp src/ffi/rust
-mv src/ffi/*.cpp src/ffi/*.h src/ffi/CMakeLists.txt src/ffi/cpp/
-```
-
-**Step 2: Initialize Rust**
-```bash
-cd src/ffi/rust
-cargo init --lib
-# Configure Cargo.toml for cdylib
-cd ../../..
-```
-
-**Step 3: Update imports in .wh files**
-```whitehall
-// Before (worked with simple structure)
-import $ffi.VideoDecoder
-
-// After (explicit paths required)
-import $ffi.cpp.VideoDecoder
-import $ffi.rust.ImageProcessor
-```
-
-**Step 4: Rebuild**
-```bash
-whitehall build
-```
-
----
-
-## Implementation Plan
-
-> **Philosophy**: Build incrementally. Each phase is independently testable and builds confidence. Ship early, iterate often.
-
----
-
-### Phase 0: Manual Proof-of-Concept (2-4 hours)
-
-**Goal**: Prove FFI works in a Whitehall project **with zero automation**
-
-**Why this phase?** Before writing any Whitehall code, verify the entire stack works manually.
-
-**Tasks**:
-
-1. **Create test project** (`examples/ffi-poc/`)
-   ```bash
-   whitehall init ffi-poc
-   cd ffi-poc
-   mkdir -p src/ffi
-   ```
-
-2. **Write simplest C++ function** (`src/ffi/math.cpp`)
-   ```cpp
-   #include <jni.h>
-
-   extern "C" JNIEXPORT jint JNICALL
-   Java_com_example_ffi_1poc_ffi_NativeMath_add(
-       JNIEnv* env, jobject, jint a, jint b) {
-       return a + b;
-   }
-   ```
-
-3. **Write CMakeLists.txt** (`src/ffi/CMakeLists.txt`)
-   ```cmake
-   cmake_minimum_required(VERSION 3.22.1)
-   add_library(nativemath SHARED math.cpp)
-   ```
-
-4. **Manually write Kotlin wrapper** (`src/ffi/NativeMath.kt`)
-   ```kotlin
-   package com.example.ffi_poc.ffi
-
-   object NativeMath {
-       external fun add(a: Int, b: Int): Int
-
-       init {
-           System.loadLibrary("nativemath")
-       }
-   }
-   ```
-
-5. **Manually edit build.gradle.kts**
-   - Add `externalNativeBuild` block pointing to CMakeLists.txt
-   - Add NDK/CMake configuration
-
-6. **Use in a component** (`src/components/App.wh`)
-   ```whitehall
-   <script>
-     import com.example.ffi_poc.ffi.NativeMath
-
-     val result = NativeMath.add(2, 3)
-   </script>
-
-   <Text>2 + 3 = {result}</Text>
-   ```
-
-7. **Build and test**
-   ```bash
-   gradle build  # Not whitehall build yet!
-   # Install APK, verify it shows "2 + 3 = 5"
-   ```
-
-**Success Criteria**:
-- ✅ APK builds successfully
-- ✅ Native library included in APK (`lib/arm64-v8a/libnativemath.so` exists)
-- ✅ App runs and displays correct result
-- ✅ You understand the full manual process
-
-**Deliverable**: Working example project in `examples/ffi-poc/` (all manual, no Whitehall automation)
-
-**Time**: 2-4 hours
-
----
-
-### Phase 1: File Detection & Copying (3-5 days)
-
-**Goal**: Whitehall automatically detects and copies FFI code
-
-**Why this phase?** Simplest automation - just move files around. No code generation yet.
-
-**What you'll build**:
-
-1. **Config parsing** (`src/config.rs`)
-   ```rust
-   #[derive(Deserialize)]
-   pub struct FfiConfig {
-       pub enabled: bool,
-       pub cpp: Option<CppConfig>,
-       pub rust: Option<RustConfig>,
-   }
-   ```
-   - Parse `[ffi]` section from `whitehall.toml`
-   - Validate configuration
-   - Handle `[ffi.cpp]` and `[ffi.rust]` subsections
-
-2. **File discovery** (`src/ffi/detection.rs` - new module)
-   ```rust
-   pub struct FfiDetection {
-       pub has_cpp: bool,
-       pub has_rust: bool,
-       pub cpp_files: Vec<PathBuf>,
-       pub rust_files: Vec<PathBuf>,
-   }
-
-   pub fn detect_ffi(project_root: &Path) -> FfiDetection {
-       // Scan src/ffi/ for *.cpp, *.h, CMakeLists.txt
-       // Scan src/ffi/ for *.rs, Cargo.toml
-   }
-   ```
-
-3. **File copying** (`src/build_pipeline.rs`)
-   ```rust
-   fn copy_ffi_code(&self) -> Result<()> {
-       // Copy src/ffi/*.cpp → build/app/src/main/cpp/
-       // Copy src/ffi/CMakeLists.txt → build/app/src/main/cpp/
-       // Preserve directory structure
-   }
-   ```
-
-4. **Logging**
-   ```
-   [INFO] FFI: Detected C++ files in src/ffi/
-   [INFO] FFI: Copied 2 C++ files to build/app/src/main/cpp/
-   ```
-
-**What you'll test**:
-```bash
-# In ffi-poc project, add to whitehall.toml:
-[ffi]
-enabled = true
-
-# Run whitehall build
-whitehall build
-
-# Verify:
-ls build/app/src/main/cpp/  # Should contain math.cpp, CMakeLists.txt
-```
-
-**Success Criteria**:
-- ✅ `whitehall build` detects FFI code
-- ✅ Files copied to correct locations
-- ✅ Helpful error if `[ffi]` enabled but no FFI code found
-- ✅ Works with both simple (`src/ffi/`) and mixed (`src/ffi/cpp/`, `src/ffi/rust/`) layouts
-
-**What you still do manually**: Write Kotlin wrappers, edit Gradle config
-
-**Deliverable**: Whitehall detects and copies FFI code automatically
-
-**Time**: 3-5 days
-
----
-
-### Phase 2: Build System Integration (1-2 weeks)
-
-**Goal**: Whitehall generates Gradle configuration for native builds
-
-**Why this phase?** Automate the build plumbing so users don't touch Gradle.
-
-**What you'll build**:
-
-1. **Gradle generation** (`src/android_scaffold.rs`)
-   ```rust
-   fn generate_gradle_ffi_config(&self, ffi: &FfiDetection) -> String {
-       if ffi.has_cpp {
-           r#"
-           android {
-               externalNativeBuild {
-                   cmake {
-                       path = file("src/main/cpp/CMakeLists.txt")
-                       version = "3.22.1"
-                   }
-               }
-               defaultConfig {
-                   externalNativeBuild {
-                       cmake {
-                           cppFlags += ["-std=c++17", "-Wall"]
-                           arguments += ["-DANDROID_STL=c++_shared"]
-                       }
-                   }
-               }
-           }
-           "#
-       }
-   }
-   ```
-
-2. **Smart ABI selection**
-   - Debug builds: Only `arm64-v8a` (fast iteration)
-   - Release builds: All ABIs (`arm64-v8a`, `armeabi-v7a`, `x86_64`, `x86`)
-   ```rust
-   let abis = if self.is_release {
-       vec!["arm64-v8a", "armeabi-v7a", "x86_64", "x86"]
-   } else {
-       vec!["arm64-v8a"]  // Debug: fast builds
-   };
-   ```
-
-3. **NDK version detection**
-   ```rust
-   fn detect_ndk_version() -> Result<String> {
-       // Check $ANDROID_NDK_HOME
-       // Check $ANDROID_HOME/ndk/
-       // Provide helpful error if not found
-   }
-   ```
-
-4. **CMake wrapper generation**
-   - If user provides CMakeLists.txt: use as-is
-   - If not: generate minimal one
-   ```cmake
-   # Generated by Whitehall
-   cmake_minimum_required(VERSION 3.22.1)
-   project("${PROJECT_NAME}")
-
-   file(GLOB_RECURSE CPP_SOURCES "*.cpp")
-   add_library(${PROJECT_NAME} SHARED ${CPP_SOURCES})
-
-   find_library(log-lib log)
-   target_link_libraries(${PROJECT_NAME} ${log-lib})
-   ```
-
-**What you'll test**:
-```bash
-# In ffi-poc, REMOVE manual Gradle edits
-# Only keep [ffi] in whitehall.toml
-
-whitehall build
-
-# Verify:
-# 1. build.gradle.kts contains externalNativeBuild
-# 2. APK contains libmath.so
-# 3. gradle assembleDebug works
-```
-
-**Success Criteria**:
-- ✅ `whitehall build` generates complete Gradle config
-- ✅ Native library builds automatically
-- ✅ Debug builds only target arm64-v8a (3x faster)
-- ✅ Release builds target all ABIs
-- ✅ Helpful error if NDK not installed
-- ✅ Works with user-provided or auto-generated CMakeLists.txt
-
-**What you still do manually**: Write Kotlin wrappers
-
-**Deliverable**: `whitehall build` compiles native code, no Gradle edits needed
-
-**Time**: 1-2 weeks
-
----
-
-### Phase 3: Import Resolution (3-5 days)
-
-**Goal**: Support `import $ffi.MyClass` syntax in `.wh` files
-
-**Why this phase?** Make FFI feel native to Whitehall - use special syntax instead of full package names.
-
-**What you'll build**:
-
-1. **Import parser** (`src/transpiler/imports.rs`)
-   ```rust
-   enum Import {
-       Regular(String),           // import com.foo.Bar
-       Ffi(String),                // import $ffi.MyClass
-       FfiExplicit(String, String), // import $ffi.cpp.MyClass
-   }
-
-   fn parse_import(line: &str) -> Import {
-       if line.contains("$ffi.") {
-           // Parse FFI import
-       }
-   }
-   ```
-
-2. **Import resolver** (`src/transpiler/codegen.rs`)
-   ```rust
-   fn resolve_ffi_import(&self, import: &str) -> String {
-       let package = &self.config.android.package;
-
-       match import {
-           "$ffi.MyClass" => format!("{}.ffi.MyClass", package),
-           "$ffi.cpp.MyClass" => format!("{}.ffi.cpp.MyClass", package),
-           "$ffi.rust.MyClass" => format!("{}.ffi.rust.MyClass", package),
-           _ => panic!("Invalid FFI import: {}", import),
-       }
-   }
-   ```
-
-3. **Name conflict detection**
-   ```rust
-   fn check_ffi_conflicts(&self, ffi: &FfiDetection) -> Result<()> {
-       // If both cpp/VideoDecoder.kt and rust/VideoDecoder.kt exist
-       // Require explicit imports: $ffi.cpp.VideoDecoder
-       if has_name_conflict {
-           return Err("Ambiguous import: use $ffi.cpp.X or $ffi.rust.X");
-       }
-   }
-   ```
-
-4. **Codegen** (Kotlin generation)
-   ```kotlin
-   // Input (.wh):
-   import $ffi.NativeMath
-
-   // Output (.kt):
-   import com.example.ffi_poc.ffi.NativeMath
-   ```
-
-**What you'll test**:
-```whitehall
-// src/components/App.wh
-import $ffi.NativeMath  // ✨ New syntax!
-
-<script>
-  val result = NativeMath.add(2, 3)
-</script>
-
-<Text>Result: {result}</Text>
-```
-
-```bash
-whitehall build
-# Verify generated Kotlin has correct import
-cat build/app/.../App.kt | grep "import com.example"
-```
-
-**Success Criteria**:
-- ✅ `import $ffi.MyClass` works in `.wh` files
-- ✅ Resolves to correct package path
-- ✅ `import $ffi.cpp.MyClass` works for mixed projects
-- ✅ Error on ambiguous imports in mixed projects
-- ✅ Autocomplete/IDE shows available FFI classes (if IDE support exists)
-
-**What you still do manually**: Write Kotlin wrappers (but can use cleaner imports!)
-
-**Deliverable**: `$ffi.*` imports work in Whitehall components
-
-**Time**: 3-5 days
-
----
-
-### Phase 4: Rust Support (1-2 weeks)
-
-**Goal**: Add Rust FFI via cargo-ndk
-
-**Why this phase?** Parallel to C++, validates multi-language design.
-
-**What you'll build**:
-
-1. **cargo-ndk detection** (`src/ffi/rust.rs` - new module)
-   ```rust
-   fn check_cargo_ndk() -> Result<()> {
-       match Command::new("cargo-ndk").arg("--version").output() {
-           Ok(_) => Ok(()),
-           Err(_) => Err(FfiError::CargoNdkNotFound(
-               "Install with: cargo install cargo-ndk"
-           ))
-       }
-   }
-   ```
-
-2. **Rust target detection**
-   ```rust
-   fn check_rust_targets() -> Vec<String> {
-       // Run: rustup target list --installed
-       // Check for:
-       // - aarch64-linux-android (required)
-       // - armv7-linux-androideabi
-       // - i686-linux-android
-       // - x86_64-linux-android
-   }
-   ```
-
-3. **Rust build integration** (`src/build_pipeline.rs`)
-   ```rust
-   fn build_rust_ffi(&self) -> Result<()> {
-       let targets = if self.is_release {
-           vec!["aarch64-linux-android", "armv7-linux-androideabi",
-                "i686-linux-android", "x86_64-linux-android"]
-       } else {
-           vec!["aarch64-linux-android"]  // Debug: fast
-       };
-
-       for target in targets {
-           Command::new("cargo")
-               .args(["ndk", "-t", target, "build"])
-               .arg(if self.is_release { "--release" } else { "" })
-               .current_dir("src/ffi/rust")
-               .status()?;
-       }
-
-       // Copy .so files from target/*/release/ to jniLibs/
-       self.copy_rust_libs()?;
-   }
-   ```
-
-4. **jniLibs organization**
-   ```
-   build/app/src/main/jniLibs/
-   ├── arm64-v8a/
-   │   ├── libnativemath.so     (C++)
-   │   └── libimageproc.so      (Rust)
-   ├── armeabi-v7a/
-   │   ├── libnativemath.so
-   │   └── libimageproc.so
-   └── x86_64/
-       └── ...
-   ```
-
-5. **Helpful errors**
-   ```
-   [ERROR] cargo-ndk not found
-
-   Install with:
-     cargo install cargo-ndk
-
-   Then add Android targets:
-     rustup target add aarch64-linux-android
-     rustup target add armv7-linux-androideabi
-   ```
-
-**What you'll test**:
-```bash
-# Create Rust FFI example
-mkdir -p src/ffi/rust
-cd src/ffi/rust
-cargo init --lib
-
-# Edit Cargo.toml
-[lib]
-crate-type = ["cdylib"]
-
-[dependencies]
-jni = "0.21"
-
-# Write lib.rs
-#[no_mangle]
-pub extern "system" fn Java_com_example_ffi_1poc_ffi_RustMath_multiply(
-    env: JNIEnv, _: JClass, a: i32, b: i32
-) -> i32 {
-    a * b
-}
-
-# Build
-whitehall build
-
-# Verify both C++ and Rust libraries exist
-ls build/app/src/main/jniLibs/arm64-v8a/
-# Should show: libnativemath.so, libimageproc.so
-```
-
-**Success Criteria**:
-- ✅ Detects `src/ffi/Cargo.toml` or `src/ffi/rust/Cargo.toml`
-- ✅ Runs `cargo ndk build` automatically
-- ✅ Copies `.so` files to correct ABI directories
-- ✅ Debug builds only compile for arm64 (fast)
-- ✅ Works alongside C++ FFI (mixed projects)
-- ✅ Helpful errors if cargo-ndk or targets missing
-
-**What you still do manually**: Write Kotlin wrappers for Rust functions
-
-**Deliverable**: Rust FFI works, can mix C++ and Rust in same project
-
-**Time**: 1-2 weeks
-
----
-
-### Phase 5: Kotlin Binding Generation (3-4 weeks)
-
-**Goal**: Auto-generate Kotlin wrappers - the "magic" phase
-
-**Why this phase?** Most complex, most user-facing. Do last when everything else works.
-
-**Design Decision First**: Choose binding specification format
-
-**Option A: YAML Manifest** (recommended for MVP)
-```yaml
-# src/ffi/bindings.yaml
-library: nativemath
-
-classes:
-  - name: NativeMath
-    functions:
-      - name: add
-        params:
-          - name: a
-            type: Int
-          - name: b
-            type: Int
-        returns: Int
-
-      - name: processArray
-        params:
-          - name: data
-            type: IntArray
-        returns: IntArray
-```
-
-**Option B: C++ Annotations** (future, more complex)
-```cpp
-/// @whitehall-class NativeMath
-/// @whitehall-function add(a: Int, b: Int): Int
-extern "C" JNIEXPORT jint JNICALL
-Java_com_example_ffi_NativeMath_add(JNIEnv* env, jobject, jint a, jint b) {
+// @ffi
+int add(int a, int b) {
     return a + b;
 }
 ```
 
-**What you'll build (Option A - YAML)**:
+**Rust:**
+```rust
+#[ffi]
+pub fn add(a: i32, b: i32) -> i32 {
+    a + b
+}
+```
 
-1. **Manifest parser** (`src/ffi/bindings.rs` - new module)
-   ```rust
-   #[derive(Deserialize)]
-   struct FfiManifest {
-       library: String,
-       classes: Vec<FfiClass>,
-   }
-
-   #[derive(Deserialize)]
-   struct FfiClass {
-       name: String,
-       functions: Vec<FfiFunction>,
-   }
-
-   #[derive(Deserialize)]
-   struct FfiFunction {
-       name: String,
-       params: Vec<Param>,
-       returns: String,
-   }
-   ```
-
-2. **JNI name generator** (`src/ffi/jni_names.rs`)
-   ```rust
-   fn generate_jni_name(package: &str, class: &str, function: &str) -> String {
-       let mangled_package = package.replace(".", "_");
-       format!("Java_{}_{}_{}_{}",
-               mangled_package, "ffi", class, function)
-   }
-
-   // Example output:
-   // Java_com_example_ffi_1poc_ffi_NativeMath_add
-   ```
-
-3. **Kotlin codegen** (`src/ffi/kotlin_gen.rs`)
-   ```rust
-   fn generate_kotlin_binding(manifest: &FfiManifest, package: &str) -> String {
-       format!(r#"
-   package {}.ffi
-
-   object {} {{
-       {}
-
-       init {{
-           System.loadLibrary("{}")
-       }}
-   }}
-   "#,
-       package,
-       manifest.class.name,
-       generate_functions(&manifest.class.functions),
-       manifest.library
-       )
-   }
-
-   fn generate_functions(funcs: &[FfiFunction]) -> String {
-       funcs.iter().map(|f| {
-           let params = f.params.iter()
-               .map(|p| format!("{}: {}", p.name, p.type))
-               .collect::<Vec<_>>()
-               .join(", ");
-
-           format!("external fun {}({}): {}", f.name, params, f.returns)
-       }).collect::<Vec<_>>().join("\n    ")
-   }
-   ```
-
-4. **Validation**
-   ```rust
-   fn validate_manifest(manifest: &FfiManifest) -> Result<()> {
-       // Check JNI function exists in compiled .so
-       // Check type compatibility
-       // Warn about common mistakes
-   }
-   ```
-
-5. **Helpful errors**
-   ```
-   [ERROR] FFI function not found in library
-
-   Expected JNI function:
-     Java_com_example_ffi_1poc_ffi_NativeMath_add
-
-   But library libnativemath.so only contains:
-     Java_com_example_ffi_NativeMath_add  (missing _1poc)
-
-   Check package name in whitehall.toml matches C++ function name.
-   ```
-
-**What you'll test**:
-```bash
-# Create bindings.yaml
-cat > src/ffi/bindings.yaml << EOF
-library: nativemath
-classes:
-  - name: NativeMath
-    functions:
-      - name: add
-        params:
-          - name: a
-            type: Int
-          - name: b
-            type: Int
-        returns: Int
-EOF
-
-# Build - now Kotlin wrapper is auto-generated!
-whitehall build
-
-# Verify generated code
-cat build/app/src/main/java/com/example/ffi_poc/ffi/NativeMath.kt
-
-# Use in component (no manual Kotlin wrapper!)
-# src/components/App.wh
-import $ffi.NativeMath
-
+**Whitehall:**
+```whitehall
 <script>
-  val result = NativeMath.add(2, 3)
+  import $ffi.cpp.Math
+
+  val result = Math.add(5, 3)
 </script>
 ```
 
-**Success Criteria**:
-- ✅ Parses `bindings.yaml` correctly
-- ✅ Generates Kotlin wrappers with correct JNI names
-- ✅ Validates JNI function names match compiled library
-- ✅ Supports all basic types (primitives, String, ByteArray)
-- ✅ Helpful errors for mismatches
-- ✅ Documentation generation (KDoc comments)
-- ✅ Works for both C++ and Rust
+### What Whitehall Generates
 
-**What you no longer do manually**: Write Kotlin wrappers! 🎉
+- ✅ JNI bridge code (150+ lines per function)
+- ✅ Kotlin bindings
+- ✅ Type conversions
+- ✅ Memory management
+- ✅ Error handling
+- ✅ Build configuration
+- ✅ Library loading
 
-**Deliverable**: Fully automated FFI - just write C++/Rust + YAML manifest
+### The Result
 
-**Time**: 3-4 weeks
-
----
-
-### Phase 6: Polish & Developer Experience (2-3 weeks)
-
-**Goal**: Make FFI delightful to use
-
-**What you'll build**:
-
-1. **FFI templates**
-   ```bash
-   whitehall ffi add cpp-hello-world
-   # Creates src/ffi/hello.cpp, CMakeLists.txt, bindings.yaml
-
-   whitehall ffi add rust-image-processing
-   # Creates src/ffi/rust/lib.rs, Cargo.toml, bindings.yaml
-   ```
-
-2. **Build caching**
-   ```rust
-   // Only rebuild native code if source changed
-   fn should_rebuild_ffi(&self) -> bool {
-       let ffi_hash = hash_directory("src/ffi/");
-       let cached_hash = read_cache(".whitehall/ffi_cache");
-       ffi_hash != cached_hash
-   }
-   ```
-
-3. **Hot reload support**
-   ```
-   [INFO] FFI: Detected change in src/ffi/math.cpp
-   [INFO] FFI: Rebuilding native library...
-   [INFO] FFI: Reinstalling APK...
-   [INFO] FFI: App restarted
-   ```
-
-4. **Better error messages**
-   ```
-   [ERROR] Native crash detected!
-
-   Signal 11 (SIGSEGV) at address 0x0
-
-   Stack trace:
-     #00 pc 00001234  libnativemath.so (add+56)
-         src/ffi/math.cpp:15
-
-   This looks like a null pointer dereference.
-   Check that your JNI parameters are not null before use.
-
-   See: https://whitehall.dev/docs/ffi/debugging
-   ```
-
-5. **Documentation generation**
-   ```rust
-   // Generate docs/FFI.md with:
-   // - List of available FFI functions
-   // - Type signatures
-   // - Usage examples
-   ```
-
-6. **Prebuilt library support**
-   ```toml
-   [ffi.cpp]
-   libraries = ["opencv", "ffmpeg"]  # Link against prebuilt libs
-   ```
-
-7. **Debug symbols**
-   ```toml
-   [ffi.cpp]
-   debug_symbols = true  # Include in release builds for better crash reports
-   ```
-
-**Success Criteria**:
-- ✅ Templates for common FFI patterns
-- ✅ Fast incremental builds (cache native code)
-- ✅ Hot reload works with FFI changes
-- ✅ Crash reports include source file:line
-- ✅ Can link against system libraries
-- ✅ Documentation auto-generated
-
-**Deliverable**: Production-ready FFI system with great DX
-
-**Time**: 2-3 weeks
+**Write performance-critical code in C++/Rust. Use it seamlessly in Whitehall. Zero JNI boilerplate.**
 
 ---
 
-### Phase 7: Advanced Features (Future)
-
-**Not required for MVP, but nice to have:**
-
-1. **Auto-generated bindings from C++ headers**
-   - Parse C++ headers with libclang
-   - Generate YAML automatically
-   - Or use SWIG/djinni
-
-2. **Rust uniffi integration**
-   - Use Mozilla's uniffi-rs
-   - Define interfaces in .udl files
-   - Auto-generate JNI bindings
-
-3. **Multi-platform FFI**
-   - Same FFI code for Android + iOS
-   - Via Kotlin Multiplatform
-
-4. **FFI marketplace**
-   - Share FFI modules (OpenCV wrapper, ML inference)
-   - `whitehall ffi install opencv-wrapper`
-
-5. **GPU acceleration**
-   - OpenCL, Vulkan, RenderScript integration
-
-6. **FFI profiling**
-   - Built-in performance monitoring
-   - JNI call overhead tracking
-
----
-
-## Phasing Summary
-
-| Phase | Duration | Automation Level | User Still Does |
-|-------|----------|------------------|----------------|
-| **0: Manual POC** | 2-4 hours | 0% | Everything manually |
-| **1: File Detection** | 3-5 days | 20% | Kotlin wrappers, Gradle config |
-| **2: Build Integration** | 1-2 weeks | 50% | Kotlin wrappers |
-| **3: Import Resolution** | 3-5 days | 60% | Kotlin wrappers (but cleaner imports) |
-| **4: Rust Support** | 1-2 weeks | 70% | Kotlin wrappers |
-| **5: Binding Generation** | 3-4 weeks | 95% | Write C++/Rust + YAML manifest |
-| **6: Polish** | 2-3 weeks | 99% | Just write native code! |
-
-**Total time to MVP (Phase 5)**: ~8-12 weeks
-**Total time to production-ready (Phase 6)**: ~10-15 weeks
-
----
-
-## Decision Points
-
-### After Phase 1:
-**Question**: Is file detection working reliably?
-- ✅ Yes → Continue to Phase 2
-- ❌ No → Fix detection logic, add more tests
-
-### After Phase 2:
-**Question**: Does build integration work for both simple and complex projects?
-- ✅ Yes → Continue to Phase 3
-- ❌ No → Improve Gradle generation, handle edge cases
-
-### After Phase 3:
-**Question**: Ship Phase 1-3 as "manual FFI" feature?
-- Option A: Ship now (users write Kotlin wrappers, but build system works)
-- Option B: Wait for Phase 5 (full automation)
-
-**Recommendation**: Ship after Phase 4 with "experimental" flag.
-
-### Phase 5 Design Choice:
-**Question**: YAML manifests or C++ annotations?
-- YAML (Option A): Simpler to parse, language-agnostic
-- Annotations (Option B): More ergonomic, requires C++ parser
-- Existing tools (Option C): Least work, most dependencies
-
-**Recommendation**: Start with YAML (Option A), consider Option C (uniffi for Rust) later.
-
----
-
-## Testing Strategy Per Phase
-
-### Phase 0-1:
-- Manual testing with example project
-- Verify files in correct locations
-
-### Phase 2-3:
-- Unit tests for file detection
-- Integration tests: build example project, verify APK contents
-- Test error cases (missing NDK, invalid config)
-
-### Phase 4:
-- Add Rust example project
-- Test mixed C++/Rust projects
-- Test all ABI targets
-
-### Phase 5:
-- Comprehensive YAML parsing tests
-- JNI name generation tests
-- Generated Kotlin validation
-- End-to-end: YAML → Kotlin → APK → run
-
-### Phase 6:
-- Performance tests (build speed, cache hit rate)
-- Crash testing (verify stack traces)
-- Documentation tests (verify generated docs are correct)
-
----
-
-## Design Decisions
-
-### 1. Why `src/ffi/` directory?
-
-- Clear separation from Kotlin/Whitehall code
-- Android convention: `src/main/cpp/` → we use `src/ffi/`
-- Easy to exclude from Whitehall transpiler
-- Mirrors output structure
-
-### 2. Why auto-detection instead of explicit `[ffi.cpp]` vs `[ffi.rust]`?
-
-- Simpler for users (drop in files, it works)
-- Can mix C++ and Rust without config changes
-- File extensions are unambiguous
-- Build system detects and handles appropriately
-
-### 3. Why not transpile FFI code?
-
-- C++ and Rust are already mature, optimized languages
-- Whitehall adds no value by transforming them
-- Let CMake/Cargo do what they do best
-- Whitehall's job: copy files, generate glue code, build integration
-
-### 4. Why generate Kotlin bindings?
-
-- Manual JNI boilerplate is error-prone
-- Reduces friction for FFI adoption
-- Type-safe Kotlin signatures from FFI metadata
-- Users focus on FFI logic, not glue code
-
----
-
-## Challenges & Solutions
-
-### Challenge 1: JNI Function Naming
-
-**Problem**: JNI requires specific function names
-```cpp
-Java_com_example_myapp_ffi_VideoDecoder_decodeFrame
-```
-
-**Solution**:
-- Whitehall generates correct package-based names
-- Provide template or generator tool
-- Document naming convention clearly
-
----
-
-### Challenge 2: Type Marshalling
-
-**Problem**: Converting between Kotlin/Java types and C/C++/Rust types
-
-**Solution**:
-- Provide helper library for common conversions (Bitmap, String, arrays)
-- Document type mapping table
-- Use existing tools (JNI for C++, jni-rs for Rust)
-
-| Kotlin Type | JNI Type | C++ Type | Rust Type |
-|-------------|----------|----------|-----------|
-| `String` | `jstring` | `jstring` | `JString` |
-| `Int` | `jint` | `int32_t` | `i32` |
-| `ByteArray` | `jbyteArray` | `jbyteArray` | `JByteArray` |
-| `Bitmap` | `jobject` | `jobject` | `JObject` |
-
----
-
-### Challenge 3: Multiple Architectures
-
-**Problem**: Android supports multiple CPU architectures (arm64-v8a, armeabi-v7a, x86, x86_64)
-
-**Solution**:
-- CMake handles C++ compilation for all architectures automatically
-- cargo-ndk handles Rust compilation with `-t` flag
-- Generated APK includes all architectures
-
----
-
-### Challenge 4: Build Performance
-
-**Problem**: Compiling C++/Rust for multiple architectures is slow
-
-**Solution**:
-- Cache compiled `.so` files (only rebuild if source changes)
-- Parallel compilation (CMake `-j`, cargo `-j`)
-- Debug builds: compile for single architecture (arm64-v8a only)
-- Release builds: compile for all architectures
-
----
-
-## Success Criteria
-
-### Phase 1 Complete When:
-- ✅ Can write C++ code in `src/ffi/`
-- ✅ `whitehall build` copies C++ code to correct location
-- ✅ Generated Gradle includes `externalNativeBuild`
-- ✅ Can import `$ffi.*` in Whitehall components
-- ✅ APK builds successfully with embedded `.so`
-- ✅ C++ functions callable from Whitehall components
-- ✅ Example project demonstrating video/image processing
-
-### Phase 2 Complete When:
-- ✅ Same as above, but with Rust code
-- ✅ Can mix C++ and Rust in same project
-- ✅ Both `$ffi.cpp.*` and `$ffi.rust.*` imports work
-
-### Phase 3 Complete When:
-- ✅ Minimal manual JNI boilerplate required
-- ✅ Kotlin bindings auto-generated from metadata
-- ✅ Type conversions handled automatically
-- ✅ Documentation and examples are comprehensive
-
----
-
-## Future Enhancements
-
-### Short-term
-- 🔜 **Hot reload for FFI** - Detect C++/Rust changes, rebuild, reinstall
-- 🔜 **FFI templates** - `whitehall ffi add cpp-image-processor`
-- 🔜 **Prebuilt libraries** - Link against system OpenCV, FFmpeg, etc.
-- 🔜 **Debug symbols** - Proper debugging for C++/Rust code
-
-### Medium-term
-- 🔜 **WASM support** - Compile Rust to WASM, run in WebView
-- 🔜 **Cross-compilation** - Build on Linux for Android (Docker container)
-- 🔜 **FFI marketplace** - Share FFI modules (OpenCV wrapper, ML inference, crypto)
-- 🔜 **Automatic binding generation** - Zero-boilerplate FFI
-
-### Long-term
-- 🔜 **Multi-platform FFI** - Same FFI code for Android and iOS (via Kotlin Multiplatform)
-- 🔜 **FFI benchmarking** - Built-in performance profiling
-- 🔜 **FFI testing** - Unit test FFI functions from Whitehall tests
-
----
-
-## Resources
-
-### Learning JNI
-- [Android NDK Documentation](https://developer.android.com/ndk/guides)
-- [JNI Tips and Tricks](https://developer.android.com/training/articles/perf-jni)
-- [Example JNI Projects](https://github.com/android/ndk-samples)
-
-### Rust JNI
-- [jni-rs crate](https://github.com/jni-rs/jni-rs)
-- [cargo-ndk](https://github.com/bbqsrc/cargo-ndk)
-- [Rust on Android Tutorial](https://mozilla.github.io/firefox-browser-architecture/experiments/2017-09-21-rust-on-android.html)
-
-### Tools
-- [SWIG](http://www.swig.org/) - Generate JNI bindings from C/C++
-- [djinni](https://github.com/dropbox/djinni) - Cross-language interface generator
-- [uniffi](https://mozilla.github.io/uniffi-rs/) - Rust FFI bindings generator
-
----
-
-## Example Projects (Future)
-
-```bash
-# Create example with C++ FFI
-whitehall init video-player --template cpp-ffi
-
-# Create example with Rust FFI
-whitehall init image-processor --template rust-ffi
-
-# Create example with both
-whitehall init multimedia-app --template mixed-ffi
-```
-
----
-
-**FFI support makes Whitehall a complete solution for high-performance Android apps!** 🚀
+**Questions or feedback?** File an issue at [whitehall/issues](https://github.com/yourusername/whitehall/issues)
