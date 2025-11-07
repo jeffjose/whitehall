@@ -135,7 +135,8 @@ impl ComposeBackend {
     /// Sets the uses_viewmodel and uses_hilt_viewmodel flags for import generation
     fn detect_store_usage(&mut self, file: &WhitehallFile) {
         for state in &file.state {
-            let transformed_value = self.transform_array_literal(&state.initial_value, false);
+            let mut transformed_value = self.transform_array_literal(&state.initial_value, false);
+            transformed_value = self.transform_range_literal(&transformed_value);
             if let Some(store_info) = self.detect_store_instantiation(&transformed_value) {
                 self.uses_viewmodel = true;
                 if store_info.has_hilt {
@@ -362,7 +363,9 @@ impl ComposeBackend {
             output.push_str(&self.indent());
 
             // Transform array literals: [1,2,3] -> mutableListOf(1,2,3)
-            let transformed_value = self.transform_array_literal(&state.initial_value, true);
+            // Transform range literals: 1..10 -> (1..10).toList()
+            let mut transformed_value = self.transform_array_literal(&state.initial_value, true);
+            transformed_value = self.transform_range_literal(&transformed_value);
 
             if let Some(ref type_ann) = state.type_annotation {
                 // Store type and default value for bind:value transformations
@@ -401,7 +404,9 @@ impl ComposeBackend {
             output.push_str(&self.indent());
 
             // Transform array literals: [1,2,3] -> listOf(1,2,3)
-            let transformed_value = self.transform_array_literal(&state.initial_value, false);
+            // Transform range literals: 1..10 -> (1..10).toList()
+            let mut transformed_value = self.transform_array_literal(&state.initial_value, false);
+            transformed_value = self.transform_range_literal(&transformed_value);
 
             // Check if this is a custom scope: $scope() → rememberCoroutineScope()
             if transformed_value.trim() == "$scope()" {
@@ -3654,5 +3659,47 @@ impl ComposeBackend {
         }
 
         transformed
+    }
+
+    /// Transform range literal RANGE[1..10] or RANGE[1..10:2] to (1..10).toList() or (1..10 step 2).toList()
+    fn transform_range_literal(&self, value: &str) -> String {
+        let trimmed = value.trim();
+
+        // Check if it's a range literal marker
+        if trimmed.starts_with("RANGE[") && trimmed.ends_with(']') {
+            let content = &trimmed[6..trimmed.len()-1]; // Extract content between RANGE[ and ]
+
+            // Parse the range: start..end or start..end:step
+            if let Some(colon_pos) = content.find(':') {
+                // Has step: start..end:step
+                let range_part = &content[..colon_pos];
+                let step = &content[colon_pos+1..];
+
+                if let Some(dot_pos) = range_part.find("..") {
+                    let start = &range_part[..dot_pos];
+                    let end = &range_part[dot_pos+2..];
+
+                    // Check if it's a negative step (downTo)
+                    if step.starts_with('-') {
+                        format!("({} downTo {}).toList()", start, end)
+                    } else {
+                        format!("({} rangeTo {} step {}).toList()", start, end, step)
+                    }
+                } else {
+                    value.to_string()
+                }
+            } else {
+                // No step: start..end
+                if let Some(dot_pos) = content.find("..") {
+                    let start = &content[..dot_pos];
+                    let end = &content[dot_pos+2..];
+                    format!("({}..{}).toList()", start, end)
+                } else {
+                    value.to_string()
+                }
+            }
+        } else {
+            value.to_string()
+        }
     }
 }
