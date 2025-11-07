@@ -454,6 +454,26 @@ pub fn get_android_cmdline_tools_url(platform: Platform) -> Result<String> {
     ))
 }
 
+/// Get CMake download URL for a specific version and platform
+///
+/// CMake is required for building native C++ code with the Android NDK
+pub fn get_cmake_download_url(version: &str, platform: Platform) -> Result<String> {
+    // Map platform to CMake platform strings
+    let (os_name, arch_name) = match platform {
+        Platform::LinuxX64 => ("linux", "x86_64"),
+        Platform::LinuxAarch64 => ("linux", "aarch64"),
+        Platform::MacX64 => ("macos", "universal"),
+        Platform::MacAarch64 => ("macos", "universal"),
+    };
+
+    // CMake download URLs from cmake.org
+    // Format: https://github.com/Kitware/CMake/releases/download/v3.28.1/cmake-3.28.1-linux-x86_64.tar.gz
+    Ok(format!(
+        "https://github.com/Kitware/CMake/releases/download/v{}/cmake-{}-{}-{}.tar.gz",
+        version, version, os_name, arch_name
+    ))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -478,5 +498,18 @@ mod tests {
         let url = get_android_cmdline_tools_url(Platform::LinuxX64).unwrap();
         assert!(url.contains("linux"));
         assert!(url.contains("commandlinetools"));
+    }
+
+    #[test]
+    fn test_cmake_url_generation() {
+        let url = get_cmake_download_url("3.28.1", Platform::LinuxX64).unwrap();
+        assert_eq!(
+            url,
+            "https://github.com/Kitware/CMake/releases/download/v3.28.1/cmake-3.28.1-linux-x86_64.tar.gz"
+        );
+
+        let url_mac = get_cmake_download_url("3.28.1", Platform::MacosX64).unwrap();
+        assert!(url_mac.contains("macos"));
+        assert!(url_mac.contains("universal"));
     }
 }

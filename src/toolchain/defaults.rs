@@ -34,6 +34,16 @@ pub const DEFAULT_TARGET_SDK: u32 = 34;
 /// Default build tools version
 pub const DEFAULT_BUILD_TOOLS: &str = "34.0.0";
 
+/// Default Android NDK version
+///
+/// NDK 26 is the current stable release with good CMake/Rust support
+pub const DEFAULT_NDK: &str = "26.1.10909125";
+
+/// Default CMake version
+///
+/// CMake 3.28.1 is stable and works well with NDK 26
+pub const DEFAULT_CMAKE: &str = "3.28.1";
+
 #[cfg(test)]
 mod tests {
     use super::*;

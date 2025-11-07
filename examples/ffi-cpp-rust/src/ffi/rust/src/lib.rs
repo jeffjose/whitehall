@@ -3,6 +3,8 @@
 // This demonstrates Rust FFI in a mixed C++/Rust project.
 // We implement subtraction and division in Rust.
 
+use whitehall_ffi_macro::ffi;
+
 #[ffi]
 pub fn subtract(a: i32, b: i32) -> i32 {
     a - b
@@ -28,3 +30,7 @@ pub fn modulo(a: i32, b: i32) -> i32 {
 pub fn is_even(n: i32) -> bool {
     n % 2 == 0
 }
+
+
+// Auto-generated JNI bridge (Phase 1.6)
+mod jni_bridge;

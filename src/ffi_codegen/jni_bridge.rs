@@ -15,15 +15,11 @@ pub fn generate_jni_bridge(
     output.push_str(" */\n\n");
 
     // Include JNI header
-    output.push_str("#include <jni.h>\n\n");
+    output.push_str("#include <jni.h>\n");
+    output.push_str("#include <exception>\n");
+    output.push_str("#include <stdexcept>\n\n");
 
-    // Include user source files
-    for source_file in source_files {
-        output.push_str(&format!("// User code\n"));
-        output.push_str(&format!("#include \"{}\"\n", source_file));
-    }
-    output.push_str("\n");
-
+    // Note: Source files are compiled together by CMake, no need to #include them
     // Generate forward declarations for user functions
     output.push_str("// Forward declarations of user functions\n");
     for function in functions {

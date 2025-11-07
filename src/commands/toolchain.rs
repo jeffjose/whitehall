@@ -19,7 +19,6 @@ pub fn execute_install(manifest_path: &str) -> Result<()> {
     )?;
 
     // Install system image for emulator based on target_sdk
-    println!("\nInstalling emulator system image for Android {}...", config.android.target_sdk);
     toolchain.ensure_system_image(config.android.target_sdk)?;
 
     Ok(())

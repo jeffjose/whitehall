@@ -1,7 +1,9 @@
 // Rust FFI Example: Simple Math Operations
 //
-// This file demonstrates the #[ffi] attribute for exposing Rust functions
+// Functions with #[ffi] attribute are automatically exposed
 // to Whitehall/Kotlin code. No JNI boilerplate needed!
+
+use whitehall_ffi_macro::ffi;
 
 #[ffi]
 pub fn add(a: i32, b: i32) -> i32 {
@@ -26,7 +28,11 @@ pub fn is_positive(n: i32) -> bool {
     n > 0
 }
 
-// This function is NOT exported (no #[ffi] attribute)
+// This function is NOT exported (private, not public)
 fn helper(x: i32) -> i32 {
     x * 2
 }
+
+
+// Auto-generated JNI bridge (Phase 1.6)
+mod jni_bridge;

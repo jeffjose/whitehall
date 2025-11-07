@@ -8,6 +8,7 @@ pub use platform::Platform;
 pub use validator::validate_compatibility;
 
 use anyhow::{Context, Result};
+use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::sync::Arc;
@@ -342,6 +343,143 @@ impl Toolchain {
         ))
     }
 
+    /// Ensure Android NDK is installed
+    ///
+    /// Downloads and installs NDK if not present. Required for native C++/Rust compilation.
+    ///
+    /// # Returns
+    /// Path to NDK installation directory
+    pub fn ensure_ndk(&self) -> Result<PathBuf> {
+        let sdk_root = self.ensure_android_sdk()?;
+        let ndk_version = DEFAULT_NDK;
+        let ndk_path = sdk_root.join("ndk").join(ndk_version);
+
+        // Check if already installed
+        if ndk_path.exists() && ndk_path.join("build/cmake/android.toolchain.cmake").exists() {
+            return Ok(ndk_path);
+        }
+
+        println!("Installing Android NDK {} (required for native compilation, ~1GB download)...", ndk_version);
+
+        // Install using sdkmanager
+        let sdkmanager = sdk_root.join("cmdline-tools/latest/bin/sdkmanager");
+        let package = format!("ndk;{}", ndk_version);
+
+        let output = Command::new(&sdkmanager)
+            .arg(format!("--sdk_root={}", sdk_root.display()))
+            .arg(&package)
+            .env("ANDROID_HOME", &sdk_root)
+            .stdin(std::process::Stdio::null())
+            .output()
+            .with_context(|| format!("Failed to install NDK: {}", package))?;
+
+        if !output.status.success() {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            anyhow::bail!(
+                "Failed to install NDK {}:\n{}",
+                package,
+                stderr
+            );
+        }
+
+        println!("Android NDK installed successfully");
+        Ok(ndk_path)
+    }
+
+    /// Ensure CMake is installed
+    ///
+    /// Downloads and installs CMake if not present. Required for building native C++ code.
+    ///
+    /// # Returns
+    /// Path to CMake bin directory
+    pub fn ensure_cmake(&self) -> Result<PathBuf> {
+        let cmake_version = DEFAULT_CMAKE;
+        let cmake_home = self.root.join(format!("cmake/{}", cmake_version));
+
+        if !cmake_home.exists() {
+            self.download_cmake(cmake_version)?;
+        }
+
+        let cmake_bin = cmake_home.join("bin/cmake");
+
+        if !cmake_bin.exists() {
+            anyhow::bail!(
+                "CMake {} installation corrupt: binary not found at {}",
+                cmake_version,
+                cmake_bin.display()
+            );
+        }
+
+        Ok(cmake_bin)
+    }
+
+    /// Download and install CMake
+    fn download_cmake(&self, version: &str) -> Result<()> {
+        let platform = Platform::detect()?;
+        let url = downloader::get_cmake_download_url(version, platform)?;
+
+        let cmake_dir = self.root.join("cmake");
+        fs::create_dir_all(&cmake_dir)?;
+
+        // Download to temporary file
+        let archive_path = cmake_dir.join(format!("cmake-{}.tar.gz", version));
+        downloader::download_with_retry(&url, &archive_path)?;
+
+        // Extract
+        downloader::extract_tar_gz(&archive_path, &cmake_dir)?;
+
+        // CMake extracts to cmake-VERSION-OS-ARCH/ directory
+        // Find the extracted directory
+        let extracted_dirs: Vec<_> = fs::read_dir(&cmake_dir)?
+            .filter_map(|e| e.ok())
+            .filter(|e| e.path().is_dir())
+            .filter(|e| {
+                let name = e.file_name();
+                let name_str = name.to_str().unwrap();
+                name_str.starts_with(&format!("cmake-{}", version))
+            })
+            .collect();
+
+        if let Some(extracted_dir) = extracted_dirs.first() {
+            let target = cmake_dir.join(version);
+            fs::rename(extracted_dir.path(), &target)?;
+        }
+
+        // Clean up archive
+        fs::remove_file(&archive_path)?;
+
+        Ok(())
+    }
+
+    /// Get configured cmake Command
+    ///
+    /// Returns a Command with proper NDK toolchain configuration
+    ///
+    /// # Arguments
+    /// * `ndk_path` - Path to Android NDK
+    /// * `android_abi` - Target Android ABI (e.g., "arm64-v8a", "x86_64")
+    /// * `android_platform` - Minimum Android API level (e.g., 24)
+    pub fn cmake_cmd(&self, ndk_path: &Path, android_abi: &str, android_platform: u32) -> Result<Command> {
+        let cmake_bin = self.ensure_cmake()?;
+
+        let mut cmd = Command::new(cmake_bin);
+
+        // Set Android NDK toolchain file
+        let toolchain_file = ndk_path.join("build/cmake/android.toolchain.cmake");
+        if !toolchain_file.exists() {
+            anyhow::bail!(
+                "NDK toolchain file not found at {}",
+                toolchain_file.display()
+            );
+        }
+
+        cmd.arg(format!("-DCMAKE_TOOLCHAIN_FILE={}", toolchain_file.display()));
+        cmd.arg(format!("-DANDROID_ABI={}", android_abi));
+        cmd.arg(format!("-DANDROID_PLATFORM=android-{}", android_platform));
+
+        Ok(cmd)
+    }
+
     /// Ensure system image is installed for the given target SDK
     ///
     /// Downloads and installs system image if not present
@@ -371,7 +509,34 @@ impl Toolchain {
             return Ok(()); // Already installed
         }
 
-        println!("Installing system image for Android {} (this may take a while, ~1GB download)...", target_sdk);
+        // Create styled progress bar matching other components (40 chars wide like java/gradle/emulator)
+        use colored::Colorize;
+        use indicatif::{ProgressBar, ProgressStyle};
+
+        let pb = ProgressBar::new(100);
+        pb.set_style(
+            ProgressStyle::default_bar()
+                .template(&format!("{{msg:20}} {}{{bar:40.dim}}{} \x1b[2mdownloading (~1GB)\x1b[0m", "[".dimmed(), "]".dimmed()))
+                .unwrap()
+                .progress_chars("=> "),
+        );
+        pb.set_message(format!("{}", format!("system-image-{}", target_sdk).dimmed()));
+
+        // Start a thread to slowly increment progress (fake progress since sdkmanager doesn't provide it)
+        use std::sync::atomic::{AtomicBool, Ordering};
+        let pb_clone = pb.clone();
+        let done = Arc::new(AtomicBool::new(false));
+        let done_clone = Arc::clone(&done);
+
+        let progress_thread = std::thread::spawn(move || {
+            let mut i = 0u64;
+            // Slowly increment progress, but stop if download completes
+            while i < 95 && !done_clone.load(Ordering::Relaxed) {
+                pb_clone.set_position(i);
+                std::thread::sleep(std::time::Duration::from_millis(600));
+                i += 1;
+            }
+        });
 
         // Install using sdkmanager with yes piped for license acceptance
         let sdkmanager = sdk_root.join("cmdline-tools/latest/bin/sdkmanager");
@@ -379,7 +544,7 @@ impl Toolchain {
         let status = Command::new("sh")
             .arg("-c")
             .arg(format!(
-                "yes | {} --sdk_root={} '{}'",
+                "yes 2>/dev/null | {} --sdk_root={} '{}' > /dev/null 2>&1",
                 sdkmanager.display(),
                 sdk_root.display(),
                 package
@@ -388,6 +553,14 @@ impl Toolchain {
             .status()
             .with_context(|| format!("Failed to install system image: {}", package))?;
 
+        // Signal thread to stop and wait for it
+        done.store(true, Ordering::Relaxed);
+        let _ = progress_thread.join();
+
+        // Complete the progress bar
+        pb.set_position(100);
+        pb.finish_and_clear();
+
         if !status.success() {
             anyhow::bail!(
                 "Failed to install system image {}",
@@ -395,7 +568,6 @@ impl Toolchain {
             );
         }
 
-        println!("System image installed successfully");
         Ok(())
     }
 

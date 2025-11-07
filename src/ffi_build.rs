@@ -1,10 +1,17 @@
 use anyhow::{Context, Result};
+use colored::Colorize;
 use std::fs;
-use std::path::{Path, PathBuf};
+use std::path::Path;
+use std::process::Command;
 
 use crate::config::Config;
-use crate::ffi_parser::cpp::{discover_cpp_ffi, CppFfiFunction};
-use crate::ffi_codegen::{generate_kotlin_object, generate_jni_bridge, generate_cmake};
+use crate::ffi_parser::cpp::discover_cpp_ffi;
+use crate::ffi_parser::rust::discover_rust_ffi;
+use crate::ffi_codegen::{
+    generate_kotlin_object, generate_jni_bridge, generate_cmake,
+    generate_kotlin_object_rust, generate_rust_bridge,
+};
+use crate::toolchain::Toolchain;
 
 /// Build FFI components if enabled
 pub fn build_ffi(config: &Config, project_root: &Path) -> Result<()> {
@@ -16,15 +23,15 @@ pub fn build_ffi(config: &Config, project_root: &Path) -> Result<()> {
     let ffi_dir = project_root.join("src/ffi");
     let build_dir = project_root.join(&config.build.output_dir);
 
-    // Phase 1: Only support C++ primitives
+    // Build C++ FFI if present
     if ffi_dir.join("cpp").exists() {
         build_cpp_ffi(config, &ffi_dir, &build_dir)?;
     }
 
-    // TODO: Phase 4: Rust support
-    // if ffi_dir.join("rust").exists() {
-    //     build_rust_ffi(config, &ffi_dir, &build_dir)?;
-    // }
+    // Build Rust FFI if present
+    if ffi_dir.join("rust").exists() {
+        build_rust_ffi(config, &ffi_dir, &build_dir)?;
+    }
 
     Ok(())
 }
@@ -204,11 +211,25 @@ fn build_cpp_ffi(config: &Config, ffi_dir: &Path, build_dir: &Path) -> Result<()
         fs::copy(&user_cmake, &cmake_file)
             .context(format!("Failed to copy user CMakeLists.txt from {}", user_cmake.display()))?;
     } else {
-        // Auto-generate CMakeLists.txt
+        // Auto-generate CMakeLists.txt with absolute paths
+        let project_root_abs = ffi_dir.parent().unwrap().canonicalize()
+            .context("Failed to canonicalize project root")?;
+
+        // Convert relative source paths to absolute
+        let absolute_source_files: Vec<String> = source_files
+            .iter()
+            .map(|rel_path| {
+                project_root_abs.join(rel_path).display().to_string()
+            })
+            .collect();
+
         let cmake_code = generate_cmake(
             &library_name,
-            &source_files,
-            jni_file.to_string_lossy().as_ref(),
+            &absolute_source_files,
+            &jni_file.canonicalize()
+                .context("Failed to canonicalize JNI bridge path")?
+                .display()
+                .to_string(),
             &config.ffi.cpp.standard,
             &config.ffi.cpp.flags,
             &config.ffi.cpp.libraries,
@@ -218,12 +239,313 @@ fn build_cpp_ffi(config: &Config, ffi_dir: &Path, build_dir: &Path) -> Result<()
             .context(format!("Failed to write CMakeLists.txt: {}", cmake_file.display()))?;
     }
 
-    // 5. TODO: Run CMake build (Phase 1.6)
-    // This would require:
-    // - Finding Android NDK
-    // - Running cmake with proper toolchain file
-    // - Running make/ninja
-    // - Copying .so files to correct location
+    // 5. Build native library using CMake + NDK
+    let project_root = ffi_dir.parent().unwrap();
+    build_native_library(
+        &library_name,
+        &cmake_file,
+        project_root,
+        build_dir,
+        config.android.min_sdk,
+    )?;
+
+    Ok(())
+}
+
+/// Build native library using CMake and Android NDK
+///
+/// Compiles C++ code to .so files for all Android ABIs
+///
+/// # Arguments
+/// * `library_name` - Name of the native library (used for .so filename)
+/// * `cmake_file` - Path to CMakeLists.txt
+/// * `project_root` - Root directory of the project
+/// * `build_dir` - Build output directory
+/// * `min_sdk` - Minimum Android SDK version
+fn build_native_library(
+    library_name: &str,
+    cmake_file: &Path,
+    _project_root: &Path,
+    build_dir: &Path,
+    min_sdk: u32,
+) -> Result<()> {
+    println!("{}", format!("Building native library: {}", library_name).cyan());
+
+    // Initialize toolchain
+    let toolchain = Toolchain::new()
+        .context("Failed to initialize toolchain")?;
+
+    // Ensure NDK is installed
+    let ndk_path = toolchain.ensure_ndk()
+        .context("Failed to ensure Android NDK")?;
+
+    // Android ABIs to build for (cover most devices)
+    let abis = vec![
+        "arm64-v8a",     // Modern 64-bit ARM (most common)
+        "armeabi-v7a",   // Legacy 32-bit ARM
+        "x86_64",        // 64-bit x86 (emulators)
+        "x86",           // 32-bit x86 (old emulators)
+    ];
+
+    // Build for each ABI
+    for abi in &abis {
+        println!("  {} {}", "→".dimmed(), format!("Building for {}", abi).dimmed());
+
+        // Create build directory for this ABI
+        let abi_build_dir = build_dir.join("cmake-build").join(abi);
+        fs::create_dir_all(&abi_build_dir)
+            .context(format!("Failed to create build directory for {}", abi))?;
+
+        // Run CMake configure
+        let mut cmake_cmd = toolchain.cmake_cmd(&ndk_path, abi, min_sdk)?;
+
+        // Set source directory (parent of CMakeLists.txt)
+        let source_dir = cmake_file.parent().unwrap();
+
+        cmake_cmd
+            .arg("-S").arg(source_dir)
+            .arg("-B").arg(&abi_build_dir)
+            .arg("-DCMAKE_BUILD_TYPE=Release");
+
+        let status = cmake_cmd.status()
+            .context(format!("Failed to run CMake configure for {}", abi))?;
+
+        if !status.success() {
+            anyhow::bail!("CMake configure failed for ABI: {}", abi);
+        }
+
+        // Run CMake build
+        let build_status = Command::new(toolchain.ensure_cmake()?)
+            .arg("--build")
+            .arg(&abi_build_dir)
+            .arg("--config").arg("Release")
+            .status()
+            .context(format!("Failed to build for {}", abi))?;
+
+        if !build_status.success() {
+            anyhow::bail!("CMake build failed for ABI: {}", abi);
+        }
+
+        // Copy .so file to jniLibs
+        let so_file = abi_build_dir.join(format!("lib{}.so", library_name));
+        if !so_file.exists() {
+            anyhow::bail!(
+                "Built library not found: {}. Expected at: {}",
+                library_name,
+                so_file.display()
+            );
+        }
+
+        // Destination: build/app/src/main/jniLibs/{abi}/lib{name}.so
+        let jnilib_dir = build_dir.join("app/src/main/jniLibs").join(abi);
+        fs::create_dir_all(&jnilib_dir)
+            .context(format!("Failed to create jniLibs directory for {}", abi))?;
+
+        let dest_so = jnilib_dir.join(format!("lib{}.so", library_name));
+        fs::copy(&so_file, &dest_so)
+            .context(format!("Failed to copy .so file for {}", abi))?;
+
+        println!("    {} {}", "✓".green(), format!("{} built successfully", abi).dimmed());
+    }
+
+    println!("{}", format!("Native library '{}' built successfully for {} ABIs", library_name, abis.len()).green());
+
+    Ok(())
+}
+
+/// Build Rust FFI components
+fn build_rust_ffi(config: &Config, ffi_dir: &Path, build_dir: &Path) -> Result<()> {
+    // 1. Discover FFI functions
+    let functions = discover_rust_ffi(ffi_dir)
+        .context("Failed to discover Rust FFI functions")?;
+
+    if functions.is_empty() {
+        return Ok(());
+    }
+
+    // Get library name with precedence: whitehall.toml > Cargo.toml > project.name
+    let library_name = get_rust_library_name(config, ffi_dir);
+
+    // Generate PascalCase object name for Kotlin
+    let object_name = to_pascal_case(&library_name);
+
+    // 2. Generate Kotlin bindings
+    let kotlin_dir = build_dir.join("generated/kotlin");
+    let package_path = config.android.package.replace('.', "/");
+    let kotlin_package_dir = kotlin_dir.join(&package_path).join("ffi");
+
+    fs::create_dir_all(&kotlin_package_dir)
+        .context("Failed to create Kotlin output directory")?;
+
+    let kotlin_package = format!("{}.ffi", config.android.package);
+    let kotlin_code = generate_kotlin_object_rust(
+        &functions,
+        &kotlin_package,
+        &library_name,
+        &object_name,
+    );
+
+    let kotlin_file = kotlin_package_dir.join(format!("{}.kt", object_name));
+    fs::write(&kotlin_file, kotlin_code)
+        .context(format!("Failed to write Kotlin binding: {}", kotlin_file.display()))?;
+
+    // 3. Generate Rust JNI bridge
+    let rust_src_dir = ffi_dir.join("rust/src");
+    if !rust_src_dir.exists() {
+        anyhow::bail!("Rust src directory not found: {}", rust_src_dir.display());
+    }
+
+    let rust_bridge_code = generate_rust_bridge(&functions, &kotlin_package);
+
+    let bridge_file = rust_src_dir.join("jni_bridge.rs");
+    fs::write(&bridge_file, rust_bridge_code)
+        .context(format!("Failed to write Rust JNI bridge: {}", bridge_file.display()))?;
+
+    // 4. Ensure lib.rs includes the bridge module
+    let lib_rs = rust_src_dir.join("lib.rs");
+    if lib_rs.exists() {
+        let content = fs::read_to_string(&lib_rs)?;
+        if !content.contains("mod jni_bridge;") {
+            // Append module declaration
+            let updated = format!("{}\n\n// Auto-generated JNI bridge (Phase 1.6)\nmod jni_bridge;\n", content);
+            fs::write(&lib_rs, updated)?;
+        }
+    }
+
+    // 5. Build Rust library using cargo
+    build_rust_library(
+        &library_name,
+        &ffi_dir.join("rust"),
+        build_dir,
+        config.android.min_sdk,
+    )?;
+
+    Ok(())
+}
+
+/// Build Rust library using cargo for Android targets
+///
+/// Compiles Rust code to .so files for all Android ABIs
+///
+/// # Arguments
+/// * `library_name` - Name of the Rust library (from Cargo.toml)
+/// * `rust_project_dir` - Path to Rust project directory (contains Cargo.toml)
+/// * `build_dir` - Build output directory
+/// * `min_sdk` - Minimum Android SDK version
+fn build_rust_library(
+    library_name: &str,
+    rust_project_dir: &Path,
+    build_dir: &Path,
+    _min_sdk: u32,
+) -> Result<()> {
+    println!("{}", format!("Building Rust library: {}", library_name).cyan());
+
+    // Initialize toolchain to ensure NDK
+    let toolchain = Toolchain::new()
+        .context("Failed to initialize toolchain")?;
+
+    let ndk_path = toolchain.ensure_ndk()
+        .context("Failed to ensure Android NDK")?;
+
+    // Rust target triples for Android
+    let targets = vec![
+        ("aarch64-linux-android", "arm64-v8a"),
+        ("armv7-linux-androideabi", "armeabi-v7a"),
+        ("x86_64-linux-android", "x86_64"),
+        ("i686-linux-android", "x86"),
+    ];
+
+    // Add Android targets if not already installed
+    for (target, _) in &targets {
+        println!("  {} {}", "→".dimmed(), format!("Adding target {}", target).dimmed());
+        let status = Command::new("rustup")
+            .args(&["target", "add", target])
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
+            .status()
+            .context(format!("Failed to add Rust target: {}", target))?;
+
+        if !status.success() {
+            println!("    {} {}", "⚠".yellow(), format!("Could not add target {}, skipping", target).yellow());
+        }
+    }
+
+    // Build for each target
+    for (target, abi) in &targets {
+        println!("  {} {}", "→".dimmed(), format!("Building for {}", abi).dimmed());
+
+        // Set up environment for Android NDK
+        let mut cmd = Command::new("cargo");
+        cmd.current_dir(rust_project_dir);
+        cmd.arg("build");
+        cmd.arg("--release");
+        cmd.arg("--target").arg(target);
+
+        // Set environment variables for NDK
+        cmd.env("ANDROID_NDK_HOME", &ndk_path);
+        cmd.env("ANDROID_NDK_ROOT", &ndk_path);
+
+        // Set linker based on target
+        let linker = match *target {
+            "aarch64-linux-android" => "aarch64-linux-android21-clang",
+            "armv7-linux-androideabi" => "armv7a-linux-androideabi21-clang",
+            "x86_64-linux-android" => "x86_64-linux-android21-clang",
+            "i686-linux-android" => "i686-linux-android21-clang",
+            _ => continue,
+        };
+
+        let linker_path = ndk_path
+            .join("toolchains/llvm/prebuilt")
+            .join(if cfg!(target_os = "linux") { "linux-x86_64" } else { "darwin-x86_64" })
+            .join("bin")
+            .join(linker);
+
+        if linker_path.exists() {
+            cmd.env(
+                format!("CARGO_TARGET_{}_LINKER", target.to_uppercase().replace('-', "_")),
+                linker_path,
+            );
+        }
+
+        cmd.stdout(std::process::Stdio::null());
+        cmd.stderr(std::process::Stdio::null());
+
+        let status = cmd.status()
+            .context(format!("Failed to build Rust library for {}", target))?;
+
+        if !status.success() {
+            anyhow::bail!("Rust build failed for target: {}", target);
+        }
+
+        // Copy .so file to jniLibs
+        let so_name = format!("lib{}.so", library_name.replace('-', "_"));
+        let so_file = rust_project_dir
+            .join("target")
+            .join(target)
+            .join("release")
+            .join(&so_name);
+
+        if !so_file.exists() {
+            anyhow::bail!(
+                "Built Rust library not found: {}. Expected at: {}",
+                library_name,
+                so_file.display()
+            );
+        }
+
+        // Destination: build/app/src/main/jniLibs/{abi}/lib{name}.so
+        let jnilib_dir = build_dir.join("app/src/main/jniLibs").join(abi);
+        fs::create_dir_all(&jnilib_dir)
+            .context(format!("Failed to create jniLibs directory for {}", abi))?;
+
+        let dest_so = jnilib_dir.join(&so_name);
+        fs::copy(&so_file, &dest_so)
+            .context(format!("Failed to copy Rust .so file for {}", abi))?;
+
+        println!("    {} {}", "✓".green(), format!("{} built successfully", abi).dimmed());
+    }
+
+    println!("{}", format!("Rust library '{}' built successfully for {} ABIs", library_name, targets.len()).green());
 
     Ok(())
 }

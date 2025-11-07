@@ -128,6 +128,10 @@ fn generate_function_body(output: &mut String, function: &RustFfiFunction) {
             RustType::Void => {
                 output.push_str("            // Void result\n");
             }
+            RustType::Bool => {
+                // Boolean needs conversion from bool to jboolean (u8)
+                output.push_str("            value as jboolean\n");
+            }
             ref ret_type if !is_complex_type(ret_type) => {
                 output.push_str("            value\n");
             }
@@ -153,6 +157,10 @@ fn generate_function_body(output: &mut String, function: &RustFfiFunction) {
         match function.return_type.base_type {
             RustType::Void => {
                 output.push_str(&format!("    {};\n", call_expr));
+            }
+            RustType::Bool => {
+                // Boolean needs conversion from bool to jboolean (u8)
+                output.push_str(&format!("    {} as jboolean\n", call_expr));
             }
             ref ret_type if !is_complex_type(ret_type) => {
                 // Simple return - direct pass-through

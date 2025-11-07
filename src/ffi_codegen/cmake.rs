@@ -1,4 +1,3 @@
-use std::path::Path;
 
 /// Generate CMakeLists.txt for building the native library
 pub fn generate_cmake(
@@ -24,12 +23,12 @@ pub fn generate_cmake(
     // Library definition
     output.push_str(&format!("add_library({} SHARED\n", library_name));
 
-    // Add user source files
+    // Add user source files (absolute paths)
     for source_file in source_files {
-        output.push_str(&format!("    ${{CMAKE_SOURCE_DIR}}/{}\n", source_file));
+        output.push_str(&format!("    {}\n", source_file));
     }
 
-    // Add generated bridge file
+    // Add generated bridge file (absolute path)
     output.push_str(&format!("    {}\n", bridge_file));
 
     output.push_str(")\n\n");

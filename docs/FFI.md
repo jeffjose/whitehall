@@ -2621,7 +2621,348 @@ whitehall build
 - Bundles in APK
 - App runs, displays "Result: 8"
 
-**Phase 1 Complete When:** This test case works end-to-end! ✅
+**Phase 1 Complete When:** Code generation works! ✅
+
+---
+
+## Phase 1.6: Native Compilation ✅ COMPLETE
+
+**Goal:** Compile C++ and Rust code into native `.so` libraries for all Android architectures.
+
+**Current Status:**
+- ✅ Code generation (Kotlin, JNI bridge, CMakeLists.txt, Cargo setup)
+- ✅ **Actual native compilation (CMake/Cargo execution)**
+- ✅ `.so` file bundling into APK
+- ✅ Created `whitehall-ffi-macro` crate for #[ffi] attribute support
+
+**Implementation Complete:**
+Phase 1.6 has been fully implemented. Native compilation now works for both C++ (via CMake/NDK) and Rust (via cargo-ndk) for all Android architectures. The `ffi_only` setting is no longer required for FFI projects - native libraries are automatically compiled and bundled during the build process.
+
+### Architecture
+
+```
+Native Compilation Pipeline
+├── C++ Build (CMake + NDK)
+│   ├── arm64-v8a     (aarch64)   ← Build in parallel
+│   ├── armeabi-v7a   (armv7)     ← Build in parallel
+│   ├── x86_64        (x86_64)    ← Build in parallel
+│   └── x86           (i686)      ← Build in parallel
+│
+├── Rust Build (Cargo + NDK)
+│   ├── aarch64-linux-android      ← Build in parallel
+│   ├── armv7-linux-androideabi    ← Build in parallel
+│   ├── x86_64-linux-android       ← Build in parallel
+│   └── i686-linux-android         ← Build in parallel
+│
+└── Copy → build/jniLibs/{arch}/lib{name}.so
+```
+
+**Concurrency Model:**
+- C++ and Rust builds run in parallel (if both present)
+- Within each language, all architectures build in parallel
+- Use Rayon or tokio for async parallel builds
+
+### Tasks
+
+#### 1.6.1: NDK Detection and Installation
+**File:** `src/toolchain/mod.rs`
+
+```rust
+impl Toolchain {
+    /// Ensure Android NDK is installed
+    ///
+    /// Downloads NDK if not present (~1GB download)
+    pub fn ensure_ndk(&self) -> Result<PathBuf> {
+        let sdk_root = self.ensure_android_sdk()?;
+        let ndk_version = DEFAULT_NDK; // "26.1.10909125"
+        let ndk_path = sdk_root.join("ndk").join(ndk_version);
+
+        if ndk_path.exists() {
+            return Ok(ndk_path);
+        }
+
+        // Install using sdkmanager
+        // sdkmanager "ndk;26.1.10909125"
+    }
+}
+```
+
+**Requirements:**
+- Android NDK 26+ (LTS with good CMake/Rust support)
+- CMake 3.22+ (bundled with NDK)
+- Rust toolchains for Android targets (if using Rust FFI)
+
+#### 1.6.2: CMake Build (C++)
+**File:** `src/ffi_build/native.rs` (new module)
+
+```rust
+/// Build C++ native library for a specific Android architecture
+fn build_cpp_arch(
+    ndk_path: &Path,
+    cmake_dir: &Path,
+    library_name: &str,
+    arch: &str,  // "arm64-v8a", "armeabi-v7a", "x86_64", "x86"
+) -> Result<PathBuf> {
+    let build_dir = cmake_dir.join("build").join(arch);
+
+    // 1. Configure CMake
+    let android_abi = arch;  // arm64-v8a, armeabi-v7a, x86_64, x86
+    let toolchain_file = ndk_path.join("build/cmake/android.toolchain.cmake");
+
+    Command::new("cmake")
+        .arg("-B").arg(&build_dir)
+        .arg("-S").arg(cmake_dir)
+        .arg(format!("-DCMAKE_TOOLCHAIN_FILE={}", toolchain_file.display()))
+        .arg(format!("-DANDROID_ABI={}", android_abi))
+        .arg("-DANDROID_PLATFORM=android-24")
+        .arg("-DCMAKE_BUILD_TYPE=Release")
+        .status()?;
+
+    // 2. Build
+    Command::new("cmake")
+        .arg("--build").arg(&build_dir)
+        .arg("--config").arg("Release")
+        .status()?;
+
+    // 3. Find .so file
+    let so_file = build_dir.join(format!("lib{}.so", library_name));
+    Ok(so_file)
+}
+
+/// Build C++ for all architectures in parallel
+pub fn build_cpp_all_archs(
+    ndk_path: &Path,
+    cmake_dir: &Path,
+    library_name: &str,
+) -> Result<HashMap<String, PathBuf>> {
+    let archs = vec!["arm64-v8a", "armeabi-v7a", "x86_64", "x86"];
+
+    // Build all archs in parallel using rayon
+    let results: Vec<_> = archs
+        .par_iter()
+        .map(|arch| {
+            println!("Building C++ for {}...", arch);
+            let so_path = build_cpp_arch(ndk_path, cmake_dir, library_name, arch)?;
+            Ok((arch.to_string(), so_path))
+        })
+        .collect();
+
+    // Check for errors
+    results.into_iter().collect()
+}
+```
+
+**CMake Android Build Variables:**
+- `CMAKE_TOOLCHAIN_FILE`: NDK's `android.toolchain.cmake`
+- `ANDROID_ABI`: Target architecture (arm64-v8a, armeabi-v7a, x86_64, x86)
+- `ANDROID_PLATFORM`: Min SDK (android-24)
+- `CMAKE_BUILD_TYPE`: Release
+
+#### 1.6.3: Cargo Build (Rust)
+**File:** `src/ffi_build/native.rs`
+
+```rust
+/// Build Rust native library for a specific Android target
+fn build_rust_target(
+    cargo_dir: &Path,
+    target: &str,  // "aarch64-linux-android", etc.
+) -> Result<PathBuf> {
+    // 1. Build with cargo
+    Command::new("cargo")
+        .arg("build")
+        .arg("--release")
+        .arg("--target").arg(target)
+        .current_dir(cargo_dir)
+        .env("CARGO_TARGET_DIR", cargo_dir.join("target"))
+        .status()?;
+
+    // 2. Find .so file
+    let so_file = cargo_dir
+        .join("target")
+        .join(target)
+        .join("release")
+        .join("lib{name}.so");
+
+    Ok(so_file)
+}
+
+/// Build Rust for all targets in parallel
+pub fn build_rust_all_targets(
+    cargo_dir: &Path,
+) -> Result<HashMap<String, PathBuf>> {
+    let targets = vec![
+        ("aarch64-linux-android", "arm64-v8a"),
+        ("armv7-linux-androideabi", "armeabi-v7a"),
+        ("x86_64-linux-android", "x86_64"),
+        ("i686-linux-android", "x86"),
+    ];
+
+    // Build all targets in parallel
+    let results: Vec<_> = targets
+        .par_iter()
+        .map(|(target, arch)| {
+            println!("Building Rust for {} ({})...", arch, target);
+            let so_path = build_rust_target(cargo_dir, target)?;
+            Ok((arch.to_string(), so_path))
+        })
+        .collect();
+
+    results.into_iter().collect()
+}
+```
+
+**Rust Target Setup:**
+```bash
+# User must have Rust Android targets installed:
+rustup target add aarch64-linux-android
+rustup target add armv7-linux-androideabi
+rustup target add x86_64-linux-android
+rustup target add i686-linux-android
+```
+
+**Cargo Configuration:**
+Create `.cargo/config.toml` in project root:
+```toml
+[target.aarch64-linux-android]
+linker = "<ndk>/toolchains/llvm/prebuilt/<host>/bin/aarch64-linux-android24-clang"
+
+[target.armv7-linux-androideabi]
+linker = "<ndk>/toolchains/llvm/prebuilt/<host>/bin/armv7a-linux-androideabi24-clang"
+
+[target.x86_64-linux-android]
+linker = "<ndk>/toolchains/llvm/prebuilt/<host>/bin/x86_64-linux-android24-clang"
+
+[target.i686-linux-android]
+linker = "<ndk>/toolchains/llvm/prebuilt/<host>/bin/i686-linux-android24-clang"
+```
+
+#### 1.6.4: Copy .so Files to jniLibs
+**File:** `src/ffi_build/native.rs`
+
+```rust
+/// Copy compiled .so files to jniLibs directory
+///
+/// Gradle expects native libraries in:
+/// build/jniLibs/{arch}/lib{name}.so
+pub fn copy_to_jnilibs(
+    so_files: &HashMap<String, PathBuf>,
+    build_dir: &Path,
+) -> Result<()> {
+    for (arch, so_path) in so_files {
+        let dest_dir = build_dir.join("jniLibs").join(arch);
+        fs::create_dir_all(&dest_dir)?;
+
+        let dest_file = dest_dir.join(so_path.file_name().unwrap());
+        fs::copy(so_path, &dest_file)?;
+
+        println!("  ✓ {} → {}", arch, dest_file.display());
+    }
+    Ok(())
+}
+```
+
+**jniLibs Directory Structure:**
+```
+build/
+└── jniLibs/
+    ├── arm64-v8a/
+    │   ├── libmath.so
+    │   └── libvideo_encoder.so
+    ├── armeabi-v7a/
+    │   ├── libmath.so
+    │   └── libvideo_encoder.so
+    ├── x86_64/
+    │   └── libmath.so
+    └── x86/
+        └── libmath.so
+```
+
+#### 1.6.5: Integration with Build Pipeline
+**File:** `src/ffi_build.rs`
+
+```rust
+pub fn build_ffi(config: &Config, project_root: &Path) -> Result<()> {
+    let ffi_dir = project_root.join("src/ffi");
+    let build_dir = project_root.join(&config.build.output_dir);
+
+    // Skip if ffi_only mode
+    if config.ffi.ffi_only {
+        // Only generate code, don't compile natives
+        return Ok(());
+    }
+
+    // Get NDK
+    let toolchain = Toolchain::new()?;
+    let ndk_path = toolchain.ensure_ndk()?;
+
+    // Parallel: Build C++ and Rust simultaneously
+    let (cpp_result, rust_result) = rayon::join(
+        || {
+            if ffi_dir.join("cpp").exists() {
+                println!("Building C++ native libraries...");
+                build_cpp_all_archs(&ndk_path, &build_dir.join("cmake"), &library_name)
+            } else {
+                Ok(HashMap::new())
+            }
+        },
+        || {
+            if ffi_dir.join("rust").exists() {
+                println!("Building Rust native libraries...");
+                build_rust_all_targets(&ffi_dir.join("rust"))
+            } else {
+                Ok(HashMap::new())
+            }
+        },
+    );
+
+    let mut all_so_files = cpp_result?;
+    all_so_files.extend(rust_result?);
+
+    // Copy all .so files to jniLibs
+    copy_to_jnilibs(&all_so_files, &build_dir)?;
+
+    println!("Native libraries built successfully!");
+    Ok(())
+}
+```
+
+### Success Criteria
+
+**Phase 1.6 Complete When:**
+1. `whitehall build` (without `ffi_only = true`) successfully:
+   - Detects/installs NDK
+   - Runs CMake for C++ code (all archs in parallel)
+   - Runs Cargo for Rust code (all targets in parallel)
+   - Copies `.so` files to `build/jniLibs/{arch}/`
+   - Gradle bundles `.so` files into APK
+   - App loads native libraries successfully
+
+2. Examples work without `ffi_only = true`:
+   - `examples/ffi-cpp` builds full APK
+   - `examples/ffi-rust` builds full APK
+   - `examples/ffi-cpp-rust` builds full APK with both libraries
+
+3. Build is fast:
+   - Parallel compilation (all archs/targets at once)
+   - Incremental builds (only rebuild if source changed)
+   - NDK cached (~5 minutes first time, instant after)
+
+### Dependencies
+
+**Cargo.toml additions:**
+```toml
+[dependencies]
+rayon = "1.7"  # Parallel iteration for multi-arch builds
+```
+
+**System Requirements (User):**
+- Rust toolchains: `rustup target add aarch64-linux-android armv7-linux-androideabi x86_64-linux-android i686-linux-android`
+- CMake 3.22+ (bundled with NDK, handled automatically)
+
+**System Requirements (Whitehall):**
+- Android NDK 26+ (auto-downloaded by Whitehall)
+- ~1GB disk space for NDK
+- ~100MB per architecture for build artifacts
 
 ---
 
@@ -2942,7 +3283,8 @@ Bridge converts `Err` to exception automatically.
 | Phase | Status | Progress |
 |-------|--------|----------|
 | Phase 0: Foundation | ✅ Complete | 100% |
-| Phase 1: C++ Primitives | ✅ Complete | 100% |
+| Phase 1: C++ Code Generation | ✅ Complete | 100% |
+| Phase 1.6: Native Compilation | ✅ Complete | 100% |
 | Phase 2: Strings | ✅ Complete | 100% |
 | Phase 3: Arrays | ✅ Complete | 100% |
 | Phase 4: Rust | ✅ Complete | 100% |

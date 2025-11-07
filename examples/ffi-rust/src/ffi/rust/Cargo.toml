@@ -1,5 +1,5 @@
 [package]
-name = "math"  # Generated object will be "Math"
+name = "math"
 version = "0.1.0"
 edition = "2021"
 
@@ -8,3 +8,4 @@ crate-type = ["cdylib"]
 
 [dependencies]
 jni = "0.21"
+whitehall-ffi-macro = { path = "/home/jeffjose/scripts/whitehall/whitehall-ffi-macro" }
