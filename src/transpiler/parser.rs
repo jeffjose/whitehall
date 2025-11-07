@@ -83,8 +83,10 @@ impl Parser {
                 }
                 // Otherwise, continue to next iteration to collect more annotations
                 continue;
-            } else if self.peek_word() == Some("class") || self.peek_word() == Some("object") {
+            } else if !parsed_store_class && (self.peek_word() == Some("class") || self.peek_word() == Some("object")) {
                 // Standalone class/object without annotation (e.g., class with var properties)
+                // Only parse as store class if we haven't seen one yet
+                // After first store class, let class/object declarations pass through
                 classes.push(self.parse_class_declaration(Vec::new())?);
                 parsed_store_class = true; // Mark that we've seen a store class
             } else if self.consume_word("import") {
@@ -1809,12 +1811,14 @@ impl Parser {
            remaining.starts_with("sealed interface ") ||
            remaining.starts_with("enum class ") ||
            remaining.starts_with("typealias ") ||
-           remaining.starts_with("fun ") {
+           remaining.starts_with("fun ") ||
+           remaining.starts_with("object ") {
             return true;
         }
 
         false
-        // Note: We don't include standalone "object" here because it might be @store annotated
+        // Note: object declarations are safe to pass through here because @store objects
+        // would have been handled by the annotation parsing logic earlier in the parse loop
     }
 
     /// Detect what type of Kotlin construct this is based on the leading keywords.
@@ -2042,9 +2046,42 @@ impl Parser {
                             paren_depth -= 1;
                             self.advance_char();
 
-                            // If we're back to depth 0 for parens and no braces were found, we're done
+                            // If we're back to depth 0 for parens and no braces were found
+                            // Check what comes next before deciding to break
                             if paren_depth == 0 && brace_depth == 0 && found_opening_paren && !found_opening_brace {
-                                break;
+                                // Save position to potentially backtrack
+                                let saved_pos = self.pos;
+
+                                // Skip whitespace to see what's next
+                                while self.peek_char().map(|c| c.is_whitespace() && c != '\n').unwrap_or(false) {
+                                    self.advance_char();
+                                }
+
+                                let next = self.peek_char();
+
+                                // Restore position
+                                self.pos = saved_pos;
+
+                                match next {
+                                    // Expression body (fun foo() = expr) or type alias (typealias A = B)
+                                    Some('=') | Some(':') => {
+                                        // Continue capturing - there's more content
+                                    }
+                                    // Opening brace (will be handled in next iteration)
+                                    Some('{') => {
+                                        // Continue capturing
+                                    }
+                                    // Newline or EOF - we're done
+                                    Some('\n') | None => {
+                                        break;
+                                    }
+                                    // Anything else - check if it's end of declaration
+                                    _ => {
+                                        // For data class Foo(...) pattern, break here
+                                        // The closing paren is the end
+                                        break;
+                                    }
+                                }
                             }
                         } else {
                             // Unmatched closing paren - this is an error
