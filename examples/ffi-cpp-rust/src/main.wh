@@ -1,0 +1,58 @@
+<script>
+  import $ffi.cpp.CppMath
+  import $ffi.rust.RustMath
+
+  var addResult = 0
+  var subtractResult = 0
+  var combinedResult = 0
+
+  onMount {
+    // Call C++ add function
+    addResult = CppMath.add(10, 5)
+
+    // Call Rust subtract function
+    subtractResult = RustMath.subtract(10, 5)
+
+    // Combine: add with C++, subtract with Rust
+    val sum = CppMath.add(20, 15)         // = 35
+    combinedResult = RustMath.subtract(sum, 10)  // = 25
+  }
+</script>
+
+<Column padding={16} spacing={16}>
+  <Text variant="h4">Mixed C++ & Rust FFI Example</Text>
+
+  <Text variant="body1">
+    This example demonstrates using both C++ and Rust FFI
+    in the same Whitehall application.
+  </Text>
+
+  <Card>
+    <CardContent>
+      <Text variant="subtitle1">C++ Addition</Text>
+      <Text variant="h6">CppMath.add(10, 5)</Text>
+      <Text variant="h3" color="primary">{addResult}</Text>
+    </CardContent>
+  </Card>
+
+  <Card>
+    <CardContent>
+      <Text variant="subtitle1">Rust Subtraction</Text>
+      <Text variant="h6">RustMath.subtract(10, 5)</Text>
+      <Text variant="h3" color="secondary">{subtractResult}</Text>
+    </CardContent>
+  </Card>
+
+  <Card>
+    <CardContent>
+      <Text variant="subtitle1">Combined Operation</Text>
+      <Text variant="h6">RustMath.subtract(CppMath.add(20, 15), 10)</Text>
+      <Text variant="h3" color="success">{combinedResult}</Text>
+    </CardContent>
+  </Card>
+
+  <Text variant="caption" color="textSecondary">
+    C++ add is implemented in C++, Rust subtract is implemented in Rust.
+    Both are seamlessly callable from Whitehall with zero boilerplate!
+  </Text>
+</Column>

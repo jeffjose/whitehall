@@ -29,6 +29,26 @@ This directory contains real-world example applications to test and demonstrate 
 **Features**: Forms, switches, complex layouts
 **Complexity**: ⭐⭐⭐ Advanced
 
+## FFI Examples
+
+### 6. C++ FFI
+**Location**: `ffi-cpp/`
+**Features**: C++ native code, `@ffi` annotations, automatic JNI bridge
+**Complexity**: ⭐⭐ Intermediate
+**What you'll learn**: How to call C++ functions from Whitehall with zero boilerplate
+
+### 7. Rust FFI
+**Location**: `ffi-rust/`
+**Features**: Rust native code, `#[ffi]` attributes, memory safety, automatic naming conversion
+**Complexity**: ⭐⭐ Intermediate
+**What you'll learn**: How to call Rust functions from Whitehall, snake_case → camelCase conversion
+
+### 8. Mixed C++ & Rust FFI
+**Location**: `ffi-cpp-rust/`
+**Features**: Both C++ and Rust in one app, multiple native libraries
+**Complexity**: ⭐⭐⭐ Advanced
+**What you'll learn**: When to use C++ vs Rust, combining multiple FFI languages
+
 ## Testing Examples
 
 Build any example:

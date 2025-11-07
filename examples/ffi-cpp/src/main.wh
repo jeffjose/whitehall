@@ -1,0 +1,30 @@
+<script>
+  import $ffi.cpp.Math
+
+  var result = 0
+
+  onMount {
+    // Call the C++ add function
+    result = Math.add(5, 3)
+  }
+</script>
+
+<Column padding={16} spacing={16}>
+  <Text variant="h4">C++ FFI Example</Text>
+
+  <Text variant="body1">
+    This example demonstrates calling C++ code from Whitehall.
+  </Text>
+
+  <Card>
+    <CardContent>
+      <Text variant="h6">Math.add(5, 3)</Text>
+      <Text variant="h3" color="primary">{result}</Text>
+    </CardContent>
+  </Card>
+
+  <Text variant="caption" color="textSecondary">
+    The add function is implemented in C++ and automatically
+    bridged to Kotlin using Whitehall's FFI system.
+  </Text>
+</Column>

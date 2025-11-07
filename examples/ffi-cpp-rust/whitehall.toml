@@ -1,0 +1,17 @@
+[project]
+name = "ffi-cpp-rust-example"
+version = "0.1.0"
+
+[android]
+package = "com.example.fficpprust"
+min_sdk = 24
+target_sdk = 34
+
+[ffi]
+enabled = true
+
+[ffi.cpp]
+standard = "17"
+
+[ffi.rust]
+profile = "release"

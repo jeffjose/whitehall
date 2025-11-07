@@ -1,0 +1,14 @@
+[project]
+name = "ffi-cpp-example"
+version = "0.1.0"
+
+[android]
+package = "com.example.fficpp"
+min_sdk = 24
+target_sdk = 34
+
+[ffi]
+enabled = true
+
+[ffi.cpp]
+standard = "17"

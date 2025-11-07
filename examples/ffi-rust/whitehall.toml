@@ -1,0 +1,14 @@
+[project]
+name = "ffi-rust-example"
+version = "0.1.0"
+
+[android]
+package = "com.example.ffirust"
+min_sdk = 24
+target_sdk = 34
+
+[ffi]
+enabled = true
+
+[ffi.rust]
+profile = "release"
