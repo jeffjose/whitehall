@@ -45,13 +45,20 @@ fn generate_forward_declaration(function: &CppFfiFunction) -> String {
     let params = function
         .params
         .iter()
-        .map(|(_, typ)| cpp_type_to_string(typ))
+        .map(|(_, typ)| {
+            // For String parameters, use const reference
+            if *typ == CppType::String {
+                "const std::string&"
+            } else {
+                typ.to_cpp_type()
+            }
+        })
         .collect::<Vec<_>>()
         .join(", ");
 
     format!(
         "{} {}({});\n",
-        cpp_type_to_string(&function.return_type),
+        function.return_type.to_cpp_type(),
         function.name,
         params
     )
@@ -86,25 +93,112 @@ fn generate_jni_function(function: &CppFfiFunction, package: &str) -> String {
 
     output.push_str("\n) {\n");
 
-    // Function body - for Phase 1 (primitives only), we can directly call the user function
-    output.push_str("    // Call user function\n");
+    // Check if we have any string parameters or return types
+    let has_strings = function.params.iter().any(|(_, t)| *t == CppType::String)
+        || function.return_type == CppType::String;
 
-    if function.return_type == CppType::Void {
+    if has_strings {
+        // Phase 2: Handle string conversions
+        output.push_str(&generate_string_conversions(function));
+    } else {
+        // Phase 1: Direct call for primitives
+        output.push_str("    // Call user function\n");
+
+        if function.return_type == CppType::Void {
+            output.push_str(&format!("    {}(", function.name));
+        } else {
+            output.push_str(&format!("    return {}(", function.name));
+        }
+
+        // Pass parameters
+        let param_names: Vec<String> = function
+            .params
+            .iter()
+            .map(|(name, _)| name.clone())
+            .collect();
+        output.push_str(&param_names.join(", "));
+        output.push_str(");\n");
+    }
+
+    output.push_str("}\n");
+
+    output
+}
+
+/// Generate string conversion code for JNI bridge (Phase 2)
+fn generate_string_conversions(function: &CppFfiFunction) -> String {
+    let mut output = String::new();
+
+    // Convert string parameters from jstring to std::string
+    for (param_name, param_type) in function.params.iter() {
+        if *param_type == CppType::String {
+            output.push_str(&format!(
+                "    // Convert jstring to std::string\n"));
+            output.push_str(&format!(
+                "    if ({} == nullptr) {{\n", param_name));
+            output.push_str("        // TODO: Handle null string - throw exception or return default\n");
+            output.push_str(&format!(
+                "        {} = env->NewStringUTF(\"\");\n", param_name));
+            output.push_str("    }\n");
+
+            output.push_str(&format!(
+                "    const char* c_{} = env->GetStringUTFChars({}, nullptr);\n",
+                param_name, param_name));
+            output.push_str(&format!(
+                "    if (c_{} == nullptr) {{\n", param_name));
+            output.push_str("        return ");
+            if function.return_type == CppType::Void {
+                output.push_str(";\n");
+            } else if function.return_type == CppType::String {
+                output.push_str("env->NewStringUTF(\"\");\n");
+            } else {
+                output.push_str("0;  // OutOfMemoryError\n");
+            }
+            output.push_str("    }\n");
+
+            output.push_str(&format!(
+                "    std::string cpp_{}(c_{});\n",
+                param_name, param_name));
+            output.push_str(&format!(
+                "    env->ReleaseStringUTFChars({}, c_{});\n\n",
+                param_name, param_name));
+        }
+    }
+
+    // Call the user function
+    output.push_str("    // Call user function\n");
+    if function.return_type == CppType::String {
+        output.push_str(&format!("    std::string result = {}(", function.name));
+    } else if function.return_type == CppType::Void {
         output.push_str(&format!("    {}(", function.name));
     } else {
         output.push_str(&format!("    return {}(", function.name));
     }
 
-    // Pass parameters
-    let param_names: Vec<String> = function
+    // Pass converted parameters
+    let param_calls: Vec<String> = function
         .params
         .iter()
-        .map(|(name, _)| name.clone())
+        .map(|(name, typ)| {
+            if *typ == CppType::String {
+                format!("cpp_{}", name)
+            } else {
+                name.clone()
+            }
+        })
         .collect();
-    output.push_str(&param_names.join(", "));
+    output.push_str(&param_calls.join(", "));
     output.push_str(");\n");
 
-    output.push_str("}\n");
+    // Convert string return value to jstring
+    if function.return_type == CppType::String {
+        output.push_str("\n    // Convert std::string to jstring\n");
+        output.push_str("    jstring j_result = env->NewStringUTF(result.c_str());\n");
+        output.push_str("    if (j_result == nullptr) {\n");
+        output.push_str("        return nullptr;  // OutOfMemoryError\n");
+        output.push_str("    }\n");
+        output.push_str("    return j_result;\n");
+    }
 
     output
 }
@@ -117,18 +211,6 @@ fn generate_jni_name(function_name: &str, package: &str) -> String {
     // For now, we'll use "Math" as the default class name
     // TODO: Make this configurable or derive from source file
     format!("Java_{}_Math_{}", package_path, function_name)
-}
-
-/// Convert CppType to C++ type string
-fn cpp_type_to_string(typ: &CppType) -> &'static str {
-    match typ {
-        CppType::Void => "void",
-        CppType::Int => "int",
-        CppType::Long => "long long",
-        CppType::Float => "float",
-        CppType::Double => "double",
-        CppType::Bool => "bool",
-    }
 }
 
 #[cfg(test)]
@@ -284,5 +366,85 @@ mod tests {
 
         assert!(bridge.contains("Auto-generated by Whitehall FFI"));
         assert!(bridge.contains("DO NOT EDIT MANUALLY"));
+    }
+
+    #[test]
+    fn test_string_parameter_conversion() {
+        let func = CppFfiFunction {
+            name: "greet".to_string(),
+            params: vec![
+                ("name".to_string(), CppType::String),
+            ],
+            return_type: CppType::String,
+            source_file: PathBuf::from("string.cpp"),
+        };
+
+        let functions = vec![func];
+        let bridge = generate_jni_bridge(&functions, "com.example", &["string.cpp".to_string()]);
+
+        println!("{}", bridge);
+
+        // Check forward declaration
+        assert!(bridge.contains("std::string greet(const std::string&);"));
+
+        // Check JNI function signature
+        assert!(bridge.contains("jstring JNICALL"));
+        assert!(bridge.contains("jstring name"));
+
+        // Check string conversions
+        assert!(bridge.contains("GetStringUTFChars"));
+        assert!(bridge.contains("ReleaseStringUTFChars"));
+        assert!(bridge.contains("NewStringUTF"));
+        assert!(bridge.contains("std::string cpp_name"));
+
+        // Check call with converted parameter
+        assert!(bridge.contains("greet(cpp_name)"));
+
+        // Check result conversion
+        assert!(bridge.contains("jstring j_result"));
+    }
+
+    #[test]
+    fn test_mixed_string_and_primitives() {
+        let func = CppFfiFunction {
+            name: "formatNumber".to_string(),
+            params: vec![
+                ("format".to_string(), CppType::String),
+                ("number".to_string(), CppType::Int),
+            ],
+            return_type: CppType::String,
+            source_file: PathBuf::from("format.cpp"),
+        };
+
+        let functions = vec![func];
+        let bridge = generate_jni_bridge(&functions, "com.test", &["format.cpp".to_string()]);
+
+        // Check forward declaration includes both types
+        assert!(bridge.contains("std::string formatNumber(const std::string&, int);"));
+
+        // Check JNI signature
+        assert!(bridge.contains("jstring format"));
+        assert!(bridge.contains("jint number"));
+
+        // Check string conversion for format but not number
+        assert!(bridge.contains("cpp_format"));
+        assert!(bridge.contains("formatNumber(cpp_format, number)"));
+    }
+
+    #[test]
+    fn test_string_return_only() {
+        let func = CppFfiFunction {
+            name: "getMessage".to_string(),
+            params: vec![],
+            return_type: CppType::String,
+            source_file: PathBuf::from("msg.cpp"),
+        };
+
+        let functions = vec![func];
+        let bridge = generate_jni_bridge(&functions, "com.test", &["msg.cpp".to_string()]);
+
+        assert!(bridge.contains("std::string getMessage();"));
+        assert!(bridge.contains("jstring JNICALL"));
+        assert!(bridge.contains("NewStringUTF(result.c_str())"));
     }
 }

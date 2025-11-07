@@ -506,7 +506,7 @@ mod tests {
 
     #[test]
     fn test_default_main_activity_generation() {
-        use crate::config::{AndroidConfig, BuildConfig, Config, ProjectConfig, ToolchainConfig};
+        use crate::config::{AndroidConfig, BuildConfig, Config, FfiConfig, ProjectConfig, ToolchainConfig};
 
         let config = Config {
             project: ProjectConfig {
@@ -520,6 +520,7 @@ mod tests {
             },
             build: BuildConfig::default(),
             toolchain: ToolchainConfig::default(),
+            ffi: FfiConfig::default(),
         };
 
         let content = generate_default_main_activity(&config);

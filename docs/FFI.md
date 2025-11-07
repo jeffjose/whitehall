@@ -2943,26 +2943,37 @@ Bridge converts `Err` to exception automatically.
 |-------|--------|----------|
 | Phase 0: Foundation | ✅ Complete | 100% |
 | Phase 1: C++ Primitives | ✅ Complete | 100% |
-| Phase 2: Strings | ⏸️ Not Started | 0% |
+| Phase 2: Strings | ✅ Complete | 100% |
 | Phase 3: Arrays | ⏸️ Not Started | 0% |
 | Phase 4: Rust | ⏸️ Not Started | 0% |
 | Phase 5: Errors | ⏸️ Not Started | 0% |
 | Phase 6: Polish | ⏸️ Not Started | 0% |
 
-### Phase 1 Complete! 🎉
-- ✅ Phase 1.1: C++ Annotation Parser - Complete
-- ✅ Phase 1.2: Kotlin Binding Generator - Complete
-- ✅ Phase 1.3: JNI Bridge Generator - Complete
-- ✅ Phase 1.4: CMake Generator - Complete
-- ✅ Phase 1.5: Build System Integration - Complete
-- ✅ Phase 1.6: End-to-End Testing - Complete
+### Phase 1 & 2 Complete! 🎉
+
+**Phase 1: C++ Primitives**
+- ✅ Phase 1.1: C++ Annotation Parser
+- ✅ Phase 1.2: Kotlin Binding Generator
+- ✅ Phase 1.3: JNI Bridge Generator
+- ✅ Phase 1.4: CMake Generator
+- ✅ Phase 1.5: Build System Integration
+- ✅ Phase 1.6: End-to-End Testing
+
+**Phase 2: String Support**
+- ✅ Extended CppType enum with String support
+- ✅ Updated Kotlin bindings for String type
+- ✅ JNI string conversions with memory management
+- ✅ Null safety checks
+- ✅ Comprehensive test coverage
 
 **What Works Now:**
 - C++ functions with `@ffi` annotations are automatically discovered
 - Kotlin bindings are generated automatically
-- JNI bridge code is generated with proper type conversions
+- JNI bridge code is generated with proper type conversions and memory management
 - CMake configuration is generated
-- Supports all primitive types: int, long, float, double, bool, void
+- **Supported types:**
+  - Primitives: int, long, float, double, bool, void
+  - Strings: std::string (with automatic JNI conversion & memory management)
 - Full integration with `whitehall build` command
 - Comprehensive test coverage
 
@@ -2970,20 +2981,20 @@ Bridge converts `Err` to exception automatically.
 
 ## Next Actions
 
-**Phase 1 Complete! Next: Phase 2 - String Support**
+**Phase 2 Complete! Next: Phase 3 - Array Support**
 
-To start Phase 2:
+To start Phase 3:
 
-1. Extend `CppType` enum to include String type
-2. Update JNI bridge generator to handle string conversions:
-   - `jstring` → `const char*` → `std::string`
-   - `std::string` → `const char*` → `jstring`
-   - Proper memory management (GetStringUTFChars/ReleaseStringUTFChars)
-3. Add null safety checks
+1. Add array types (IntArray, LongArray, FloatArray, DoubleArray, BoolArray)
+2. Update JNI bridge generator to handle array conversions:
+   - `jintArray` → `int*` → `std::vector<int>`
+   - `std::vector<T>` → `T*` → `jTArray`
+   - Proper memory management (GetArrayElements/ReleaseArrayElements)
+3. Add array size checks and null safety
 4. Write comprehensive tests
 5. Update integration tests
 
-**Current Milestone:** Phase 2 - String marshalling with automatic memory management
+**Current Milestone:** Phase 3 - Array marshalling with automatic memory management
 
 ---
 

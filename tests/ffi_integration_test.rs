@@ -143,32 +143,120 @@ void testVoid(int x) { }
 }
 
 #[test]
-fn test_ffi_parser_unsupported_types() {
+fn test_ffi_parser_string_support() {
     let temp_dir = TempDir::new().unwrap();
     let ffi_dir = temp_dir.path().join("ffi");
     let cpp_dir = ffi_dir.join("cpp");
     fs::create_dir_all(&cpp_dir).unwrap();
 
-    // Test that unsupported types produce errors
+    // Phase 2: std::string is now supported
     let cpp_content = r#"
 // @ffi
-std::string unsupported(std::string x) {
-    return x;
+std::string greet(std::string name) {
+    return "Hello, " + name;
 }
 "#;
-    fs::write(cpp_dir.join("invalid.cpp"), cpp_content).unwrap();
+    fs::write(cpp_dir.join("string.cpp"), cpp_content).unwrap();
 
     let result = discover_cpp_ffi(&ffi_dir);
+    assert!(result.is_ok(), "Phase 2 should support std::string");
 
-    if result.is_err() {
-        let error = result.unwrap_err();
-        let error_msg = format!("{:?}", error);
-        println!("Got expected error: {}", error_msg);
-        // Check if the full error chain contains the message
-        assert!(error_msg.contains("Unsupported C++ type") || error_msg.contains("std::string"),
-                "Error chain should mention unsupported type or std::string, got: {}", error_msg);
-    } else {
-        let functions = result.unwrap();
-        panic!("Expected error but got {} function(s). Phase 1 should reject std::string", functions.len());
+    let functions = result.unwrap();
+    assert_eq!(functions.len(), 1);
+    assert_eq!(functions[0].name, "greet");
+    assert_eq!(functions[0].return_type, whitehall::ffi_parser::CppType::String);
+    assert_eq!(functions[0].params[0].1, whitehall::ffi_parser::CppType::String);
+}
+
+#[test]
+fn test_ffi_string_end_to_end() {
+    // Create a temporary directory with test C++ file
+    let temp_dir = TempDir::new().unwrap();
+    let ffi_dir = temp_dir.path().join("ffi");
+    let cpp_dir = ffi_dir.join("cpp");
+    fs::create_dir_all(&cpp_dir).unwrap();
+
+    // Write test C++ file with string functions
+    let cpp_content = r#"
+// @ffi
+std::string greet(std::string name) {
+    return "Hello, " + name + "!";
+}
+
+// @ffi
+std::string toUpper(std::string text) {
+    std::string result = text;
+    for (char& c : result) {
+        c = toupper(c);
     }
+    return result;
+}
+
+// @ffi
+std::string formatNumber(std::string format, int number) {
+    return format + std::to_string(number);
+}
+"#;
+    fs::write(cpp_dir.join("strings.cpp"), cpp_content).unwrap();
+
+    // Test 1: Discover FFI functions
+    let functions = discover_cpp_ffi(&ffi_dir).unwrap();
+    assert_eq!(functions.len(), 3, "Should find 3 @ffi functions");
+
+    // Test 2: Generate Kotlin bindings
+    let kotlin_code = generate_kotlin_object(
+        &functions,
+        "com.example.test",
+        "strings",
+        "Strings",
+    );
+
+    assert!(kotlin_code.contains("package com.example.test"));
+    assert!(kotlin_code.contains("object Strings"));
+    assert!(kotlin_code.contains("external fun greet(name: String): String"));
+    assert!(kotlin_code.contains("external fun toUpper(text: String): String"));
+    assert!(kotlin_code.contains("external fun formatNumber(format: String, number: Int): String"));
+    assert!(kotlin_code.contains("System.loadLibrary(\"strings\")"));
+
+    // Test 3: Generate JNI bridge with string conversions
+    let jni_code = generate_jni_bridge(
+        &functions,
+        "com.example.test",
+        &["ffi/cpp/strings.cpp".to_string()],
+    );
+
+    // Check forward declarations
+    assert!(jni_code.contains("std::string greet(const std::string&);"));
+    assert!(jni_code.contains("std::string toUpper(const std::string&);"));
+    assert!(jni_code.contains("std::string formatNumber(const std::string&, int);"));
+
+    // Check string conversions
+    assert!(jni_code.contains("GetStringUTFChars"));
+    assert!(jni_code.contains("ReleaseStringUTFChars"));
+    assert!(jni_code.contains("NewStringUTF"));
+
+    // Check JNI function signatures
+    assert!(jni_code.contains("jstring JNICALL"));
+    assert!(jni_code.contains("jstring name"));
+    assert!(jni_code.contains("jstring text"));
+    assert!(jni_code.contains("jstring format"));
+
+    // Check function calls with converted parameters
+    assert!(jni_code.contains("cpp_name"));
+    assert!(jni_code.contains("cpp_text"));
+    assert!(jni_code.contains("cpp_format"));
+
+    // Test 4: Generate CMake
+    let cmake_code = generate_cmake(
+        "strings",
+        &["ffi/cpp/strings.cpp".to_string()],
+        "build/jni/strings_bridge.cpp",
+        "17",
+        &[],
+        &[],
+    );
+
+    assert!(cmake_code.contains("project(\"strings\")"));
+    assert!(cmake_code.contains("ffi/cpp/strings.cpp"));
+    assert!(cmake_code.contains("build/jni/strings_bridge.cpp"));
 }

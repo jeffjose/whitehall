@@ -233,7 +233,7 @@ fn generate_proguard_rules(output_dir: &Path) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::config::{AndroidConfig, BuildConfig, Config, ProjectConfig, ToolchainConfig};
+    use crate::config::{AndroidConfig, BuildConfig, Config, FfiConfig, ProjectConfig, ToolchainConfig};
     use tempfile::TempDir;
 
     fn make_test_config() -> Config {
@@ -249,6 +249,7 @@ mod tests {
             },
             build: BuildConfig::default(),
             toolchain: ToolchainConfig::default(),
+            ffi: FfiConfig::default(),
         }
     }
 

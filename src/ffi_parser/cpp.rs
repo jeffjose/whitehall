@@ -11,6 +11,7 @@ pub enum CppType {
     Float,
     Double,
     Bool,
+    String,  // Phase 2: String support
 }
 
 impl CppType {
@@ -24,7 +25,9 @@ impl CppType {
             "float" => Ok(CppType::Float),
             "double" => Ok(CppType::Double),
             "bool" => Ok(CppType::Bool),
-            _ => bail!("Unsupported C++ type: '{}'. Phase 1 only supports primitives: int, long, float, double, bool", type_str),
+            "std::string" => Ok(CppType::String),
+            "string" => Ok(CppType::String),
+            _ => bail!("Unsupported C++ type: '{}'. Phase 2 supports: int, long, float, double, bool, std::string", type_str),
         }
     }
 
@@ -37,6 +40,7 @@ impl CppType {
             CppType::Float => "jfloat",
             CppType::Double => "jdouble",
             CppType::Bool => "jboolean",
+            CppType::String => "jstring",
         }
     }
 
@@ -49,6 +53,20 @@ impl CppType {
             CppType::Float => "Float",
             CppType::Double => "Double",
             CppType::Bool => "Boolean",
+            CppType::String => "String",
+        }
+    }
+
+    /// Get the C++ type string for forward declarations
+    pub fn to_cpp_type(&self) -> &'static str {
+        match self {
+            CppType::Void => "void",
+            CppType::Int => "int",
+            CppType::Long => "long long",
+            CppType::Float => "float",
+            CppType::Double => "double",
+            CppType::Bool => "bool",
+            CppType::String => "std::string",
         }
     }
 }
@@ -274,21 +292,46 @@ mod tests {
     }
 
     #[test]
-    fn test_unsupported_type_error() {
+    fn test_string_support() {
         let cpp = r#"
             // @ffi
             std::string greet(std::string name) {
-                return "Hello";
+                return "Hello, " + name;
+            }
+
+            // @ffi
+            std::string toUpper(std::string text) {
+                return text;
             }
         "#;
 
         let path = Path::new("test.cpp");
-        let result = parse_cpp_ffi_from_string(cpp, path);
+        let functions = parse_cpp_ffi_from_string(cpp, path).unwrap();
 
-        assert!(result.is_err());
-        let err_msg = result.unwrap_err().to_string();
-        assert!(err_msg.contains("Unsupported C++ type"));
-        assert!(err_msg.contains("std::string"));
+        assert_eq!(functions.len(), 2);
+        assert_eq!(functions[0].name, "greet");
+        assert_eq!(functions[0].return_type, CppType::String);
+        assert_eq!(functions[0].params.len(), 1);
+        assert_eq!(functions[0].params[0].1, CppType::String);
+
+        assert_eq!(functions[1].name, "toUpper");
+        assert_eq!(functions[1].return_type, CppType::String);
+    }
+
+    #[test]
+    fn test_const_string_ref() {
+        let cpp = r#"
+            // @ffi
+            std::string process(std::string input) {
+                return input;
+            }
+        "#;
+
+        let path = Path::new("test.cpp");
+        let functions = parse_cpp_ffi_from_string(cpp, path).unwrap();
+
+        assert_eq!(functions.len(), 1);
+        assert_eq!(functions[0].params[0].1, CppType::String);
     }
 
     #[test]
@@ -298,11 +341,16 @@ mod tests {
         assert_eq!(CppType::Float.to_jni_type(), "jfloat");
         assert_eq!(CppType::Double.to_jni_type(), "jdouble");
         assert_eq!(CppType::Bool.to_jni_type(), "jboolean");
+        assert_eq!(CppType::String.to_jni_type(), "jstring");
 
         assert_eq!(CppType::Int.to_kotlin_type(), "Int");
         assert_eq!(CppType::Long.to_kotlin_type(), "Long");
         assert_eq!(CppType::Float.to_kotlin_type(), "Float");
         assert_eq!(CppType::Double.to_kotlin_type(), "Double");
         assert_eq!(CppType::Bool.to_kotlin_type(), "Boolean");
+        assert_eq!(CppType::String.to_kotlin_type(), "String");
+
+        assert_eq!(CppType::Int.to_cpp_type(), "int");
+        assert_eq!(CppType::String.to_cpp_type(), "std::string");
     }
 }
