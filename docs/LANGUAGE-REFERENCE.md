@@ -127,6 +127,24 @@ val fullName = "$firstName $lastName"
 <Text>{fullName}</Text>
 ```
 
+**Array literals:**
+```whitehall
+val numbers = [1, 2, 3, 4, 5]
+val strings = ["Apple", "Banana", "Cherry"]
+var mutableNums = [10, 20, 30]
+
+val nested = [[1, 2], [3, 4]]
+```
+
+**Transpiles to:**
+```kotlin
+val numbers = listOf(1, 2, 3, 4, 5)
+val strings = listOf("Apple", "Banana", "Cherry")
+var mutableNums by remember { mutableStateOf(mutableListOf(10, 20, 30)) }
+
+val nested = listOf(listOf(1, 2), listOf(3, 4))
+```
+
 ---
 
 ### Data Binding
