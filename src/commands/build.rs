@@ -58,23 +58,33 @@ fn execute_single_file(file_path: &str) -> Result<()> {
         single_config.app.name
     );
 
-    // Initialize toolchain and build APK
-    let toolchain = Toolchain::new()?;
-    toolchain.ensure_all_parallel(&config.toolchain.java, &config.toolchain.gradle)?;
+    // Build APK (skip if FFI-only mode)
+    if !config.ffi.ffi_only {
+        // Initialize toolchain and build APK
+        let toolchain = Toolchain::new()?;
+        toolchain.ensure_all_parallel(&config.toolchain.java, &config.toolchain.gradle)?;
 
-    build_with_gradle(&toolchain, &config, &result.output_dir)?;
+        build_with_gradle(&toolchain, &config, &result.output_dir)?;
+
+        let elapsed = start.elapsed();
+        println!("   {} APK for `{}` v{} ({}) in {:.2}s",
+            "Built".green().bold(),
+            single_config.app.name,
+            config.project.version,
+            single_config.app.package,
+            elapsed.as_secs_f64()
+        );
+    } else {
+        let elapsed = start.elapsed();
+        println!("   {} FFI code generation for `{}` in {:.2}s (FFI-only mode)",
+            "Completed".green().bold(),
+            single_config.app.name,
+            elapsed.as_secs_f64()
+        );
+    }
 
     // Restore original directory
     env::set_current_dir(&original_dir)?;
-
-    let elapsed = start.elapsed();
-    println!("   {} APK for `{}` v{} ({}) in {:.2}s",
-        "Built".green().bold(),
-        single_config.app.name,
-        config.project.version,
-        single_config.app.package,
-        elapsed.as_secs_f64()
-    );
 
     Ok(())
 }
@@ -134,25 +144,35 @@ fn execute_project(manifest_path: &str) -> Result<()> {
         config.project.name
     );
 
-    // 5. Initialize toolchain and build APK
-    let toolchain = Toolchain::new()?;
-    toolchain.ensure_all_parallel(&config.toolchain.java, &config.toolchain.gradle)?;
+    // 5. Build APK (skip if FFI-only mode)
+    if !config.ffi.ffi_only {
+        // Initialize toolchain and build APK
+        let toolchain = Toolchain::new()?;
+        toolchain.ensure_all_parallel(&config.toolchain.java, &config.toolchain.gradle)?;
 
-    build_with_gradle(&toolchain, &config, &result.output_dir)?;
+        build_with_gradle(&toolchain, &config, &result.output_dir)?;
+
+        let elapsed = start.elapsed();
+        println!("   {} APK for `{}` v{} ({}) in {:.2}s",
+            "Built".green().bold(),
+            config.project.name,
+            config.project.version,
+            config.android.package,
+            elapsed.as_secs_f64()
+        );
+    } else {
+        let elapsed = start.elapsed();
+        println!("   {} FFI code generation for `{}` in {:.2}s (FFI-only mode)",
+            "Completed".green().bold(),
+            config.project.name,
+            elapsed.as_secs_f64()
+        );
+    }
 
     // 6. Restore original directory if we changed it
     if project_dir != original_dir {
         env::set_current_dir(&original_dir)?;
     }
-
-    let elapsed = start.elapsed();
-    println!("   {} APK for `{}` v{} ({}) in {:.2}s",
-        "Built".green().bold(),
-        config.project.name,
-        config.project.version,
-        config.android.package,
-        elapsed.as_secs_f64()
-    );
 
     Ok(())
 }

@@ -95,6 +95,9 @@ fn default_kotlin() -> String {
 pub struct FfiConfig {
     /// Enable or disable FFI. If None, auto-detect based on directory existence
     pub enabled: Option<bool>,
+    /// FFI-only mode: skip APK build and only generate FFI bindings
+    #[serde(default)]
+    pub ffi_only: bool,
     #[serde(default)]
     pub cpp: CppConfig,
     #[serde(default)]
@@ -105,6 +108,7 @@ impl Default for FfiConfig {
     fn default() -> Self {
         Self {
             enabled: None, // Auto-detect by default
+            ffi_only: false,
             cpp: CppConfig::default(),
             rust: RustConfig::default(),
         }

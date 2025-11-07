@@ -9,6 +9,7 @@ target_sdk = 34
 
 [ffi]
 enabled = true
+ffi_only = true
 
 [ffi.rust]
 profile = "release"
