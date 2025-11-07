@@ -9,7 +9,7 @@ target_sdk = 34
 
 [ffi]
 enabled = true
-ffi_only = true
+ffi_only = true  # Required: Cargo/CMake native compilation not yet implemented (Phase 1.6)
 
 [ffi.rust]
 profile = "release"

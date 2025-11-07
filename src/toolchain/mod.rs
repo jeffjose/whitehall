@@ -373,23 +373,25 @@ impl Toolchain {
 
         println!("Installing system image for Android {} (this may take a while, ~1GB download)...", target_sdk);
 
-        // Install using sdkmanager
+        // Install using sdkmanager with yes piped for license acceptance
         let sdkmanager = sdk_root.join("cmdline-tools/latest/bin/sdkmanager");
 
-        let output = Command::new(&sdkmanager)
-            .arg(format!("--sdk_root={}", sdk_root.display()))
-            .arg(&package)
+        let status = Command::new("sh")
+            .arg("-c")
+            .arg(format!(
+                "yes | {} --sdk_root={} '{}'",
+                sdkmanager.display(),
+                sdk_root.display(),
+                package
+            ))
             .env("ANDROID_HOME", &sdk_root)
-            .stdin(std::process::Stdio::null())
-            .output()
+            .status()
             .with_context(|| format!("Failed to install system image: {}", package))?;
 
-        if !output.status.success() {
-            let stderr = String::from_utf8_lossy(&output.stderr);
+        if !status.success() {
             anyhow::bail!(
-                "Failed to install system image {}:\n{}",
-                package,
-                stderr
+                "Failed to install system image {}",
+                package
             );
         }
 
