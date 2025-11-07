@@ -8,9 +8,25 @@ This document provides a high-level map of Whitehall's architecture with pointer
 
 ## What is Whitehall?
 
-Whitehall is a **Svelte-inspired framework for Android development** that transpiles a clean, markup-based syntax into Kotlin with Jetpack Compose.
+Whitehall is a **Kotlin superset for Android development** - it's Kotlin with ergonomic enhancements for Jetpack Compose.
 
-**Core Philosophy:** "cargo for Android" - opinionated defaults with project-level control when needed.
+**Core Philosophy:**
+
+1. **Kotlin First** - Any valid Kotlin code is valid Whitehall code
+   - Use data classes, sealed classes, extension functions, coroutines, etc.
+   - Mix pure Kotlin alongside Whitehall syntax in the same file
+   - Zero runtime overhead - transpiles to clean, idiomatic Kotlin/Compose
+
+2. **Additive Syntax** - Whitehall adds convenient features on top:
+   - Component markup syntax for UI (`<Text>`, `<Column>`)
+   - Automatic state management (var → StateFlow)
+   - Data binding shortcuts (`bind:value`, `bind:checked`)
+   - UI conveniences (padding shortcuts, color helpers)
+   - Lifecycle hooks (`onMount`, `onDispose`)
+
+3. **Toolchain Philosophy** - "cargo for Android"
+   - Opinionated defaults with project-level control when needed
+   - Zero-config setup with automatic toolchain management
 
 ---
 
@@ -44,10 +60,16 @@ Whitehall is a **Svelte-inspired framework for Android development** that transp
 | Component | Status | Reference Doc |
 |-----------|--------|---------------|
 | **Transpiler** | ✅ Complete (38/38 tests, 100%) | [REF-TRANSPILER.md](./REF-TRANSPILER.md) |
+| **Pass-Through Architecture** | ✅ Complete (10/10 tests, Phases 0-6) | [PASSTHRU.md](./PASSTHRU.md) |
 | **Build System** | ✅ Fully Implemented | [REF-BUILD-SYSTEM.md](./REF-BUILD-SYSTEM.md) |
 | **State Management** | ✅ Phase 1.1 Complete (Component inline vars) | [REF-STATE-MANAGEMENT.md](./REF-STATE-MANAGEMENT.md) |
 | **Toolchain** | ✅ Fully Implemented (Phases 1-5) | [REF-TOOLCHAIN.md](./REF-TOOLCHAIN.md) |
 | **Web Playground** | ✅ Phase 1 Complete | [REF-WEB-PLAYGROUND.md](./REF-WEB-PLAYGROUND.md) |
+
+**Pass-Through Architecture** enables Whitehall as a true Kotlin superset:
+- Any Kotlin syntax passes through unchanged (data classes, sealed classes, extension functions, etc.)
+- Mix pure Kotlin and Whitehall features in the same file
+- Tested with complex patterns: sealed classes, companion objects, extension properties, DSL builders
 
 **Legend:** ✅ Complete | 🔄 In Progress | ⏳ Planned | 🔮 Future
 
@@ -104,18 +126,32 @@ whitehall/
 
 ```
 .wh files → Parser → AST → Semantic Analysis → Code Generator → .kt files
-                              ↓
-                         Store Registry
-                         Type Checking
-                         Validation
+              ↓                   ↓
+         Pass-Through         Store Registry
+         (Pure Kotlin)        Type Checking
+                              Validation
 ```
 
 **Key Phases:**
 
-1. **Parsing** (`parser.rs`) - Lexer-free recursive descent, handles Kotlin + XML syntax
+1. **Parsing** (`parser.rs`) - Hybrid parsing strategy:
+   - Whitehall-specific syntax (props, markup, directives) → Parsed and transformed
+   - Pure Kotlin syntax (data classes, extension functions, etc.) → Passed through unchanged
+   - Maintains source order and position for accurate error reporting
+
 2. **Semantic Analysis** (`analyzer.rs`) - Build store registry, validate types
+
 3. **Code Generation** (`codegen/compose.rs`) - Transform AST to idiomatic Kotlin/Compose
+   - Whitehall features → Kotlin/Compose equivalents
+   - Pass-through blocks → Output unchanged
+
 4. **Android Scaffold** (`android_scaffold.rs`) - Generate Gradle project structure
+
+**Pass-Through Architecture:**
+- Enables Whitehall as a true Kotlin superset
+- Kotlin blocks captured with context tracking (strings, comments, braces)
+- Tested with complex patterns: sealed classes, companion objects, extension properties, DSL builders
+- Learn more: [PASSTHRU.md](./PASSTHRU.md)
 
 **Learn more:** [REF-TRANSPILER.md](./REF-TRANSPILER.md)
 

@@ -1,6 +1,14 @@
 # Whitehall Language Reference
 
-Svelte-inspired Android framework transpiling to Kotlin + Jetpack Compose.
+**A Kotlin Superset for Android Development**
+
+Whitehall is Kotlin with ergonomic enhancements for Jetpack Compose. Write idiomatic Kotlin alongside reactive UI syntax.
+
+**Key Philosophy:**
+- ✅ **Any valid Kotlin code is valid Whitehall code** - Use data classes, sealed classes, extension functions, coroutines, etc.
+- ✅ **Additive syntax** - Whitehall adds convenient shortcuts on top of Kotlin (component syntax, state binding, reactive primitives)
+- ✅ **Zero runtime overhead** - Transpiles to clean, idiomatic Kotlin/Compose code
+- ✅ **Gradual adoption** - Mix Kotlin and Whitehall syntax in the same file
 
 ## Installation
 
@@ -9,6 +17,59 @@ cargo install whitehall
 whitehall init myapp && cd myapp
 whitehall run
 ```
+
+---
+
+## Kotlin Superset Features
+
+**Pure Kotlin works as-is:**
+```whitehall
+// Use any Kotlin feature - data classes, sealed classes, extension functions, etc.
+data class User(val id: String, val name: String)
+
+sealed class LoadingState<out T> {
+    object Idle : LoadingState<Nothing>()
+    data class Success<T>(val data: T) : LoadingState<T>()
+}
+
+val User.displayName: String
+    get() = "$name (#$id)"
+
+fun List<User>.findById(id: String): User? = find { it.id == id }
+
+typealias UserFilter = (User) -> Boolean
+
+// Mix with Whitehall reactive primitives
+class UserStore {
+    var users: List<User> = []  // Auto-reactive via StateFlow
+
+    suspend fun loadUsers() {   // Auto-wrapped in viewModelScope
+        users = api.fetchUsers()
+    }
+}
+
+// Component markup
+<LazyColumn>
+  @for (user in store.users, key = { it.id }) {
+    <Text>{user.displayName}</Text>
+  }
+</LazyColumn>
+```
+
+**What Whitehall adds:**
+- 📦 Component markup syntax (`<Text>`, `<Column>`, etc.)
+- 🔄 Automatic state management (var → StateFlow)
+- 🎯 Data binding shortcuts (`bind:value`, `bind:checked`)
+- 🎨 UI conveniences (padding shortcuts, color helpers)
+- ⚡ Lifecycle hooks (`onMount`, `onDispose`)
+- 🚀 ViewModel auto-generation
+
+**What stays pure Kotlin:**
+- All language features (extension functions, sealed classes, etc.)
+- Type system and inference
+- Coroutines and suspend functions
+- Standard library
+- Third-party Kotlin libraries
 
 ---
 

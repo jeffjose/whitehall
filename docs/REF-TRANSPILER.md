@@ -16,7 +16,9 @@ All core features implemented and production-ready. All tests passing - transpil
 
 The Whitehall transpiler converts `.wh` files into idiomatic Kotlin with Jetpack Compose code.
 
-**Architecture:** Lexer-free recursive descent parser → AST → Semantic analysis → Code generation
+**Architecture:** Hybrid parsing (transforms Whitehall syntax, passes through pure Kotlin) → AST → Semantic analysis → Code generation
+
+**Key Innovation:** Pass-through architecture enables Whitehall as a true Kotlin superset - any valid Kotlin code works unchanged.
 
 **Location:** `src/transpiler/`
 
@@ -41,19 +43,30 @@ src/transpiler/
 ```
 .wh file (string)
     ↓
-Parser (parser.rs)
-    ├─ Parse imports: import $models.User
-    ├─ Parse props: @prop val name: Type
-    ├─ Parse state: var/val declarations
-    ├─ Parse classes: @store class MyStore { ... }
-    ├─ Parse functions: fun name() { body }
-    ├─ Parse lifecycle: onMount { }, onDispose { }
-    └─ Parse markup: <Component>...</Component>
+Parser (parser.rs) - Hybrid Strategy
+    ├─ Whitehall Syntax (Parsed & Transformed):
+    │   ├─ Parse imports: import $models.User
+    │   ├─ Parse props: @prop val name: Type
+    │   ├─ Parse state: var/val declarations
+    │   ├─ Parse classes: @store class MyStore { ... }
+    │   ├─ Parse functions: fun name() { body }
+    │   ├─ Parse lifecycle: onMount { }, onDispose { }
+    │   └─ Parse markup: <Component>...</Component>
+    │
+    └─ Pure Kotlin Syntax (Passed Through):
+        ├─ data class User(...)
+        ├─ sealed class Result<T> { ... }
+        ├─ val Type.property: String get() = ...
+        ├─ fun List<T>.extension(): T? = ...
+        ├─ typealias Predicate = (T) -> Boolean
+        ├─ operator fun plus(...) = ...
+        └─ Any other Kotlin syntax
     ↓
 AST (ast.rs)
-    ├─ WhitehallFile { imports, props, state, classes, markup }
+    ├─ WhitehallFile { imports, props, state, classes, markup, kotlin_blocks }
     ├─ Markup enum (Component, Text, Interpolation, IfElse, ForLoop, etc.)
-    └─ ClassDeclaration (for @store classes)
+    ├─ ClassDeclaration (for @store classes)
+    └─ KotlinBlock (pass-through content with position tracking)
     ↓
 Semantic Analyzer (analyzer.rs)
     ├─ Build store registry (cross-file detection)
@@ -66,11 +79,19 @@ Code Generator (codegen/compose.rs)
     ├─ If no: generate_component() → Composable Kotlin
     ├─ Transform props (spacing → Arrangement.spacedBy)
     ├─ Transform expressions (route aliases, lambda arrows)
+    ├─ Output pass-through kotlin_blocks unchanged
     ├─ Collect imports recursively
     └─ Format output with proper indentation
     ↓
-Generated Kotlin Code
+Generated Kotlin Code (Clean, idiomatic)
 ```
+
+**Pass-Through Architecture (Phases 0-6 Complete):**
+- Enables Whitehall as a true Kotlin superset
+- Context-aware parsing: tracks strings, comments, braces/parens
+- Maintains source order and position
+- Tested with complex patterns: sealed classes, companion objects, extension properties, DSL builders
+- Learn more: [PASSTHRU.md](./PASSTHRU.md)
 
 ---
 
