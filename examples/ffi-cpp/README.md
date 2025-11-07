@@ -100,6 +100,37 @@ All generated automatically!
 - **Strings**: `std::string`
 - **Arrays**: `std::vector<int>`, `std::vector<long>`, `std::vector<float>`, `std::vector<double>`, `std::vector<bool>`, `std::vector<std::string>`
 
+## Custom CMake Configuration (Optional)
+
+Whitehall auto-generates `build/cmake/CMakeLists.txt` for you. However, if you need custom build configuration:
+
+**Create `src/ffi/cpp/CMakeLists.txt`** and Whitehall will use it instead:
+
+```cmake
+# Custom CMakeLists.txt with additional dependencies
+cmake_minimum_required(VERSION 3.22.1)
+project("math")
+
+add_library(math SHARED
+    ${CMAKE_SOURCE_DIR}/src/ffi/cpp/math.cpp
+    ${CMAKE_SOURCE_DIR}/build/generated/jni/math_bridge.cpp
+)
+
+set(CMAKE_CXX_STANDARD 20)  # Use C++20
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+
+# Add custom flags
+target_compile_options(math PRIVATE -O3 -march=native)
+
+# Link custom libraries
+find_library(log-lib log)
+target_link_libraries(math ${log-lib} your-custom-lib)
+```
+
+**Note**: If you provide your own CMakeLists.txt, you must include both:
+- Your source files: `${CMAKE_SOURCE_DIR}/src/ffi/cpp/*.cpp`
+- The generated JNI bridge: `${CMAKE_SOURCE_DIR}/build/generated/jni/*_bridge.cpp`
+
 ## Key Benefits
 
 ✅ **No JNI Boilerplate** - Just write clean C++ code

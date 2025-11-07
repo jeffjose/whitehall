@@ -94,23 +94,32 @@ fn build_cpp_ffi(config: &Config, ffi_dir: &Path, build_dir: &Path) -> Result<()
     fs::write(&jni_file, jni_code)
         .context(format!("Failed to write JNI bridge: {}", jni_file.display()))?;
 
-    // 4. Generate CMakeLists.txt
+    // 4. CMakeLists.txt: Use user-provided or auto-generate
     let cmake_dir = build_dir.join("cmake");
     fs::create_dir_all(&cmake_dir)
         .context("Failed to create CMake output directory")?;
 
-    let cmake_code = generate_cmake(
-        "math", // TODO: Make this configurable
-        &source_files,
-        jni_file.to_string_lossy().as_ref(),
-        &config.ffi.cpp.standard,
-        &config.ffi.cpp.flags,
-        &config.ffi.cpp.libraries,
-    );
-
     let cmake_file = cmake_dir.join("CMakeLists.txt");
-    fs::write(&cmake_file, cmake_code)
-        .context(format!("Failed to write CMakeLists.txt: {}", cmake_file.display()))?;
+    let user_cmake = ffi_dir.join("cpp/CMakeLists.txt");
+
+    if user_cmake.exists() {
+        // User provided their own CMakeLists.txt - copy it
+        fs::copy(&user_cmake, &cmake_file)
+            .context(format!("Failed to copy user CMakeLists.txt from {}", user_cmake.display()))?;
+    } else {
+        // Auto-generate CMakeLists.txt
+        let cmake_code = generate_cmake(
+            "math", // TODO: Make this configurable
+            &source_files,
+            jni_file.to_string_lossy().as_ref(),
+            &config.ffi.cpp.standard,
+            &config.ffi.cpp.flags,
+            &config.ffi.cpp.libraries,
+        );
+
+        fs::write(&cmake_file, cmake_code)
+            .context(format!("Failed to write CMakeLists.txt: {}", cmake_file.display()))?;
+    }
 
     // 5. TODO: Run CMake build (Phase 1.6)
     // This would require:
