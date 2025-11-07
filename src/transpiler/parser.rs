@@ -94,7 +94,19 @@ impl Parser {
             } else if parsed_store_class && self.is_kotlin_syntax() {
                 // Pass-through: Kotlin syntax after a store class that doesn't need transformation
                 // Only do this if we've already parsed a store class
-                kotlin_blocks.push(self.capture_kotlin_block()?);
+                let mut block = self.capture_kotlin_block()?;
+
+                // If there are pending annotations, prepend them to the kotlin block content
+                if !pending_annotations.is_empty() {
+                    let annotations_str = pending_annotations.iter()
+                        .map(|a| format!("@{}", a))
+                        .collect::<Vec<_>>()
+                        .join("\n");
+                    block.content = format!("{}\n{}", annotations_str, block.content);
+                    pending_annotations.clear();
+                }
+
+                kotlin_blocks.push(block);
             } else if !parsed_store_class && self.peek_word() == Some("suspend") {
                 // Handle suspend fun (only before store class, after that they pass through)
                 self.consume_word("suspend");
