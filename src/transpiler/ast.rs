@@ -70,6 +70,7 @@ pub struct PropertyDeclaration {
     pub type_annotation: Option<String>, // e.g., "String"
     pub initial_value: Option<String>,   // e.g., "\"\"" or "false"
     pub getter: Option<String>,          // Custom getter for derived properties
+    pub visibility: Option<String>,      // "private", "protected", "public", or None (default)
 }
 
 #[derive(Debug, Clone, PartialEq)]

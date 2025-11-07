@@ -3211,37 +3211,64 @@ impl ComposeBackend {
 
         output.push_str(" : ViewModel() {\n");
 
-        // Generate UiState data class
-        output.push_str("    data class UiState(\n");
-        for (i, prop) in class.properties.iter().enumerate() {
-            // Skip derived properties (with getters) - they don't go in UiState
-            if prop.getter.is_some() {
-                continue;
-            }
+        // Separate public/default visibility properties from private properties
+        let public_properties: Vec<_> = class.properties.iter()
+            .filter(|p| p.visibility.is_none() || p.visibility.as_deref() == Some("public"))
+            .collect();
+        let private_properties: Vec<_> = class.properties.iter()
+            .filter(|p| p.visibility.as_deref() == Some("private"))
+            .collect();
 
-            // Infer type from initial value if no type annotation
-            let type_str = if let Some(type_ann) = &prop.type_annotation {
-                type_ann.clone()
-            } else if let Some(init_val) = &prop.initial_value {
-                self.infer_type_from_value(init_val)
-            } else {
-                "String".to_string()
-            };
-            let default_val = prop.initial_value.as_deref().unwrap_or("\"\"");
-            output.push_str(&format!("        val {}: {} = {}", prop.name, type_str, default_val));
-            if i < class.properties.len() - 1 {
-                output.push(',');
+        // Generate UiState data class (only for public/default properties without getters)
+        let ui_state_properties: Vec<_> = public_properties.iter()
+            .filter(|p| p.getter.is_none())
+            .copied()
+            .collect();
+
+        if !ui_state_properties.is_empty() {
+            output.push_str("    data class UiState(\n");
+            for (i, prop) in ui_state_properties.iter().enumerate() {
+                // Infer type from initial value if no type annotation
+                let type_str = if let Some(type_ann) = &prop.type_annotation {
+                    type_ann.clone()
+                } else if let Some(init_val) = &prop.initial_value {
+                    self.infer_type_from_value(init_val)
+                } else {
+                    "String".to_string()
+                };
+                let default_val = prop.initial_value.as_deref().unwrap_or("\"\"");
+                let comma = if i < ui_state_properties.len() - 1 { "," } else { "" };
+                output.push_str(&format!("        val {}: {} = {}{}\n", prop.name, type_str, default_val, comma));
             }
+            output.push_str("    )\n\n");
+
+            // Generate StateFlow
+            output.push_str("    private val _uiState = MutableStateFlow(UiState())\n");
+            output.push_str("    val uiState: StateFlow<UiState> = _uiState.asStateFlow()\n\n");
+        }
+
+        // Generate private properties as direct class fields
+        for prop in &private_properties {
+            let vis = "private";
+            let mutability = if prop.mutable { "var" } else { "val" };
+            let type_str = if let Some(type_ann) = &prop.type_annotation {
+                format!(": {}", type_ann)
+            } else {
+                String::new()
+            };
+            let init_val = if let Some(val) = &prop.initial_value {
+                format!(" = {}", val)
+            } else {
+                String::new()
+            };
+            output.push_str(&format!("    {} {} {}{}{}\n", vis, mutability, prop.name, type_str, init_val));
+        }
+        if !private_properties.is_empty() {
             output.push('\n');
         }
-        output.push_str("    )\n\n");
 
-        // Generate StateFlow
-        output.push_str("    private val _uiState = MutableStateFlow(UiState())\n");
-        output.push_str("    val uiState: StateFlow<UiState> = _uiState.asStateFlow()\n\n");
-
-        // Generate property accessors
-        for prop in &class.properties {
+        // Generate property accessors (only for public/default properties)
+        for prop in &public_properties {
             if prop.getter.is_some() {
                 // Derived property with getter
                 let type_str = if let Some(type_ann) = &prop.type_annotation {

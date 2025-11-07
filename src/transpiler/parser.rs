@@ -532,9 +532,27 @@ impl Parser {
                 break;
             }
 
-            // Check for property (var/val)
-            if self.peek_word() == Some("var") || self.peek_word() == Some("val") {
-                properties.push(self.parse_property_declaration()?);
+            // Check for property (with optional visibility modifier)
+            if self.peek_word() == Some("var") || self.peek_word() == Some("val")
+                || self.peek_word() == Some("private") || self.peek_word() == Some("protected") || self.peek_word() == Some("public") {
+
+                // Check for visibility modifier
+                let visibility = if self.peek_word() == Some("private")
+                    || self.peek_word() == Some("protected")
+                    || self.peek_word() == Some("public") {
+                    let vis = self.parse_identifier()?;
+                    self.skip_whitespace();
+                    Some(vis)
+                } else {
+                    None
+                };
+
+                // Now we must have var/val after optional visibility
+                if self.peek_word() == Some("var") || self.peek_word() == Some("val") {
+                    properties.push(self.parse_property_declaration_with_visibility(visibility)?);
+                } else {
+                    return Err(self.error_at_pos("Expected 'var' or 'val' after visibility modifier"));
+                }
             }
             // Check for function
             else if self.peek_word() == Some("fun") || self.peek_word() == Some("suspend") {
@@ -607,7 +625,11 @@ impl Parser {
     }
 
     fn parse_property_declaration(&mut self) -> Result<PropertyDeclaration, String> {
-        // Parse: var name: Type = value or val name = value or val name get() = expression
+        self.parse_property_declaration_with_visibility(None)
+    }
+
+    fn parse_property_declaration_with_visibility(&mut self, visibility: Option<String>) -> Result<PropertyDeclaration, String> {
+        // Parse: [visibility] var name: Type = value or [visibility] val name = value or [visibility] val name get() = expression
         let mutable = if self.consume_word("var") {
             true
         } else if self.consume_word("val") {
@@ -669,6 +691,7 @@ impl Parser {
             type_annotation,
             initial_value,
             getter,
+            visibility,
         })
     }
 
@@ -1599,6 +1622,12 @@ impl Parser {
             Some("var")
         } else if remaining.starts_with("val ") || remaining.starts_with("val\n") {
             Some("val")
+        } else if remaining.starts_with("private ") {
+            Some("private")
+        } else if remaining.starts_with("protected ") {
+            Some("protected")
+        } else if remaining.starts_with("public ") {
+            Some("public")
         } else if remaining.starts_with("@prop") {
             Some("@prop")
         } else if remaining.starts_with("fun ") {

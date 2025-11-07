@@ -4,11 +4,11 @@ Issues discovered during Pokemon app example development.
 
 ## Status Summary
 
-**✅ Fixed (1):**
+**✅ Fixed (2):**
 - Top-level Kotlin imports
-
-**❌ Blocking Issues (3):**
 - Private/public class-level fields with initialization
+
+**❌ Blocking Issues (2):**
 - Data classes outside main class
 - Hex colors incorrectly transpiled
 
@@ -41,31 +41,27 @@ class MyStore {
 
 ---
 
-### 2. Private/public class-level fields with initialization
+### 2. Private/public class-level fields with initialization ~~not supported~~ ✅ FIXED
 
-**Issue:** Parser can't handle `private val` or `private var` fields at class level with complex initialization
+**Issue:** ~~Parser can't handle `private val` or `private var` fields at class level with complex initialization~~
 
 **Example:**
 ```kotlin
 class MyStore {
-    private val client = OkHttpClient()  // ❌ Parser error
-    private val json = Json { }          // ❌ Parser error
+    private val client = OkHttpClient()  // ✅ Now works!
+    private val json = Json { }          // ✅ Now works!
 
     var data = []  // ✅ Works
 }
 ```
 
-**Current State:** ❌ Not supported
-**Location:** `src/stores/PokemonStore.wh:7-8`
-**Error:** `[Line 7:5] Unexpected content in class body`
+**Current State:** ✅ **FIXED** - Private/protected/public visibility modifiers now supported on class-level fields
+**Fixed:** 2025-11-07
+**Details:** Parser now recognizes visibility modifiers before var/val declarations. Codegen outputs private fields as direct class fields (not in UiState). Public fields remain reactive in UiState.
 
-**Workaround:** Initialize inside functions instead:
-```kotlin
-suspend fun loadData() {
-    val client = OkHttpClient()  // ✅ Works in function
-    val json = Json { }
-}
-```
+~~**Location:** `src/stores/PokemonStore.wh:7-8`~~
+~~**Error:** `[Line 7:5] Unexpected content in class body`~~
+~~**Workaround:** Initialize inside functions instead~~
 
 ---
 
@@ -175,7 +171,7 @@ Box(modifier = Modifier.size(48.dp, 48.dp))
 **High Priority (blocks real apps):**
 1. Hex color transpilation bug
 2. Top-level data classes
-3. Private val fields with initialization
+3. ~~Private val fields with initialization~~ ✅ FIXED
 
 **Medium Priority:**
 4. ~~Top-level imports (Kotlin interop)~~ ✅ FIXED
@@ -193,16 +189,18 @@ See `examples/pokemon-app/` for real-world example hitting remaining issues.
 
 **Current Status:**
 - ✅ Import statements now work
-- ❌ Still blocked by: private class fields, data classes outside main class, hex color bug
+- ✅ Private class fields now work
+- ❌ Still blocked by: data classes outside main class, hex color bug
 
 **To reproduce remaining issues:**
 ```bash
 cd examples/pokemon-app
 cargo run --manifest-path ../../Cargo.toml -- compile src/stores/PokemonStore.wh
-# Error: [Line 12:5] Unexpected content in class body (private val field)
+# Error: [Line 63:1] Expected component, found: "data class PokemonListResponse"
 ```
 
 ---
 
 *Last Updated: 2025-11-07*
 *Import support added: 2025-11-07*
+*Private field support added: 2025-11-07*
