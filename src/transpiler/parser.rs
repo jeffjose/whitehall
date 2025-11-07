@@ -95,15 +95,16 @@ impl Parser {
                 // Pass-through: Kotlin syntax after a store class that doesn't need transformation
                 // Only do this if we've already parsed a store class
                 kotlin_blocks.push(self.capture_kotlin_block()?);
-            } else if self.peek_word() == Some("suspend") {
-                // Handle suspend fun
+            } else if !parsed_store_class && self.peek_word() == Some("suspend") {
+                // Handle suspend fun (only before store class, after that they pass through)
                 self.consume_word("suspend");
                 self.skip_whitespace();
                 if !self.consume_word("fun") {
                     return Err(self.error_at_pos("Expected 'fun' after 'suspend'"));
                 }
                 functions.push(self.parse_function_declaration(true)?);
-            } else if self.consume_word("fun") {
+            } else if !parsed_store_class && self.consume_word("fun") {
+                // Parse functions only before store class, after that they pass through
                 functions.push(self.parse_function_declaration(false)?);
             } else if self.consume_word("onMount") {
                 lifecycle_hooks.push(self.parse_lifecycle_hook("onMount")?);
@@ -1759,13 +1760,8 @@ impl Parser {
            remaining.starts_with("sealed class ") ||
            remaining.starts_with("sealed interface ") ||
            remaining.starts_with("enum class ") ||
-           remaining.starts_with("typealias ") {
-            return true;
-        }
-
-        // For Phase 2, pass through all top-level functions to keep it simple
-        // Later phases can be more selective about which functions to parse vs pass through
-        if remaining.starts_with("fun ") {
+           remaining.starts_with("typealias ") ||
+           remaining.starts_with("fun ") {
             return true;
         }
 
@@ -1832,7 +1828,18 @@ impl Parser {
     }
 
     /// Capture a Kotlin code block that passes through unchanged.
-    /// Uses simple balanced brace/paren matching (Phase 2 - no string/comment handling yet).
+    /// Phase 4: Handles string literals AND comments correctly.
+    ///
+    /// IMPORTANT: We must track both strings and comments because they can contain
+    /// braces/parens that should not affect depth counting. For example:
+    ///   data class Foo(
+    ///       val x: String = "{ not a brace }",  // Also not { a brace }
+    ///       val y: Int  /* Neither is { this } */
+    ///   )
+    ///
+    /// The key insight is that strings and comments are mutually exclusive contexts:
+    /// - Comment markers inside strings are just text: "// not a comment"
+    /// - String delimiters inside comments are just text: /* "not a string" */
     fn capture_kotlin_block(&mut self) -> Result<KotlinBlock, String> {
         let start_pos = self.pos;
         let block_type = self.detect_block_type();
@@ -1842,6 +1849,16 @@ impl Parser {
         let mut paren_depth = 0;
         let mut found_opening_brace = false;
         let mut found_opening_paren = false;
+
+        // String literal tracking
+        let mut in_string = false;           // Regular string: "..."
+        let mut in_char = false;             // Character literal: '...'
+        let mut in_multiline_string = false; // Multi-line string: """..."""
+        let mut escaped = false;             // Previous char was backslash
+
+        // Comment tracking (Phase 4)
+        let mut in_line_comment = false;     // Line comment: // ... until \n
+        let mut in_block_comment = false;    // Block comment: /* ... */
 
         // Guard against infinite loops
         let mut iterations = 0;
@@ -1854,63 +1871,193 @@ impl Parser {
             }
 
             let ch = self.peek_char().unwrap();
+            let next_ch = self.peek_ahead(1);
+            let next_next_ch = self.peek_ahead(2);
 
-            match ch {
-                '(' => {
-                    found_opening_paren = true;
-                    paren_depth += 1;
-                    self.advance_char();
-                }
-                ')' => {
-                    if paren_depth > 0 {
-                        paren_depth -= 1;
-                        self.advance_char();
+            // ========== ESCAPE SEQUENCES ==========
+            // Handle escape sequences in regular strings and char literals
+            // Multi-line strings (raw strings) don't process escape sequences the same way
+            if escaped {
+                escaped = false;
+                self.advance_char();
+                continue;
+            }
 
-                        // If we're back to depth 0 for parens and no braces were found, we're done
-                        if paren_depth == 0 && brace_depth == 0 && found_opening_paren && !found_opening_brace {
-                            break;
-                        }
-                    } else {
-                        // Unmatched closing paren - this is an error
-                        return Err(self.error_at_pos("Unmatched closing parenthesis in Kotlin block"));
-                    }
-                }
-                '{' => {
-                    found_opening_brace = true;
-                    brace_depth += 1;
-                    self.advance_char();
-                }
-                '}' => {
-                    if brace_depth > 0 {
-                        brace_depth -= 1;
-                        self.advance_char();
+            // Check for backslash escape in regular strings/chars (not multi-line)
+            if ch == '\\' && (in_string || in_char) && !in_multiline_string {
+                escaped = true;
+                self.advance_char();
+                continue;
+            }
 
-                        // If we're back to depth 0 for braces, we're done
-                        if brace_depth == 0 && found_opening_brace {
-                            break;
-                        }
-                    } else {
-                        // Unmatched closing brace - this is an error
-                        return Err(self.error_at_pos("Unmatched closing brace in Kotlin block"));
-                    }
-                }
-                '\n' => {
-                    self.advance_char();
+            // ========== COMMENT HANDLING ==========
+            // Comments can only start when NOT in a string
+            // Strings can only start when NOT in a comment
+            // This ensures mutual exclusion
 
-                    // At depth 0 (before any braces/parens or after balanced), check for new declaration
-                    if brace_depth == 0 && paren_depth == 0 {
-                        self.skip_whitespace();
-                        if self.is_top_level_keyword() {
-                            // Hit a new top-level declaration, stop capturing
-                            break;
-                        }
-                    }
-                }
-                _ => {
-                    self.advance_char();
+            let in_any_string = in_string || in_char || in_multiline_string;
+            let in_any_comment = in_line_comment || in_block_comment;
+
+            // Check for COMMENT START (only when not already in a string)
+            if !in_any_string && !in_block_comment {
+                // Line comment: //
+                if ch == '/' && next_ch == Some('/') {
+                    in_line_comment = true;
+                    self.advance_char(); // First /
+                    self.advance_char(); // Second /
+                    continue;
                 }
             }
+
+            if !in_any_string && !in_line_comment {
+                // Block comment: /*
+                if ch == '/' && next_ch == Some('*') {
+                    in_block_comment = true;
+                    self.advance_char(); // /
+                    self.advance_char(); // *
+                    continue;
+                }
+            }
+
+            // Check for COMMENT END
+            if in_line_comment && ch == '\n' {
+                // Line comment ends at newline
+                in_line_comment = false;
+                self.advance_char();
+
+                // After line comment ends, check for new declaration at depth 0
+                if brace_depth == 0 && paren_depth == 0 {
+                    self.skip_whitespace();
+                    if self.is_top_level_keyword() {
+                        break;
+                    }
+                }
+                continue;
+            }
+
+            if in_block_comment && ch == '*' && next_ch == Some('/') {
+                // Block comment ends at */
+                in_block_comment = false;
+                self.advance_char(); // *
+                self.advance_char(); // /
+                continue;
+            }
+
+            // If we're in a comment, skip everything else (don't process strings or structure)
+            if in_any_comment {
+                self.advance_char();
+                continue;
+            }
+
+            // ========== STRING HANDLING ==========
+            // From here on, we're NOT in a comment, so we can process strings
+
+            // Check for multi-line string delimiters: """
+            // Must check before single " to avoid false positives
+            if ch == '"' && next_ch == Some('"') && next_next_ch == Some('"') {
+                // Toggle multi-line string state
+                in_multiline_string = !in_multiline_string;
+                self.advance_char(); // First "
+                self.advance_char(); // Second "
+                self.advance_char(); // Third "
+                continue;
+            }
+
+            // Check for regular string/char delimiters (only when not in multi-line string)
+            if !in_multiline_string {
+                match ch {
+                    '"' if !in_char => {
+                        in_string = !in_string;
+                        self.advance_char();
+                        continue;
+                    }
+                    '\'' if !in_string => {
+                        in_char = !in_char;
+                        self.advance_char();
+                        continue;
+                    }
+                    _ => {}
+                }
+            }
+
+            // ========== STRUCTURAL CHARACTER TRACKING ==========
+            // Only track braces/parens when NOT inside any string literal
+            if !in_string && !in_char && !in_multiline_string {
+                match ch {
+                    '(' => {
+                        found_opening_paren = true;
+                        paren_depth += 1;
+                        self.advance_char();
+                    }
+                    ')' => {
+                        if paren_depth > 0 {
+                            paren_depth -= 1;
+                            self.advance_char();
+
+                            // If we're back to depth 0 for parens and no braces were found, we're done
+                            if paren_depth == 0 && brace_depth == 0 && found_opening_paren && !found_opening_brace {
+                                break;
+                            }
+                        } else {
+                            // Unmatched closing paren - this is an error
+                            return Err(self.error_at_pos("Unmatched closing parenthesis in Kotlin block"));
+                        }
+                    }
+                    '{' => {
+                        found_opening_brace = true;
+                        brace_depth += 1;
+                        self.advance_char();
+                    }
+                    '}' => {
+                        if brace_depth > 0 {
+                            brace_depth -= 1;
+                            self.advance_char();
+
+                            // If we're back to depth 0 for braces, we're done
+                            if brace_depth == 0 && found_opening_brace {
+                                break;
+                            }
+                        } else {
+                            // Unmatched closing brace - this is an error
+                            return Err(self.error_at_pos("Unmatched closing brace in Kotlin block"));
+                        }
+                    }
+                    '\n' => {
+                        self.advance_char();
+
+                        // At depth 0 (before any braces/parens or after balanced), check for new declaration
+                        if brace_depth == 0 && paren_depth == 0 {
+                            self.skip_whitespace();
+                            if self.is_top_level_keyword() {
+                                // Hit a new top-level declaration, stop capturing
+                                break;
+                            }
+                        }
+                    }
+                    _ => {
+                        self.advance_char();
+                    }
+                }
+            } else {
+                // Inside a string literal, just advance without tracking structure
+                self.advance_char();
+            }
         }
+
+        // Sanity checks: we should not end with unclosed strings or comments
+        if in_string {
+            return Err(self.error_at_pos("Unclosed string literal in Kotlin block"));
+        }
+        if in_char {
+            return Err(self.error_at_pos("Unclosed character literal in Kotlin block"));
+        }
+        if in_multiline_string {
+            return Err(self.error_at_pos("Unclosed multi-line string literal in Kotlin block"));
+        }
+        if in_block_comment {
+            return Err(self.error_at_pos("Unclosed block comment in Kotlin block"));
+        }
+        // Note: in_line_comment at EOF is OK - line comments can end at EOF
 
         // Extract the captured content
         let content = self.input[start_pos..self.pos].trim().to_string();
