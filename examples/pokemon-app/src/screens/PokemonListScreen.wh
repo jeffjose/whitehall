@@ -1,0 +1,50 @@
+import $.stores.PokemonStore
+import $.components.PokemonCard
+
+val store = PokemonStore()
+
+onMount {
+  store.loadPokemonList()
+}
+
+<Column fillMaxWidth={true}>
+  <Box
+    backgroundColor="#6200EE"
+    px={16}
+    py={20}>
+    <Text
+      fontSize={28}
+      fontWeight="bold"
+      color="#FFFFFF">
+      Pokédex
+    </Text>
+  </Box>
+
+  @if (store.error != null) {
+    <Box p={16}>
+      <Text color="#D32F2F">
+        Error: {store.error}
+      </Text>
+      <Spacer h={8} />
+      <Button
+        text="Retry"
+        onClick={() => store.loadPokemonList()} />
+    </Box>
+  } else if (store.isLoading) {
+    <Box p={32}>
+      <CircularProgressIndicator />
+    </Box>
+  } else {
+    <LazyColumn spacing={8} padding={16}>
+      @for (pokemon in store.pokemonList, key = { it.name }) {
+        <PokemonCard
+          name={pokemon.name}
+          id={store.getPokemonId(pokemon.url)}
+          onClick={() => {
+            val pokemonId = store.getPokemonId(pokemon.url)
+            navigate($routes.detail(id = pokemonId))
+          }} />
+      }
+    </LazyColumn>
+  }
+</Column>

@@ -1,0 +1,149 @@
+import $.stores.PokemonStore
+
+@prop val id: Int
+
+val store = PokemonStore()
+
+onMount {
+  store.loadPokemonDetail(id)
+}
+
+<Column fillMaxWidth={true}>
+  <Box
+    backgroundColor="#6200EE"
+    px={16}
+    py={16}>
+    <Row spacing={12}>
+      <Button
+        text="← Back"
+        onClick={() => navigateBack()} />
+      <Text
+        fontSize={24}
+        fontWeight="bold"
+        color="#FFFFFF">
+        Details
+      </Text>
+    </Row>
+  </Box>
+
+  @if (store.error != null) {
+    <Box p={16}>
+      <Text color="#D32F2F">
+        Error: {store.error}
+      </Text>
+    </Box>
+  } else if (store.isLoading) {
+    <Box p={32}>
+      <CircularProgressIndicator />
+    </Box>
+  } else if (store.selectedPokemon != null) {
+    val pokemon = store.selectedPokemon!!
+
+    <Column spacing={24} p={16}>
+      <Card px={16} py={20}>
+        <Column spacing={16}>
+          @if (pokemon.sprites.front_default != null) {
+            <AsyncImage
+              url={pokemon.sprites.front_default}
+              width={200}
+              height={200} />
+          }
+
+          <Text
+            fontSize={32}
+            fontWeight="bold">
+            {pokemon.name.capitalize()}
+          </Text>
+
+          <Row spacing={16}>
+            <Column spacing={4}>
+              <Text
+                fontSize={12}
+                color="secondary">
+                Height
+              </Text>
+              <Text fontSize={18}>
+                {pokemon.height / 10.0}m
+              </Text>
+            </Column>
+
+            <Column spacing={4}>
+              <Text
+                fontSize={12}
+                color="secondary">
+                Weight
+              </Text>
+              <Text fontSize={18}>
+                {pokemon.weight / 10.0}kg
+              </Text>
+            </Column>
+          </Row>
+        </Column>
+      </Card>
+
+      <Card px={16} py={16}>
+        <Column spacing={12}>
+          <Text
+            fontSize={20}
+            fontWeight="bold">
+            Types
+          </Text>
+
+          <Row spacing={8}>
+            @for (typeSlot in pokemon.types, key = { it.type.name }) {
+              <Box
+                backgroundColor="#03DAC6"
+                px={16}
+                py={8}>
+                <Text
+                  fontSize={14}
+                  fontWeight="bold"
+                  color="#000000">
+                  {typeSlot.type.name.uppercase()}
+                </Text>
+              </Box>
+            }
+          </Row>
+        </Column>
+      </Card>
+
+      <Card px={16} py={16}>
+        <Column spacing={12}>
+          <Text
+            fontSize={20}
+            fontWeight="bold">
+            Base Stats
+          </Text>
+
+          @for (statSlot in pokemon.stats, key = { it.stat.name }) {
+            <Column spacing={4}>
+              <Row spacing={8}>
+                <Text
+                  fontSize={14}
+                  color="secondary"
+                  fillMaxWidth={true}>
+                  {statSlot.stat.name.replace("-", " ").capitalize()}
+                </Text>
+                <Text
+                  fontSize={14}
+                  fontWeight="bold">
+                  {statSlot.base_stat}
+                </Text>
+              </Row>
+
+              <Box
+                height={8}
+                backgroundColor="#E0E0E0"
+                fillMaxWidth={true}>
+                <Box
+                  height={8}
+                  backgroundColor="#6200EE"
+                  width={statSlot.base_stat * 100 / 255} />
+              </Box>
+            </Column>
+          }
+        </Column>
+      </Card>
+    </Column>
+  }
+</Column>

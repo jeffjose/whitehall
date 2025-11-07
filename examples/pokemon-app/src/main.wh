@@ -1,0 +1,12 @@
+import $.screens.PokemonListScreen
+import $.screens.PokemonDetailScreen
+
+<NavHost startDestination="list">
+  <NavDestination route="list">
+    <PokemonListScreen />
+  </NavDestination>
+
+  <NavDestination route="detail/{id}">
+    <PokemonDetailScreen id={$screen.params.id} />
+  </NavDestination>
+</NavHost>

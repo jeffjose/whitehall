@@ -1,0 +1,113 @@
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.Json
+import okhttp3.OkHttpClient
+import okhttp3.Request
+
+@Serializable
+data class PokemonListResponse(
+    val results: List<PokemonListItem>
+)
+
+@Serializable
+data class PokemonListItem(
+    val name: String,
+    val url: String
+)
+
+@Serializable
+data class PokemonDetail(
+    val id: Int,
+    val name: String,
+    val height: Int,
+    val weight: Int,
+    val sprites: Sprites,
+    val types: List<TypeSlot>,
+    val stats: List<StatSlot>
+)
+
+@Serializable
+data class Sprites(
+    val front_default: String?
+)
+
+@Serializable
+data class TypeSlot(
+    val type: TypeInfo
+)
+
+@Serializable
+data class TypeInfo(
+    val name: String
+)
+
+@Serializable
+data class StatSlot(
+    val base_stat: Int,
+    val stat: StatInfo
+)
+
+@Serializable
+data class StatInfo(
+    val name: String
+)
+
+class PokemonStore {
+    var pokemonList: List<PokemonListItem> = []
+    var selectedPokemon: PokemonDetail? = null
+    var isLoading = false
+    var error: String? = null
+
+    private val client = OkHttpClient()
+    private val json = Json { ignoreUnknownKeys = true }
+
+    suspend fun loadPokemonList() {
+        isLoading = true
+        error = null
+
+        io {
+            try {
+                val request = Request.Builder()
+                    .url("https://pokeapi.co/api/v2/pokemon?limit=50")
+                    .build()
+
+                val response = client.newCall(request).execute()
+                val body = response.body?.string() ?: throw Exception("Empty response")
+
+                val data = json.decodeFromString<PokemonListResponse>(body)
+                pokemonList = data.results
+                error = null
+            } catch (e: Exception) {
+                error = e.message ?: "Failed to load Pokemon"
+            } finally {
+                isLoading = false
+            }
+        }
+    }
+
+    suspend fun loadPokemonDetail(pokemonId: Int) {
+        isLoading = true
+        error = null
+
+        io {
+            try {
+                val request = Request.Builder()
+                    .url("https://pokeapi.co/api/v2/pokemon/$pokemonId")
+                    .build()
+
+                val response = client.newCall(request).execute()
+                val body = response.body?.string() ?: throw Exception("Empty response")
+
+                selectedPokemon = json.decodeFromString<PokemonDetail>(body)
+                error = null
+            } catch (e: Exception) {
+                error = e.message ?: "Failed to load Pokemon details"
+            } finally {
+                isLoading = false
+            }
+        }
+    }
+
+    fun getPokemonId(url: String): Int {
+        return url.trimEnd('/').split('/').last().toInt()
+    }
+}

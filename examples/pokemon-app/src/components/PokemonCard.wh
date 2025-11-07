@@ -1,0 +1,36 @@
+@prop val name: String
+@prop val id: Int
+@prop val onClick: () -> Unit
+
+<Card
+  onClick={onClick}
+  px={16}
+  py={12}
+  fillMaxWidth={true}>
+  <Row spacing={12}>
+    <Box
+      width={48}
+      height={48}
+      backgroundColor="#f0f0f0">
+      <Text
+        fontSize={14}
+        fontWeight="bold"
+        color="#999">
+        #{id}
+      </Text>
+    </Box>
+
+    <Column spacing={4}>
+      <Text
+        fontSize={18}
+        fontWeight="bold">
+        {name.capitalize()}
+      </Text>
+      <Text
+        fontSize={14}
+        color="secondary">
+        Tap to view details
+      </Text>
+    </Column>
+  </Row>
+</Card>
