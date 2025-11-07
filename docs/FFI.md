@@ -2946,10 +2946,10 @@ Bridge converts `Err` to exception automatically.
 | Phase 2: Strings | ✅ Complete | 100% |
 | Phase 3: Arrays | ✅ Complete | 100% |
 | Phase 4: Rust | ✅ Complete | 100% |
-| Phase 5: Errors | ⏸️ Not Started | 0% |
+| Phase 5: Error Handling | ✅ Complete | 100% |
 | Phase 6: Polish | ⏸️ Not Started | 0% |
 
-### Phase 1, 2, 3, & 4 Complete! 🎉
+### Phase 1, 2, 3, 4, & 5 Complete! 🎉
 
 **Phase 1: C++ Primitives**
 - ✅ C++ Annotation Parser
@@ -2987,6 +2987,24 @@ Bridge converts `Err` to exception automatically.
 - ✅ Integration with existing Kotlin binding generation
 - ✅ Comprehensive test coverage for all Rust FFI types
 
+**Phase 5: Error Handling**
+- ✅ **C++ Exception Handling**:
+  - Automatic try-catch wrapping for all C++ function calls
+  - Exception type mapping (invalid_argument, out_of_range, runtime_error, exception)
+  - Maps to appropriate Java exceptions (IllegalArgumentException, IndexOutOfBoundsException, RuntimeException)
+  - Preserves error messages with e.what()
+  - Safe default return values
+  - Zero overhead when no exceptions thrown
+
+- ✅ **Rust Result<T, E> Support**:
+  - Parser detects Result<T, E> return types
+  - Extracts inner type T for Kotlin bindings
+  - Generates match expressions in Rust JNI bridge
+  - Ok(value) → returns value
+  - Err(e) → throws RuntimeException with error message
+  - Works with all base types (primitives, strings, arrays)
+  - Idiomatic Rust error handling with automatic Java exception conversion
+
 **What Works Now:**
 - C++ functions with `@ffi` annotations are automatically discovered
 - Rust functions with `#[ffi]` attribute are automatically discovered
@@ -3010,18 +3028,20 @@ Bridge converts `Err` to exception automatically.
 
 ## Next Actions
 
-**Phase 4 Complete! Next: Phase 5 - Error Handling**
+**Phase 5 Complete! Next: Phase 6 - Polish & Production Readiness**
 
-To start Phase 5:
+To start Phase 6:
 
-1. Implement exception mapping for C++ (std::exception → RuntimeException, etc.)
-2. Wrap all user function calls in try-catch blocks
-3. Add automatic exception propagation from C++ to Kotlin
-4. Support Rust Result<T, E> types and convert Err to exceptions
-5. Add proper error context and stack traces
-6. Write comprehensive error handling tests
+1. Write comprehensive, helpful error messages in parsers
+2. Add validation for unsupported types with suggestions
+3. Improve parser error reporting with better context
+4. Add debugging flags (WHITEHALL_FFI_DEBUG=1)
+5. Performance profiling and optimization
+6. Memory leak detection in tests
+7. Complete troubleshooting guide with common issues
+8. Add CI tests for FFI system
 
-**Current Milestone:** Phase 5 - Automatic exception propagation across FFI boundary
+**Current Milestone:** Phase 6 - Production-ready FFI system with excellent developer experience
 
 ---
 

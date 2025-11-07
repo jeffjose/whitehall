@@ -88,7 +88,7 @@ pub fn generate_kotlin_binding_rust(function: &RustFfiFunction) -> String {
         .collect::<Vec<_>>()
         .join(", ");
 
-    let return_type = match function.return_type {
+    let return_type = match function.return_type.base_type {
         RustType::Void => String::new(),
         _ => format!(": {}", function.return_type.to_kotlin_type()),
     };

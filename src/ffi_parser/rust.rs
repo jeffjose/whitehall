@@ -21,6 +21,48 @@ pub enum RustType {
     StringArray,
 }
 
+/// Wrapper that indicates whether a type is a Result<T, E>
+#[derive(Debug, Clone, PartialEq)]
+pub struct RustFunctionReturn {
+    pub base_type: RustType,
+    pub is_result: bool,  // true if this is Result<T, E>
+}
+
+impl RustFunctionReturn {
+    pub fn plain(base_type: RustType) -> Self {
+        RustFunctionReturn {
+            base_type,
+            is_result: false,
+        }
+    }
+
+    pub fn result(base_type: RustType) -> Self {
+        RustFunctionReturn {
+            base_type,
+            is_result: true,
+        }
+    }
+
+    /// Get the Kotlin type (same whether Result or not)
+    pub fn to_kotlin_type(&self) -> &'static str {
+        self.base_type.to_kotlin_type()
+    }
+
+    /// Get the JNI type (same whether Result or not)
+    pub fn to_jni_type(&self) -> &'static str {
+        self.base_type.to_jni_type()
+    }
+
+    /// Get the Rust type string
+    pub fn to_rust_type(&self) -> String {
+        if self.is_result {
+            format!("Result<{}, String>", self.base_type.to_rust_type())
+        } else {
+            self.base_type.to_rust_type().to_string()
+        }
+    }
+}
+
 impl RustType {
     /// Parse Rust type from syn::Type
     pub fn from_syn_type(ty: &Type) -> Result<Self> {
@@ -155,7 +197,7 @@ impl RustType {
 pub struct RustFfiFunction {
     pub name: String,
     pub params: Vec<(String, RustType)>,
-    pub return_type: RustType,
+    pub return_type: RustFunctionReturn,  // Phase 5: Support Result<T, E>
     pub source_file: PathBuf,
 }
 
@@ -259,12 +301,10 @@ fn parse_ffi_function(func: ItemFn, source_file: &Path) -> Result<RustFfiFunctio
         }
     }
 
-    // Parse return type
+    // Parse return type (Phase 5: Support Result<T, E>)
     let return_type = match &func.sig.output {
-        ReturnType::Default => RustType::Void,
-        ReturnType::Type(_, ty) => RustType::from_syn_type(ty)
-            .context(format!("In return type of function '{}' at {}",
-                           function_name, source_file.display()))?,
+        ReturnType::Default => RustFunctionReturn::plain(RustType::Void),
+        ReturnType::Type(_, ty) => parse_return_type(ty, &function_name, source_file)?,
     };
 
     Ok(RustFfiFunction {
@@ -273,6 +313,49 @@ fn parse_ffi_function(func: ItemFn, source_file: &Path) -> Result<RustFfiFunctio
         return_type,
         source_file: source_file.to_path_buf(),
     })
+}
+
+/// Parse return type, detecting Result<T, E> wrappers
+fn parse_return_type(ty: &Type, function_name: &str, source_file: &Path) -> Result<RustFunctionReturn> {
+    match ty {
+        Type::Path(type_path) => {
+            let segments = &type_path.path.segments;
+
+            if segments.is_empty() {
+                bail!("Empty type path in return type of '{}' at {}", function_name, source_file.display());
+            }
+
+            let last_segment = &segments[segments.len() - 1];
+            let type_name = last_segment.ident.to_string();
+
+            // Phase 5: Check for Result<T, E>
+            if type_name == "Result" {
+                if let syn::PathArguments::AngleBracketed(ref args) = last_segment.arguments {
+                    if args.args.len() >= 1 {
+                        // Extract T from Result<T, E>
+                        if let Some(syn::GenericArgument::Type(inner_ty)) = args.args.first() {
+                            let base_type = RustType::from_syn_type(inner_ty)
+                                .context(format!("In Result<T, E> return type of '{}' at {}",
+                                               function_name, source_file.display()))?;
+                            return Ok(RustFunctionReturn::result(base_type));
+                        }
+                    }
+                }
+                bail!("Result must have type parameters: Result<T, E> in function '{}' at {}",
+                      function_name, source_file.display());
+            }
+
+            // Not a Result - parse as regular type
+            let base_type = RustType::from_syn_type(ty)
+                .context(format!("In return type of '{}' at {}", function_name, source_file.display()))?;
+            Ok(RustFunctionReturn::plain(base_type))
+        }
+        _ => {
+            let base_type = RustType::from_syn_type(ty)
+                .context(format!("In return type of '{}' at {}", function_name, source_file.display()))?;
+            Ok(RustFunctionReturn::plain(base_type))
+        }
+    }
 }
 
 #[cfg(test)]
@@ -293,7 +376,7 @@ mod tests {
 
         assert_eq!(functions.len(), 1);
         assert_eq!(functions[0].name, "add");
-        assert_eq!(functions[0].return_type, RustType::Int);
+        assert_eq!(functions[0].return_type, RustFunctionReturn::plain(RustType::Int));
         assert_eq!(functions[0].params.len(), 2);
         assert_eq!(functions[0].params[0].0, "a");
         assert_eq!(functions[0].params[0].1, RustType::Int);
@@ -326,7 +409,7 @@ mod tests {
         assert_eq!(functions.len(), 2);
         assert_eq!(functions[0].name, "add");
         assert_eq!(functions[1].name, "multiply");
-        assert_eq!(functions[1].return_type, RustType::Double);
+        assert_eq!(functions[1].return_type, RustFunctionReturn::plain(RustType::Double));
     }
 
     #[test]
@@ -369,9 +452,9 @@ mod tests {
         let functions = parse_rust_ffi_from_string(rust, path).unwrap();
 
         assert_eq!(functions.len(), 3);
-        assert_eq!(functions[0].return_type, RustType::Bool);
-        assert_eq!(functions[1].return_type, RustType::Float);
-        assert_eq!(functions[2].return_type, RustType::Long);
+        assert_eq!(functions[0].return_type, RustFunctionReturn::plain(RustType::Bool));
+        assert_eq!(functions[1].return_type, RustFunctionReturn::plain(RustType::Float));
+        assert_eq!(functions[2].return_type, RustFunctionReturn::plain(RustType::Long));
     }
 
     #[test]
@@ -393,12 +476,12 @@ mod tests {
 
         assert_eq!(functions.len(), 2);
         assert_eq!(functions[0].name, "greet");
-        assert_eq!(functions[0].return_type, RustType::String);
+        assert_eq!(functions[0].return_type, RustFunctionReturn::plain(RustType::String));
         assert_eq!(functions[0].params.len(), 1);
         assert_eq!(functions[0].params[0].1, RustType::String);
 
         assert_eq!(functions[1].name, "to_upper");
-        assert_eq!(functions[1].return_type, RustType::String);
+        assert_eq!(functions[1].return_type, RustFunctionReturn::plain(RustType::String));
     }
 
     #[test]
@@ -414,7 +497,7 @@ mod tests {
         let functions = parse_rust_ffi_from_string(rust, path).unwrap();
 
         assert_eq!(functions.len(), 1);
-        assert_eq!(functions[0].return_type, RustType::Void);
+        assert_eq!(functions[0].return_type, RustFunctionReturn::plain(RustType::Void));
     }
 
     #[test]
@@ -462,13 +545,13 @@ mod tests {
 
         // First function: Vec<i32>
         assert_eq!(functions[0].name, "double_values");
-        assert_eq!(functions[0].return_type, RustType::IntArray);
+        assert_eq!(functions[0].return_type, RustFunctionReturn::plain(RustType::IntArray));
         assert_eq!(functions[0].params.len(), 1);
         assert_eq!(functions[0].params[0].1, RustType::IntArray);
 
         // Second function: Vec<String>
         assert_eq!(functions[1].name, "to_upper_all");
-        assert_eq!(functions[1].return_type, RustType::StringArray);
+        assert_eq!(functions[1].return_type, RustFunctionReturn::plain(RustType::StringArray));
         assert_eq!(functions[1].params[0].1, RustType::StringArray);
     }
 
@@ -498,11 +581,11 @@ mod tests {
         let functions = parse_rust_ffi_from_string(rust, path).unwrap();
 
         assert_eq!(functions.len(), 6);
-        assert_eq!(functions[0].return_type, RustType::IntArray);
-        assert_eq!(functions[1].return_type, RustType::LongArray);
-        assert_eq!(functions[2].return_type, RustType::FloatArray);
-        assert_eq!(functions[3].return_type, RustType::DoubleArray);
-        assert_eq!(functions[4].return_type, RustType::BoolArray);
-        assert_eq!(functions[5].return_type, RustType::StringArray);
+        assert_eq!(functions[0].return_type, RustFunctionReturn::plain(RustType::IntArray));
+        assert_eq!(functions[1].return_type, RustFunctionReturn::plain(RustType::LongArray));
+        assert_eq!(functions[2].return_type, RustFunctionReturn::plain(RustType::FloatArray));
+        assert_eq!(functions[3].return_type, RustFunctionReturn::plain(RustType::DoubleArray));
+        assert_eq!(functions[4].return_type, RustFunctionReturn::plain(RustType::BoolArray));
+        assert_eq!(functions[5].return_type, RustFunctionReturn::plain(RustType::StringArray));
     }
 }

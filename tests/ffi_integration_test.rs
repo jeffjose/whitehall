@@ -517,7 +517,7 @@ pub fn greet(name: String) -> String {
     let functions = result.unwrap();
     assert_eq!(functions.len(), 1);
     assert_eq!(functions[0].name, "greet");
-    assert_eq!(functions[0].return_type, whitehall::ffi_parser::rust::RustType::String);
+    assert_eq!(functions[0].return_type, whitehall::ffi_parser::rust::RustFunctionReturn::plain(whitehall::ffi_parser::rust::RustType::String));
     assert_eq!(functions[0].params[0].1, whitehall::ffi_parser::rust::RustType::String);
 }
 
@@ -615,15 +615,15 @@ pub fn to_upper_case(strings: Vec<String>) -> Vec<String> {
     // Test 2: Check types are correct
     assert_eq!(functions[0].name, "double_values");
     assert_eq!(functions[0].params[0].1, whitehall::ffi_parser::rust::RustType::IntArray);
-    assert_eq!(functions[0].return_type, whitehall::ffi_parser::rust::RustType::IntArray);
+    assert_eq!(functions[0].return_type, whitehall::ffi_parser::rust::RustFunctionReturn::plain(whitehall::ffi_parser::rust::RustType::IntArray));
 
     assert_eq!(functions[1].name, "sum_array");
     assert_eq!(functions[1].params[0].1, whitehall::ffi_parser::rust::RustType::IntArray);
-    assert_eq!(functions[1].return_type, whitehall::ffi_parser::rust::RustType::Int);
+    assert_eq!(functions[1].return_type, whitehall::ffi_parser::rust::RustFunctionReturn::plain(whitehall::ffi_parser::rust::RustType::Int));
 
     assert_eq!(functions[2].name, "to_upper_case");
     assert_eq!(functions[2].params[0].1, whitehall::ffi_parser::rust::RustType::StringArray);
-    assert_eq!(functions[2].return_type, whitehall::ffi_parser::rust::RustType::StringArray);
+    assert_eq!(functions[2].return_type, whitehall::ffi_parser::rust::RustFunctionReturn::plain(whitehall::ffi_parser::rust::RustType::StringArray));
 
     // Test 3: Generate Kotlin bindings
     let kotlin_code = generate_kotlin_object_rust(
@@ -662,4 +662,89 @@ pub fn to_upper_case(strings: Vec<String>) -> Vec<String> {
     // Check vector construction
     assert!(rust_bridge_code.contains("rust_values"));
     assert!(rust_bridge_code.contains("rust_strings"));
+}
+
+#[test]
+fn test_rust_ffi_result_end_to_end() {
+    // Create a temporary directory with test Rust file
+    let temp_dir = TempDir::new().unwrap();
+    let ffi_dir = temp_dir.path().join("ffi");
+    let rust_dir = ffi_dir.join("rust");
+    fs::create_dir_all(&rust_dir).unwrap();
+
+    // Write test Rust file with Result<T, E> functions
+    let rust_content = r#"
+#[ffi]
+pub fn safe_divide(a: i32, b: i32) -> Result<i32, String> {
+    if b == 0 {
+        Err("Division by zero".to_string())
+    } else {
+        Ok(a / b)
+    }
+}
+
+#[ffi]
+pub fn parse_number(text: String) -> Result<i32, String> {
+    text.parse::<i32>()
+        .map_err(|e| format!("Parse error: {}", e))
+}
+
+#[ffi]
+pub fn get_first(values: Vec<i32>) -> Result<i32, String> {
+    values.first()
+        .copied()
+        .ok_or_else(|| "Empty array".to_string())
+}
+"#;
+    fs::write(rust_dir.join("lib.rs"), rust_content).unwrap();
+
+    // Test 1: Discover FFI functions
+    let functions = discover_rust_ffi(&ffi_dir).unwrap();
+    assert_eq!(functions.len(), 3, "Should find 3 #[ffi] functions");
+
+    // Test 2: Verify Result types are detected
+    assert!(functions[0].return_type.is_result, "safe_divide should return Result");
+    assert_eq!(functions[0].return_type.base_type, whitehall::ffi_parser::rust::RustType::Int);
+
+    assert!(functions[1].return_type.is_result, "parse_number should return Result");
+    assert_eq!(functions[1].return_type.base_type, whitehall::ffi_parser::rust::RustType::Int);
+
+    assert!(functions[2].return_type.is_result, "get_first should return Result");
+    assert_eq!(functions[2].return_type.base_type, whitehall::ffi_parser::rust::RustType::Int);
+
+    // Test 3: Generate Kotlin bindings (Result functions look like regular functions in Kotlin)
+    let kotlin_code = generate_kotlin_object_rust(
+        &functions,
+        "com.example.test",
+        "math",
+        "Math",
+    );
+
+    assert!(kotlin_code.contains("package com.example.test"));
+    assert!(kotlin_code.contains("object Math"));
+    // Result<i32, String> appears as just Int in Kotlin
+    assert!(kotlin_code.contains("external fun safeDivide(a: Int, b: Int): Int"));
+    assert!(kotlin_code.contains("external fun parseNumber(text: String): Int"));
+    assert!(kotlin_code.contains("external fun getFirst(values: IntArray): Int"));
+
+    // Test 4: Generate Rust JNI bridge with Result handling
+    let rust_bridge_code = generate_rust_bridge(
+        &functions,
+        "com.example.test",
+    );
+
+    println!("{}", rust_bridge_code);
+
+    // Check for Result match expressions
+    assert!(rust_bridge_code.contains("match crate::safe_divide"));
+    assert!(rust_bridge_code.contains("Ok(value) =>"));
+    assert!(rust_bridge_code.contains("Err(e) =>"));
+
+    // Check for exception throwing
+    assert!(rust_bridge_code.contains("throw_new"));
+    assert!(rust_bridge_code.contains("RuntimeException"));
+
+    // Check for error message conversion
+    assert!(rust_bridge_code.contains("format!(\"{}\", e)"));
+    assert!(rust_bridge_code.contains("new_string"));
 }

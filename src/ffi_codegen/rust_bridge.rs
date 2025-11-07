@@ -93,7 +93,7 @@ fn generate_rust_bridge_function(function: &RustFfiFunction, package: &str) -> S
 /// Generate the function body with proper type conversions
 fn generate_function_body(output: &mut String, function: &RustFfiFunction) {
     let _has_complex_types = function.params.iter().any(|(_, typ)| is_complex_type(typ))
-        || is_complex_type(&function.return_type);
+        || is_complex_type(&function.return_type.base_type);
 
     // Convert parameters
     for (param_name, param_type) in &function.params {
@@ -118,20 +118,65 @@ fn generate_function_body(output: &mut String, function: &RustFfiFunction) {
         format!("crate::{}({})", function.name, call_params.join(", "))
     };
 
-    // Handle return value
-    match function.return_type {
-        RustType::Void => {
-            output.push_str(&format!("    {};\n", call_expr));
+    // Phase 5: Handle Result<T, E> types
+    if function.return_type.is_result {
+        output.push_str(&format!("    match {} {{\n", call_expr));
+        output.push_str("        Ok(value) => {\n");
+
+        // Handle successful result
+        match function.return_type.base_type {
+            RustType::Void => {
+                output.push_str("            // Void result\n");
+            }
+            ref ret_type if !is_complex_type(ret_type) => {
+                output.push_str("            value\n");
+            }
+            ref ret_type => {
+                output.push_str("            let result = value;\n");
+                generate_return_conversion(output, ret_type);
+            }
         }
-        ref ret_type if !is_complex_type(ret_type) => {
-            // Simple return - direct pass-through
-            output.push_str(&format!("    {}\n", call_expr));
+        output.push_str("        }\n");
+
+        // Handle error case - throw Java exception
+        output.push_str("        Err(e) => {\n");
+        output.push_str("            let err_msg = format!(\"{}\", e);\n");
+        output.push_str("            let err_str = env.new_string(err_msg)\n");
+        output.push_str("                .expect(\"Couldn't create error string!\");\n");
+        output.push_str("            env.throw_new(\"java/lang/RuntimeException\", err_str.to_str().unwrap_or(\"\"))\n");
+        output.push_str("                .expect(\"Couldn't throw exception!\");\n");
+        output.push_str(&generate_default_return_for_result(&function.return_type.base_type));
+        output.push_str("        }\n");
+        output.push_str("    }\n");
+    } else {
+        // Not a Result - handle normally
+        match function.return_type.base_type {
+            RustType::Void => {
+                output.push_str(&format!("    {};\n", call_expr));
+            }
+            ref ret_type if !is_complex_type(ret_type) => {
+                // Simple return - direct pass-through
+                output.push_str(&format!("    {}\n", call_expr));
+            }
+            ref ret_type => {
+                // Complex return - needs conversion
+                output.push_str(&format!("    let result = {};\n", call_expr));
+                generate_return_conversion(output, ret_type);
+            }
         }
-        ref ret_type => {
-            // Complex return - needs conversion
-            output.push_str(&format!("    let result = {};\n", call_expr));
-            generate_return_conversion(output, ret_type);
-        }
+    }
+}
+
+/// Generate default return value for Result error cases
+fn generate_default_return_for_result(base_type: &RustType) -> String {
+    match base_type {
+        RustType::Void => String::new(),
+        RustType::Int | RustType::Long => "            0\n".to_string(),
+        RustType::Float | RustType::Double => "            0.0\n".to_string(),
+        RustType::Bool => "            false\n".to_string(),
+        RustType::String | RustType::IntArray | RustType::LongArray |
+        RustType::FloatArray | RustType::DoubleArray | RustType::BoolArray |
+        RustType::StringArray => "            JObject::null().into_inner()\n".to_string(),
     }
 }
 
