@@ -318,6 +318,85 @@ impl Toolchain {
         &self.root
     }
 
+    /// Get system image package name based on target SDK
+    ///
+    /// # Arguments
+    /// * `target_sdk` - Target SDK version (e.g., 34, 35)
+    ///
+    /// Returns the system image package name to install via sdkmanager
+    pub fn get_system_image_package(target_sdk: u32) -> Result<String> {
+        let platform = Platform::detect()?;
+
+        // Determine architecture
+        let arch = match platform {
+            Platform::LinuxX64 | Platform::MacX64 => "x86_64",
+            Platform::MacAarch64 => "arm64-v8a", // Apple Silicon
+            Platform::LinuxAarch64 => "arm64-v8a", // Linux ARM64
+        };
+
+        // Use google_apis_playstore for most common use case
+        // Format: system-images;android-{SDK};{variant};{arch}
+        Ok(format!(
+            "system-images;android-{};google_apis_playstore;{}",
+            target_sdk, arch
+        ))
+    }
+
+    /// Ensure system image is installed for the given target SDK
+    ///
+    /// Downloads and installs system image if not present
+    ///
+    /// # Arguments
+    /// * `target_sdk` - Target SDK version (e.g., 34, 35)
+    pub fn ensure_system_image(&self, target_sdk: u32) -> Result<()> {
+        let package = Self::get_system_image_package(target_sdk)?;
+        let sdk_root = self.ensure_android_sdk()?;
+
+        // Parse the package name to get the directory path
+        // system-images;android-35;google_apis_playstore;x86_64
+        // -> system-images/android-35/google_apis_playstore/x86_64/
+        let parts: Vec<&str> = package.split(';').collect();
+        if parts.len() != 4 || parts[0] != "system-images" {
+            anyhow::bail!("Invalid system image package format: {}", package);
+        }
+
+        let system_image_path = sdk_root
+            .join("system-images")
+            .join(parts[1])
+            .join(parts[2])
+            .join(parts[3]);
+
+        // Check if already installed
+        if system_image_path.exists() && system_image_path.join("system.img").exists() {
+            return Ok(()); // Already installed
+        }
+
+        println!("Installing system image for Android {} (this may take a while, ~1GB download)...", target_sdk);
+
+        // Install using sdkmanager
+        let sdkmanager = sdk_root.join("cmdline-tools/latest/bin/sdkmanager");
+
+        let output = Command::new(&sdkmanager)
+            .arg(format!("--sdk_root={}", sdk_root.display()))
+            .arg(&package)
+            .env("ANDROID_HOME", &sdk_root)
+            .stdin(std::process::Stdio::null())
+            .output()
+            .with_context(|| format!("Failed to install system image: {}", package))?;
+
+        if !output.status.success() {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            anyhow::bail!(
+                "Failed to install system image {}:\n{}",
+                package,
+                stderr
+            );
+        }
+
+        println!("System image installed successfully");
+        Ok(())
+    }
+
     /// Ensure all toolchains in parallel for faster installation
     ///
     /// Downloads Java, Gradle, and Android SDK simultaneously

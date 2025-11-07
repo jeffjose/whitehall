@@ -18,6 +18,10 @@ pub fn execute_install(manifest_path: &str) -> Result<()> {
         &config.toolchain.gradle
     )?;
 
+    // Install system image for emulator based on target_sdk
+    println!("\nInstalling emulator system image for Android {}...", config.android.target_sdk);
+    toolchain.ensure_system_image(config.android.target_sdk)?;
+
     Ok(())
 }
 
@@ -129,6 +133,11 @@ pub fn execute_exec(manifest_path: &str, command: &str, args: &[String]) -> Resu
     let java_home = toolchain.ensure_java(&config.toolchain.java)?;
     let gradle_bin = toolchain.ensure_gradle(&config.toolchain.gradle)?;
     let android_home = toolchain.ensure_android_sdk()?;
+
+    // If running emulator, ensure system image is installed (lazy loading)
+    if command == "emulator" {
+        toolchain.ensure_system_image(config.android.target_sdk)?;
+    }
 
     // Build PATH with toolchain binaries
     let mut path_components = vec![

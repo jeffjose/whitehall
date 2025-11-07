@@ -4,7 +4,7 @@ version = "1.0.0"
 
 [android]
 min_sdk = 24
-target_sdk = 34
+target_sdk = 35
 package = "com.example.counter"
 
 [toolchain]
