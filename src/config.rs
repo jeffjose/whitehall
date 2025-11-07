@@ -149,6 +149,9 @@ pub struct RustConfig {
     pub profile: String,
     #[serde(default = "default_rust_targets")]
     pub targets: Vec<String>,
+    /// Library name for the Rust FFI library. Defaults to Cargo.toml package name or project name if not specified.
+    #[serde(default)]
+    pub library_name: Option<String>,
 }
 
 impl Default for RustConfig {
@@ -156,6 +159,7 @@ impl Default for RustConfig {
         Self {
             profile: default_rust_profile(),
             targets: default_rust_targets(),
+            library_name: None,
         }
     }
 }

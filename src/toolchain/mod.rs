@@ -248,6 +248,7 @@ impl Toolchain {
             "platform-tools",        // adb, fastboot
             "build-tools;34.0.0",    // aapt, dx, etc.
             "platforms;android-34",  // Android 14 platform
+            "emulator",              // Android emulator
         ];
 
         for component in components {
@@ -661,7 +662,10 @@ impl Toolchain {
             "platform-tools",
             "build-tools;34.0.0",
             "platforms;android-34",
+            "emulator",
         ];
+
+        let progress_per_component = 90 / components.len() as u64; // 90% total for all components
 
         for (i, component) in components.iter().enumerate() {
             let output = Command::new(&sdkmanager)
@@ -677,8 +681,8 @@ impl Toolchain {
                 anyhow::bail!("Failed to install {}", component);
             }
 
-            // Update progress: 10% + (component_num * 30%) = 40%, 70%, 100%
-            pb.set_position(10 + ((i + 1) * 30) as u64);
+            // Update progress: 10% for licenses + proportional progress for each component
+            pb.set_position(10 + ((i + 1) as u64 * progress_per_component));
         }
 
         pb.finish_and_clear();
@@ -911,7 +915,10 @@ impl Toolchain {
                 "platform-tools",
                 "build-tools;34.0.0",
                 "platforms;android-34",
+                "emulator",
             ];
+
+            let progress_per_component = 90 / components.len() as u64; // 90% total for all components
 
             for (i, component) in components.iter().enumerate() {
                 let output = Command::new(&sdkmanager)
@@ -927,8 +934,8 @@ impl Toolchain {
                     anyhow::bail!("Failed to install {}", component);
                 }
 
-                // Update progress: 10% + (component_num * 30%) = 40%, 70%, 100%
-                pb.set_position(10 + ((i + 1) * 30) as u64);
+                // Update progress: 10% for licenses + proportional progress for each component
+                pb.set_position(10 + ((i + 1) as u64 * progress_per_component));
             }
 
             pb.finish_and_clear();
@@ -974,6 +981,7 @@ impl Toolchain {
                 "platform-tools",
                 "build-tools;34.0.0",
                 "platforms;android-34",
+                "emulator",
             ];
 
             for component in components {

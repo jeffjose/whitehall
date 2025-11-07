@@ -56,6 +56,83 @@ fn to_pascal_case(s: &str) -> String {
         .collect()
 }
 
+/// Parse project name from CMakeLists.txt
+/// Looks for: project("name") or project(name)
+fn parse_cmake_project_name(path: &Path) -> Result<String> {
+    let content = fs::read_to_string(path)
+        .context(format!("Failed to read CMakeLists.txt: {}", path.display()))?;
+
+    // Match: project("name") or project(name) or project( "name" )
+    let re = regex::Regex::new(r#"project\s*\(\s*["']?([^"')\s]+)["']?\s*\)"#)
+        .context("Failed to compile regex")?;
+
+    if let Some(cap) = re.captures(&content) {
+        return Ok(cap[1].to_string());
+    }
+
+    anyhow::bail!("No project() declaration found in CMakeLists.txt")
+}
+
+/// Parse package name from Cargo.toml
+fn parse_cargo_toml_name(path: &Path) -> Result<String> {
+    let content = fs::read_to_string(path)
+        .context(format!("Failed to read Cargo.toml: {}", path.display()))?;
+
+    let cargo_toml: toml::Value = toml::from_str(&content)
+        .context("Failed to parse Cargo.toml")?;
+
+    cargo_toml
+        .get("package")
+        .and_then(|p| p.get("name"))
+        .and_then(|n| n.as_str())
+        .map(|s| s.to_string())
+        .ok_or_else(|| anyhow::anyhow!("No package.name found in Cargo.toml"))
+}
+
+/// Get C++ library name with precedence:
+/// 1. whitehall.toml override
+/// 2. src/ffi/cpp/CMakeLists.txt project name
+/// 3. project name fallback
+fn get_cpp_library_name(config: &Config, ffi_dir: &Path) -> String {
+    // 1. Check whitehall.toml override
+    if let Some(name) = &config.ffi.cpp.library_name {
+        return name.clone();
+    }
+
+    // 2. Check user-provided CMakeLists.txt
+    let user_cmake = ffi_dir.join("cpp/CMakeLists.txt");
+    if user_cmake.exists() {
+        if let Ok(name) = parse_cmake_project_name(&user_cmake) {
+            return name;
+        }
+    }
+
+    // 3. Fallback to project name
+    config.project.name.clone()
+}
+
+/// Get Rust library name with precedence:
+/// 1. whitehall.toml override
+/// 2. src/ffi/rust/Cargo.toml package name
+/// 3. project name fallback
+fn get_rust_library_name(config: &Config, ffi_dir: &Path) -> String {
+    // 1. Check whitehall.toml override
+    if let Some(name) = &config.ffi.rust.library_name {
+        return name.clone();
+    }
+
+    // 2. Check Cargo.toml
+    let cargo_toml = ffi_dir.join("rust/Cargo.toml");
+    if cargo_toml.exists() {
+        if let Ok(name) = parse_cargo_toml_name(&cargo_toml) {
+            return name;
+        }
+    }
+
+    // 3. Fallback to project name
+    config.project.name.clone()
+}
+
 /// Build C++ FFI components
 fn build_cpp_ffi(config: &Config, ffi_dir: &Path, build_dir: &Path) -> Result<()> {
     // 1. Discover FFI functions
@@ -66,13 +143,11 @@ fn build_cpp_ffi(config: &Config, ffi_dir: &Path, build_dir: &Path) -> Result<()
         return Ok(());
     }
 
-    // Get library name from config or default to project name
-    let library_name = config.ffi.cpp.library_name
-        .as_ref()
-        .unwrap_or(&config.project.name);
+    // Get library name with precedence: whitehall.toml > CMakeLists.txt > project.name
+    let library_name = get_cpp_library_name(config, ffi_dir);
 
     // Generate PascalCase object name for Kotlin
-    let object_name = to_pascal_case(library_name);
+    let object_name = to_pascal_case(&library_name);
 
     // 2. Generate Kotlin bindings
     let kotlin_dir = build_dir.join("generated/kotlin");
@@ -86,7 +161,7 @@ fn build_cpp_ffi(config: &Config, ffi_dir: &Path, build_dir: &Path) -> Result<()
     let kotlin_code = generate_kotlin_object(
         &functions,
         &kotlin_package,
-        library_name,
+        &library_name,
         &object_name,
     );
 
@@ -131,7 +206,7 @@ fn build_cpp_ffi(config: &Config, ffi_dir: &Path, build_dir: &Path) -> Result<()
     } else {
         // Auto-generate CMakeLists.txt
         let cmake_code = generate_cmake(
-            library_name,
+            &library_name,
             &source_files,
             jni_file.to_string_lossy().as_ref(),
             &config.ffi.cpp.standard,
