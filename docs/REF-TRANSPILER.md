@@ -264,6 +264,7 @@ match (component, prop_name) {
 - **Ternary operators:** `condition ? a : b` → `.let { if (condition) a else b }`
 - **$screen.params:** `$screen.params.id` → `id` (extracted as function parameter)
 - **Array literals:** `[1, 2, 3]` → `listOf(1, 2, 3)` (or `mutableListOf()` for `var`)
+- **Range literals:** `1..10` → `(1..10).toList()`, `0..10:2` → `(0 rangeTo 10 step 2).toList()`, `10..1:-1` → `(10 downTo 1).toList()`
 - **Hex colors:** `#FF5722` → `Color(0xFFFF5722)`
 - **Theme colors:** `"primary"` → `MaterialTheme.colorScheme.primary`
 - **String resources:** `R.string.app_name` → `stringResource(R.string.app_name)`
