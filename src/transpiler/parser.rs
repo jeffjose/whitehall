@@ -91,11 +91,10 @@ impl Parser {
                 parsed_store_class = true; // Mark that we've seen a store class
             } else if self.consume_word("import") {
                 imports.push(self.parse_import()?);
-            } else if self.peek_word() == Some("var") || self.peek_word() == Some("val") {
-                state.push(self.parse_state_declaration()?);
             } else if parsed_store_class && self.is_kotlin_syntax() {
                 // Pass-through: Kotlin syntax after a store class that doesn't need transformation
                 // Only do this if we've already parsed a store class
+                // This check must come BEFORE var/val check to catch extension properties
                 let mut block = self.capture_kotlin_block()?;
 
                 // If there are pending annotations, prepend them to the kotlin block content
@@ -109,6 +108,9 @@ impl Parser {
                 }
 
                 kotlin_blocks.push(block);
+            } else if self.peek_word() == Some("var") || self.peek_word() == Some("val") {
+                // Parse state declarations (only for non-extension properties)
+                state.push(self.parse_state_declaration()?);
             } else if !parsed_store_class && self.peek_word() == Some("suspend") {
                 // Handle suspend fun (only before store class, after that they pass through)
                 self.consume_word("suspend");
@@ -1810,10 +1812,32 @@ impl Parser {
            remaining.starts_with("sealed class ") ||
            remaining.starts_with("sealed interface ") ||
            remaining.starts_with("enum class ") ||
+           remaining.starts_with("class ") ||  // Regular classes (must come after specific class types)
            remaining.starts_with("typealias ") ||
            remaining.starts_with("fun ") ||
-           remaining.starts_with("object ") {
+           remaining.starts_with("object ") ||
+           // Function modifiers
+           remaining.starts_with("inline fun ") ||
+           remaining.starts_with("infix fun ") ||
+           remaining.starts_with("operator fun ") ||
+           remaining.starts_with("suspend fun ") ||
+           // Fun interfaces (SAM interfaces)
+           remaining.starts_with("fun interface ") {
             return true;
+        }
+
+        // Check for extension properties: val Type.property
+        if remaining.starts_with("val ") {
+            let after_val = &remaining[4..]; // Skip "val "
+            // Look for a dot before colon or newline (indicates extension property)
+            // Example: "User.fullName: String" should find '.' at position 4
+            for (i, ch) in after_val.char_indices() {
+                if ch == '.' {
+                    return true; // Found dot, this is an extension property
+                } else if ch == ':' || ch == '\n' || ch == '=' {
+                    break; // Reached end of type/property name without finding dot
+                }
+            }
         }
 
         false
@@ -1911,6 +1935,9 @@ impl Parser {
         // Comment tracking (Phase 4)
         let mut in_line_comment = false;     // Line comment: // ... until \n
         let mut in_block_comment = false;    // Block comment: /* ... */
+
+        // Expression body tracking - once we see '=' after parens, consume until newline
+        let mut in_expression_body = false;
 
         // Guard against infinite loops
         let mut iterations = 0;
@@ -2058,18 +2085,28 @@ impl Parser {
                                 }
 
                                 let next = self.peek_char();
+                                let next_next = self.peek_ahead(1);  // Get next two chars for -> detection
 
                                 // Restore position
                                 self.pos = saved_pos;
 
                                 match next {
                                     // Expression body (fun foo() = expr) or type alias (typealias A = B)
-                                    Some('=') | Some(':') => {
+                                    Some('=') => {
+                                        // Mark that we're in an expression body
+                                        in_expression_body = true;
                                         // Continue capturing - there's more content
+                                    }
+                                    Some(':') => {
+                                        // Continue capturing - there's more content (type annotation)
                                     }
                                     // Opening brace (will be handled in next iteration)
                                     Some('{') => {
                                         // Continue capturing
+                                    }
+                                    // Function type arrow: (A) -> B
+                                    Some('-') if next_next == Some('>') => {
+                                        // This is a function type arrow, continue capturing
                                     }
                                     // Newline or EOF - we're done
                                     Some('\n') | None => {
@@ -2077,9 +2114,12 @@ impl Parser {
                                     }
                                     // Anything else - check if it's end of declaration
                                     _ => {
-                                        // For data class Foo(...) pattern, break here
-                                        // The closing paren is the end
-                                        break;
+                                        // If we're in an expression body, don't break - keep capturing
+                                        if !in_expression_body {
+                                            // For data class Foo(...) pattern, break here
+                                            // The closing paren is the end
+                                            break;
+                                        }
                                     }
                                 }
                             }
@@ -2106,6 +2146,13 @@ impl Parser {
                             // Unmatched closing brace - this is an error
                             return Err(self.error_at_pos("Unmatched closing brace in Kotlin block"));
                         }
+                    }
+                    '=' => {
+                        // If we see '=' at depth 0, we're in an expression body
+                        if brace_depth == 0 && paren_depth == 0 && found_opening_paren {
+                            in_expression_body = true;
+                        }
+                        self.advance_char();
                     }
                     '\n' => {
                         self.advance_char();
