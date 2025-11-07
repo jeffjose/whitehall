@@ -72,6 +72,13 @@ val numbers = [1, 2, 3]        // → listOf(1, 2, 3)
 var mutable = [10, 20]         // → mutableStateOf(mutableListOf(10, 20))
 ```
 
+**Ranges:**
+```whitehall
+val simple = 1..10             // → (1..10).toList()
+val stepped = 0..100:2         // → (0 rangeTo 100 step 2).toList()
+val countdown = 10..1:-1       // → (10 downTo 1).toList()
+```
+
 ---
 
 ### Data Binding
