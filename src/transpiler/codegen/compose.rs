@@ -3139,6 +3139,15 @@ impl ComposeBackend {
 
         output.push_str("}\n");
 
+        // Append pass-through Kotlin blocks
+        if !file.kotlin_blocks.is_empty() {
+            output.push('\n');
+            for block in &file.kotlin_blocks {
+                output.push_str(&block.content);
+                output.push_str("\n\n");
+            }
+        }
+
         Ok(output)
     }
 
@@ -3323,6 +3332,15 @@ impl ComposeBackend {
         }
 
         output.push_str("}\n");
+
+        // Append pass-through Kotlin blocks
+        if !file.kotlin_blocks.is_empty() {
+            output.push('\n');
+            for block in &file.kotlin_blocks {
+                output.push_str(&block.content);
+                output.push_str("\n\n");
+            }
+        }
 
         Ok(output)
     }

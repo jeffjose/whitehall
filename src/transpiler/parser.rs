@@ -53,8 +53,9 @@ impl Parser {
         let mut functions = Vec::new();
         let mut lifecycle_hooks = Vec::new();
         let mut classes = Vec::new();
-        let kotlin_blocks: Vec<KotlinBlock> = Vec::new();
+        let mut kotlin_blocks: Vec<KotlinBlock> = Vec::new();
         let mut pending_annotations = Vec::new();
+        let mut parsed_store_class = false; // Track if we've parsed a store class
 
         // Parse imports, props, state, functions, lifecycle hooks, and classes (before markup)
         loop {
@@ -71,6 +72,7 @@ impl Parser {
                 let next_word = self.peek_word();
                 if next_word == Some("class") || next_word == Some("object") {
                     classes.push(self.parse_class_declaration(pending_annotations.clone())?);
+                    parsed_store_class = true; // Mark that we've seen a store class
                     pending_annotations.clear();
                     continue;
                 } else if annotation == "prop" {
@@ -84,10 +86,15 @@ impl Parser {
             } else if self.peek_word() == Some("class") || self.peek_word() == Some("object") {
                 // Standalone class/object without annotation (e.g., class with var properties)
                 classes.push(self.parse_class_declaration(Vec::new())?);
+                parsed_store_class = true; // Mark that we've seen a store class
             } else if self.consume_word("import") {
                 imports.push(self.parse_import()?);
             } else if self.peek_word() == Some("var") || self.peek_word() == Some("val") {
                 state.push(self.parse_state_declaration()?);
+            } else if parsed_store_class && self.is_kotlin_syntax() {
+                // Pass-through: Kotlin syntax after a store class that doesn't need transformation
+                // Only do this if we've already parsed a store class
+                kotlin_blocks.push(self.capture_kotlin_block()?);
             } else if self.peek_word() == Some("suspend") {
                 // Handle suspend fun
                 self.consume_word("suspend");
@@ -1738,6 +1745,185 @@ impl Parser {
                 break;
             }
         }
+    }
+
+    // ========== Pass-Through Architecture Helpers ==========
+
+    /// Check if the current position is at Kotlin syntax that should pass through unchanged.
+    /// These are Kotlin language constructs that don't need Whitehall transformation.
+    fn is_kotlin_syntax(&self) -> bool {
+        let remaining = &self.input[self.pos..];
+
+        // Check for Kotlin keywords that we don't explicitly parse
+        if remaining.starts_with("data class ") ||
+           remaining.starts_with("sealed class ") ||
+           remaining.starts_with("sealed interface ") ||
+           remaining.starts_with("enum class ") ||
+           remaining.starts_with("typealias ") {
+            return true;
+        }
+
+        // For Phase 2, pass through all top-level functions to keep it simple
+        // Later phases can be more selective about which functions to parse vs pass through
+        if remaining.starts_with("fun ") {
+            return true;
+        }
+
+        false
+        // Note: We don't include standalone "object" here because it might be @store annotated
+    }
+
+    /// Detect what type of Kotlin construct this is based on the leading keywords.
+    /// This is just a hint for debugging/tooling - the content isn't parsed.
+    fn detect_block_type(&self) -> crate::transpiler::ast::KotlinBlockType {
+        use crate::transpiler::ast::KotlinBlockType;
+        let remaining = &self.input[self.pos..];
+
+        if remaining.starts_with("data class ") {
+            KotlinBlockType::DataClass
+        } else if remaining.starts_with("sealed class ") || remaining.starts_with("sealed interface ") {
+            KotlinBlockType::SealedClass
+        } else if remaining.starts_with("enum class ") {
+            KotlinBlockType::EnumClass
+        } else if remaining.starts_with("fun ") {
+            KotlinBlockType::TopLevelFunction
+        } else if remaining.starts_with("typealias ") {
+            KotlinBlockType::TypeAlias
+        } else if remaining.starts_with("object ") {
+            KotlinBlockType::ObjectDeclaration
+        } else {
+            KotlinBlockType::Unknown
+        }
+    }
+
+    /// Check if we're at the start of a new top-level Kotlin declaration.
+    /// Used to detect when a pass-through block ends and a new one begins.
+    fn is_top_level_keyword(&self) -> bool {
+        let remaining = &self.input[self.pos..];
+
+        // Keywords that start a new top-level declaration
+        let keywords = [
+            "import ",
+            "class ",
+            "data class ",
+            "sealed class ",
+            "sealed interface ",
+            "enum class ",
+            "object ",
+            "interface ",
+            "fun ",
+            "val ",
+            "var ",
+            "typealias ",
+        ];
+
+        for keyword in &keywords {
+            if remaining.starts_with(keyword) {
+                return true;
+            }
+        }
+
+        // Check for annotations
+        if remaining.starts_with("@") {
+            return true;
+        }
+
+        false
+    }
+
+    /// Capture a Kotlin code block that passes through unchanged.
+    /// Uses simple balanced brace/paren matching (Phase 2 - no string/comment handling yet).
+    fn capture_kotlin_block(&mut self) -> Result<KotlinBlock, String> {
+        let start_pos = self.pos;
+        let block_type = self.detect_block_type();
+
+        // Track brace and paren depth to find the end of the block
+        let mut brace_depth = 0;
+        let mut paren_depth = 0;
+        let mut found_opening_brace = false;
+        let mut found_opening_paren = false;
+
+        // Guard against infinite loops
+        let mut iterations = 0;
+        let max_iterations = 100000; // Safety limit
+
+        while self.peek_char().is_some() {
+            iterations += 1;
+            if iterations > max_iterations {
+                return Err(self.error_at_pos("Parser stuck capturing Kotlin block - possible infinite loop"));
+            }
+
+            let ch = self.peek_char().unwrap();
+
+            match ch {
+                '(' => {
+                    found_opening_paren = true;
+                    paren_depth += 1;
+                    self.advance_char();
+                }
+                ')' => {
+                    if paren_depth > 0 {
+                        paren_depth -= 1;
+                        self.advance_char();
+
+                        // If we're back to depth 0 for parens and no braces were found, we're done
+                        if paren_depth == 0 && brace_depth == 0 && found_opening_paren && !found_opening_brace {
+                            break;
+                        }
+                    } else {
+                        // Unmatched closing paren - this is an error
+                        return Err(self.error_at_pos("Unmatched closing parenthesis in Kotlin block"));
+                    }
+                }
+                '{' => {
+                    found_opening_brace = true;
+                    brace_depth += 1;
+                    self.advance_char();
+                }
+                '}' => {
+                    if brace_depth > 0 {
+                        brace_depth -= 1;
+                        self.advance_char();
+
+                        // If we're back to depth 0 for braces, we're done
+                        if brace_depth == 0 && found_opening_brace {
+                            break;
+                        }
+                    } else {
+                        // Unmatched closing brace - this is an error
+                        return Err(self.error_at_pos("Unmatched closing brace in Kotlin block"));
+                    }
+                }
+                '\n' => {
+                    self.advance_char();
+
+                    // At depth 0 (before any braces/parens or after balanced), check for new declaration
+                    if brace_depth == 0 && paren_depth == 0 {
+                        self.skip_whitespace();
+                        if self.is_top_level_keyword() {
+                            // Hit a new top-level declaration, stop capturing
+                            break;
+                        }
+                    }
+                }
+                _ => {
+                    self.advance_char();
+                }
+            }
+        }
+
+        // Extract the captured content
+        let content = self.input[start_pos..self.pos].trim().to_string();
+
+        if content.is_empty() {
+            return Err(self.error_at_pos("Empty Kotlin block captured"));
+        }
+
+        Ok(KotlinBlock {
+            content,
+            position: start_pos,
+            block_type,
+        })
     }
 }
 
