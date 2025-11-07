@@ -98,6 +98,9 @@ fn generate_jni_function(function: &CppFfiFunction, package: &str) -> String {
 
     output.push_str("\n) {\n");
 
+    // Phase 5: Wrap function call in try-catch for exception handling
+    output.push_str("    try {\n");
+
     // Check if we have any string/array parameters or return types
     let has_strings_or_arrays = function.params.iter().any(|(_, t)| *t == CppType::String || is_array_type(t))
         || function.return_type == CppType::String || is_array_type(&function.return_type);
@@ -107,12 +110,12 @@ fn generate_jni_function(function: &CppFfiFunction, package: &str) -> String {
         output.push_str(&generate_complex_conversions(function));
     } else {
         // Phase 1: Direct call for primitives
-        output.push_str("    // Call user function\n");
+        output.push_str("        // Call user function\n");
 
         if function.return_type == CppType::Void {
-            output.push_str(&format!("    {}(", function.name));
+            output.push_str(&format!("        {}(", function.name));
         } else {
-            output.push_str(&format!("    return {}(", function.name));
+            output.push_str(&format!("        return {}(", function.name));
         }
 
         // Pass parameters
@@ -125,9 +128,55 @@ fn generate_jni_function(function: &CppFfiFunction, package: &str) -> String {
         output.push_str(");\n");
     }
 
+    // Phase 5: Add exception handlers
+    output.push_str("    } catch (const std::invalid_argument& e) {\n");
+    output.push_str("        jclass exClass = env->FindClass(\"java/lang/IllegalArgumentException\");\n");
+    output.push_str("        if (exClass != nullptr) {\n");
+    output.push_str("            env->ThrowNew(exClass, e.what());\n");
+    output.push_str("        }\n");
+    output.push_str(&generate_default_return(&function.return_type));
+    output.push_str("    } catch (const std::out_of_range& e) {\n");
+    output.push_str("        jclass exClass = env->FindClass(\"java/lang/IndexOutOfBoundsException\");\n");
+    output.push_str("        if (exClass != nullptr) {\n");
+    output.push_str("            env->ThrowNew(exClass, e.what());\n");
+    output.push_str("        }\n");
+    output.push_str(&generate_default_return(&function.return_type));
+    output.push_str("    } catch (const std::runtime_error& e) {\n");
+    output.push_str("        jclass exClass = env->FindClass(\"java/lang/RuntimeException\");\n");
+    output.push_str("        if (exClass != nullptr) {\n");
+    output.push_str("            env->ThrowNew(exClass, e.what());\n");
+    output.push_str("        }\n");
+    output.push_str(&generate_default_return(&function.return_type));
+    output.push_str("    } catch (const std::exception& e) {\n");
+    output.push_str("        jclass exClass = env->FindClass(\"java/lang/RuntimeException\");\n");
+    output.push_str("        if (exClass != nullptr) {\n");
+    output.push_str("            env->ThrowNew(exClass, e.what());\n");
+    output.push_str("        }\n");
+    output.push_str(&generate_default_return(&function.return_type));
+    output.push_str("    } catch (...) {\n");
+    output.push_str("        jclass exClass = env->FindClass(\"java/lang/RuntimeException\");\n");
+    output.push_str("        if (exClass != nullptr) {\n");
+    output.push_str("            env->ThrowNew(exClass, \"Unknown C++ exception\");\n");
+    output.push_str("        }\n");
+    output.push_str(&generate_default_return(&function.return_type));
+    output.push_str("    }\n");
+
     output.push_str("}\n");
 
     output
+}
+
+/// Generate default return value for exception cases
+fn generate_default_return(return_type: &CppType) -> String {
+    match return_type {
+        CppType::Void => String::new(),
+        CppType::Int | CppType::Long => "        return 0;\n".to_string(),
+        CppType::Float | CppType::Double => "        return 0.0;\n".to_string(),
+        CppType::Bool => "        return false;\n".to_string(),
+        CppType::String | CppType::IntArray | CppType::LongArray |
+        CppType::FloatArray | CppType::DoubleArray | CppType::BoolArray |
+        CppType::StringArray => "        return nullptr;\n".to_string(),
+    }
 }
 
 /// Generate complex type conversion code for JNI bridge (Phase 2/3: Strings and Arrays)
@@ -143,16 +192,16 @@ fn generate_complex_conversions(function: &CppFfiFunction) -> String {
         }
     }
 
-    // Call the user function
-    output.push_str("    // Call user function\n");
+    // Call the user function (Phase 5: indented for try-catch block)
+    output.push_str("            // Call user function\n");
     let needs_result = function.return_type == CppType::String || is_array_type(&function.return_type);
 
     if needs_result {
-        output.push_str(&format!("    auto result = {}(", function.name));
+        output.push_str(&format!("        auto result = {}(", function.name));
     } else if function.return_type == CppType::Void {
-        output.push_str(&format!("    {}(", function.name));
+        output.push_str(&format!("        {}(", function.name));
     } else {
-        output.push_str(&format!("    return {}(", function.name));
+        output.push_str(&format!("        return {}(", function.name));
     }
 
     // Pass converted parameters
@@ -172,12 +221,12 @@ fn generate_complex_conversions(function: &CppFfiFunction) -> String {
 
     // Convert return value if needed
     if function.return_type == CppType::String {
-        output.push_str("\n    // Convert std::string to jstring\n");
-        output.push_str("    jstring j_result = env->NewStringUTF(result.c_str());\n");
-        output.push_str("    if (j_result == nullptr) {\n");
-        output.push_str("        return nullptr;  // OutOfMemoryError\n");
-        output.push_str("    }\n");
-        output.push_str("    return j_result;\n");
+        output.push_str("\n        // Convert std::string to jstring\n");
+        output.push_str("        jstring j_result = env->NewStringUTF(result.c_str());\n");
+        output.push_str("        if (j_result == nullptr) {\n");
+        output.push_str("            return nullptr;  // OutOfMemoryError\n");
+        output.push_str("        }\n");
+        output.push_str("        return j_result;\n");
     } else if is_array_type(&function.return_type) {
         output.push_str(&generate_array_return_conversion(&function.return_type));
     }
@@ -193,17 +242,17 @@ fn generate_string_param_conversion(param_name: &str, return_type: &CppType) -> 
         "    // Convert jstring to std::string\n"));
     output.push_str(&format!(
         "    if ({} == nullptr) {{\n", param_name));
-    output.push_str("        // TODO: Handle null string - throw exception or return default\n");
+    output.push_str("            // TODO: Handle null string - throw exception or return default\n");
     output.push_str(&format!(
         "        {} = env->NewStringUTF(\"\");\n", param_name));
-    output.push_str("    }\n");
+    output.push_str("        }\n");
 
     output.push_str(&format!(
         "    const char* c_{} = env->GetStringUTFChars({}, nullptr);\n",
         param_name, param_name));
     output.push_str(&format!(
         "    if (c_{} == nullptr) {{\n", param_name));
-    output.push_str("        return ");
+    output.push_str("            return ");
     if *return_type == CppType::Void {
         output.push_str(";\n");
     } else if *return_type == CppType::String {
@@ -213,7 +262,7 @@ fn generate_string_param_conversion(param_name: &str, return_type: &CppType) -> 
     } else {
         output.push_str("0;  // OutOfMemoryError\n");
     }
-    output.push_str("    }\n");
+    output.push_str("        }\n");
 
     output.push_str(&format!(
         "    std::string cpp_{}(c_{});\n",
@@ -243,9 +292,9 @@ fn generate_array_param_conversion(param_name: &str, param_type: &CppType, retur
         _ => unreachable!(),
     };
 
-    output.push_str(&format!("    // Convert {} to {}\n", param_type.to_jni_type(), param_type.to_cpp_type()));
-    output.push_str(&format!("    if ({} == nullptr) {{\n", param_name));
-    output.push_str("        return ");
+    output.push_str(&format!("        // Convert {} to {}\n", param_type.to_jni_type(), param_type.to_cpp_type()));
+    output.push_str(&format!("        if ({} == nullptr) {{\n", param_name));
+    output.push_str("            return ");
     if *return_type == CppType::Void {
         output.push_str(";\n");
     } else if is_array_type(return_type) || *return_type == CppType::String {
@@ -253,13 +302,13 @@ fn generate_array_param_conversion(param_name: &str, param_type: &CppType, retur
     } else {
         output.push_str("0;\n");
     }
-    output.push_str("    }\n");
+    output.push_str("        }\n");
 
-    output.push_str(&format!("    jsize {}_len = env->GetArrayLength({});\n", param_name, param_name));
-    output.push_str(&format!("    auto* {}_elems = env->{}({}, nullptr);\n",
+    output.push_str(&format!("        jsize {}_len = env->GetArrayLength({});\n", param_name, param_name));
+    output.push_str(&format!("        auto* {}_elems = env->{}({}, nullptr);\n",
         param_name, jni_get, param_name));
-    output.push_str(&format!("    if ({}_elems == nullptr) {{\n", param_name));
-    output.push_str("        return ");
+    output.push_str(&format!("        if ({}_elems == nullptr) {{\n", param_name));
+    output.push_str("            return ");
     if *return_type == CppType::Void {
         output.push_str(";\n");
     } else if is_array_type(return_type) || *return_type == CppType::String {
@@ -267,11 +316,11 @@ fn generate_array_param_conversion(param_name: &str, param_type: &CppType, retur
     } else {
         output.push_str("0;\n");
     }
-    output.push_str("    }\n");
+    output.push_str("        }\n");
 
-    output.push_str(&format!("    {} cpp_{}({}_elems, {}_elems + {}_len);\n",
+    output.push_str(&format!("        {} cpp_{}({}_elems, {}_elems + {}_len);\n",
         param_type.to_cpp_type(), param_name, param_name, param_name, param_name));
-    output.push_str(&format!("    env->{}({}, {}_elems, JNI_ABORT);  // Don't copy back\n\n",
+    output.push_str(&format!("        env->{}({}, {}_elems, JNI_ABORT);  // Don't copy back\n\n",
         jni_release, param_name, param_name));
 
     output
@@ -281,30 +330,30 @@ fn generate_array_param_conversion(param_name: &str, param_type: &CppType, retur
 fn generate_string_array_param_conversion(param_name: &str, return_type: &CppType) -> String {
     let mut output = String::new();
 
-    output.push_str(&format!("    // Convert jobjectArray to std::vector<std::string>\n"));
-    output.push_str(&format!("    if ({} == nullptr) {{\n", param_name));
-    output.push_str("        return ");
+    output.push_str(&format!("        // Convert jobjectArray to std::vector<std::string>\n"));
+    output.push_str(&format!("        if ({} == nullptr) {{\n", param_name));
+    output.push_str("            return ");
     if *return_type == CppType::Void {
         output.push_str(";\n");
     } else {
         output.push_str("nullptr;\n");
     }
-    output.push_str("    }\n");
-
-    output.push_str(&format!("    jsize {}_len = env->GetArrayLength({});\n", param_name, param_name));
-    output.push_str(&format!("    std::vector<std::string> cpp_{};\n", param_name));
-    output.push_str(&format!("    cpp_{}.reserve({}_len);\n", param_name, param_name));
-    output.push_str(&format!("    for (jsize i = 0; i < {}_len; ++i) {{\n", param_name));
-    output.push_str(&format!("        jstring j_str = (jstring)env->GetObjectArrayElement({}, i);\n", param_name));
-    output.push_str("        if (j_str != nullptr) {\n");
-    output.push_str("            const char* c_str = env->GetStringUTFChars(j_str, nullptr);\n");
-    output.push_str("            if (c_str != nullptr) {\n");
-    output.push_str(&format!("                cpp_{}.push_back(c_str);\n", param_name));
-    output.push_str("                env->ReleaseStringUTFChars(j_str, c_str);\n");
-    output.push_str("            }\n");
-    output.push_str("            env->DeleteLocalRef(j_str);\n");
     output.push_str("        }\n");
-    output.push_str("    }\n\n");
+
+    output.push_str(&format!("        jsize {}_len = env->GetArrayLength({});\n", param_name, param_name));
+    output.push_str(&format!("        std::vector<std::string> cpp_{};\n", param_name));
+    output.push_str(&format!("        cpp_{}.reserve({}_len);\n", param_name, param_name));
+    output.push_str(&format!("        for (jsize i = 0; i < {}_len; ++i) {{\n", param_name));
+    output.push_str(&format!("            jstring j_str = (jstring)env->GetObjectArrayElement({}, i);\n", param_name));
+    output.push_str("            if (j_str != nullptr) {\n");
+    output.push_str("                const char* c_str = env->GetStringUTFChars(j_str, nullptr);\n");
+    output.push_str("                if (c_str != nullptr) {\n");
+    output.push_str(&format!("                    cpp_{}.push_back(c_str);\n", param_name));
+    output.push_str("                    env->ReleaseStringUTFChars(j_str, c_str);\n");
+    output.push_str("                }\n");
+    output.push_str("                env->DeleteLocalRef(j_str);\n");
+    output.push_str("            }\n");
+    output.push_str("        }\n\n");
 
     output
 }
