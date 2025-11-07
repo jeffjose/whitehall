@@ -2,6 +2,19 @@
 
 Issues discovered during Pokemon app example development.
 
+## Status Summary
+
+**✅ Fixed (1):**
+- Top-level Kotlin imports
+
+**❌ Blocking Issues (3):**
+- Private/public class-level fields with initialization
+- Data classes outside main class
+- Hex colors incorrectly transpiled
+
+**⚠️ Needs Investigation (1):**
+- Box width/height not properly handled
+
 ## Parser Limitations
 
 ### 1. Top-level Kotlin imports ~~not supported~~ ✅ FIXED
@@ -141,15 +154,19 @@ Box(modifier = Modifier.size(48.dp, 48.dp))
 
 **Workaround:** Would need separate `.kt` files for models
 
+**Note:** Top-level imports are now supported (fixed 2025-11-07), but top-level data class definitions after the main class are still not supported (see Parser Limitations #3).
+
 ---
 
-### 2. Import statements for external libraries
+### 2. ~~Import statements for external libraries~~ ✅ FIXED
 
-**Needed for:** OkHttp, Kotlinx Serialization, other libraries
+~~**Needed for:** OkHttp, Kotlinx Serialization, other libraries~~
 
-**Use case:** Network calls, JSON parsing
+~~**Use case:** Network calls, JSON parsing~~
 
-**Impact:** Can't use external libraries without workarounds
+~~**Impact:** Can't use external libraries without workarounds~~
+
+**Status:** ✅ **FIXED** (2025-11-07) - Import statements now fully supported and pass through to generated code.
 
 ---
 
@@ -172,14 +189,20 @@ Box(modifier = Modifier.size(48.dp, 48.dp))
 
 ## Test Case
 
-See `examples/pokemon-app/` for real-world example hitting all these issues.
+See `examples/pokemon-app/` for real-world example hitting remaining issues.
 
-**To reproduce:**
+**Current Status:**
+- ✅ Import statements now work
+- ❌ Still blocked by: private class fields, data classes outside main class, hex color bug
+
+**To reproduce remaining issues:**
 ```bash
 cd examples/pokemon-app
-cargo run --manifest-path ../../Cargo.toml -- build
+cargo run --manifest-path ../../Cargo.toml -- compile src/stores/PokemonStore.wh
+# Error: [Line 12:5] Unexpected content in class body (private val field)
 ```
 
 ---
 
 *Last Updated: 2025-11-07*
+*Import support added: 2025-11-07*
