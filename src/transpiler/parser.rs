@@ -687,6 +687,9 @@ impl Parser {
         } else if self.peek_char() == Some('[') {
             // Array literal syntax: [1, 2, 3] -> will be converted to listOf() later
             self.parse_array_literal()
+        } else if self.is_range_literal() {
+            // Range literal syntax: 1..10 or 1..10:2 -> will be converted to .toList() later
+            self.parse_range_literal()
         } else {
             // Parse value (handle braces and parentheses for complex expressions)
             let start = self.pos;
@@ -768,6 +771,121 @@ impl Parser {
         }
 
         Err("Unterminated array literal".to_string())
+    }
+
+    /// Check if we're at the start of a range literal (e.g., 1..10, 5..20:2)
+    fn is_range_literal(&self) -> bool {
+        let mut temp_pos = self.pos;
+        let chars: Vec<char> = self.input.chars().collect();
+
+        // Skip optional minus sign
+        if temp_pos < chars.len() && chars[temp_pos] == '-' {
+            temp_pos += 1;
+        }
+
+        // Must start with a digit
+        if temp_pos >= chars.len() || !chars[temp_pos].is_ascii_digit() {
+            return false;
+        }
+
+        // Skip digits
+        while temp_pos < chars.len() && chars[temp_pos].is_ascii_digit() {
+            temp_pos += 1;
+        }
+
+        // Check for .. pattern
+        if temp_pos + 1 < chars.len() && chars[temp_pos] == '.' && chars[temp_pos + 1] == '.' {
+            return true;
+        }
+
+        false
+    }
+
+    /// Parse range literal: 1..10 or 1..10:2 or 10..1:-1
+    /// Returns as RANGE[start..end] or RANGE[start..end:step]
+    fn parse_range_literal(&mut self) -> Result<String, String> {
+        let start_pos = self.pos;
+
+        // Parse start number (may be negative)
+        let mut has_minus = false;
+        if self.peek_char() == Some('-') {
+            has_minus = true;
+            self.advance_char();
+        }
+
+        // Parse digits
+        while let Some(ch) = self.peek_char() {
+            if ch.is_ascii_digit() {
+                self.advance_char();
+            } else {
+                break;
+            }
+        }
+
+        let start_num = if has_minus {
+            format!("-{}", &self.input[start_pos + 1..self.pos])
+        } else {
+            self.input[start_pos..self.pos].to_string()
+        };
+
+        // Expect ..
+        if !self.consume_str("..") {
+            return Err(self.error_at_pos("Expected '..' in range literal"));
+        }
+
+        // Parse end number (may be negative)
+        let end_start = self.pos;
+        has_minus = false;
+        if self.peek_char() == Some('-') {
+            has_minus = true;
+            self.advance_char();
+        }
+
+        while let Some(ch) = self.peek_char() {
+            if ch.is_ascii_digit() {
+                self.advance_char();
+            } else {
+                break;
+            }
+        }
+
+        let end_num = if has_minus {
+            format!("-{}", &self.input[end_start + 1..self.pos])
+        } else {
+            self.input[end_start..self.pos].to_string()
+        };
+
+        // Check for optional :step
+        if self.peek_char() == Some(':') {
+            self.advance_char(); // consume :
+
+            let step_start = self.pos;
+            has_minus = false;
+            if self.peek_char() == Some('-') {
+                has_minus = true;
+                self.advance_char();
+            }
+
+            while let Some(ch) = self.peek_char() {
+                if ch.is_ascii_digit() {
+                    self.advance_char();
+                } else {
+                    break;
+                }
+            }
+
+            let step_num = if has_minus {
+                format!("-{}", &self.input[step_start + 1..self.pos])
+            } else {
+                self.input[step_start..self.pos].to_string()
+            };
+
+            // Return as special marker for codegen
+            Ok(format!("RANGE[{}..{}:{}]", start_num, end_num, step_num))
+        } else {
+            // No step, just start..end
+            Ok(format!("RANGE[{}..{}]", start_num, end_num))
+        }
     }
 
     fn parse_string(&mut self) -> Result<String, String> {
@@ -1501,6 +1619,16 @@ impl Parser {
             Some("onDispose")
         } else {
             None
+        }
+    }
+
+    fn consume_str(&mut self, s: &str) -> bool {
+        let remaining = &self.input[self.pos..];
+        if remaining.starts_with(s) {
+            self.pos += s.len();
+            true
+        } else {
+            false
         }
     }
 
