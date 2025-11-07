@@ -260,3 +260,112 @@ std::string formatNumber(std::string format, int number) {
     assert!(cmake_code.contains("ffi/cpp/strings.cpp"));
     assert!(cmake_code.contains("build/jni/strings_bridge.cpp"));
 }
+
+#[test]
+fn test_ffi_array_end_to_end() {
+    // Create a temporary directory with test C++ file
+    let temp_dir = TempDir::new().unwrap();
+    let ffi_dir = temp_dir.path().join("ffi");
+    let cpp_dir = ffi_dir.join("cpp");
+    fs::create_dir_all(&cpp_dir).unwrap();
+
+    // Write test C++ file with array functions
+    // NOTE: Put opening brace on same line for regex matching
+    let cpp_content = r#"
+// @ffi
+std::vector<int> doubleValues(std::vector<int> values) {
+    return values;
+}
+
+// @ffi
+int sumArray(const std::vector<int>& values) {
+    return 0;
+}
+
+// @ffi
+std::vector<std::string> toUpperCase(std::vector<std::string> strings) {
+    return strings;
+}
+"#;
+    fs::write(cpp_dir.join("arrays.cpp"), cpp_content).unwrap();
+
+    // Test 1: Discover FFI functions
+    let functions = discover_cpp_ffi(&ffi_dir).unwrap();
+    assert_eq!(functions.len(), 3, "Should find 3 @ffi functions");
+
+    // Test 2: Check types are correct
+    assert_eq!(functions[0].name, "doubleValues");
+    assert_eq!(functions[0].params[0].1, whitehall::ffi_parser::CppType::IntArray);
+    assert_eq!(functions[0].return_type, whitehall::ffi_parser::CppType::IntArray);
+
+    assert_eq!(functions[1].name, "sumArray");
+    assert_eq!(functions[1].params[0].1, whitehall::ffi_parser::CppType::IntArray);
+    assert_eq!(functions[1].return_type, whitehall::ffi_parser::CppType::Int);
+
+    assert_eq!(functions[2].name, "toUpperCase");
+    assert_eq!(functions[2].params[0].1, whitehall::ffi_parser::CppType::StringArray);
+    assert_eq!(functions[2].return_type, whitehall::ffi_parser::CppType::StringArray);
+
+    // Test 3: Generate Kotlin bindings
+    let kotlin_code = generate_kotlin_object(
+        &functions,
+        "com.example.test",
+        "arrays",
+        "Arrays",
+    );
+
+    assert!(kotlin_code.contains("package com.example.test"));
+    assert!(kotlin_code.contains("object Arrays"));
+    assert!(kotlin_code.contains("external fun doubleValues(values: IntArray): IntArray"));
+    assert!(kotlin_code.contains("external fun sumArray(values: IntArray): Int"));
+    assert!(kotlin_code.contains("external fun toUpperCase(strings: Array<String>): Array<String>"));
+    assert!(kotlin_code.contains("System.loadLibrary(\"arrays\")"));
+
+    // Test 4: Generate JNI bridge with array conversions
+    let jni_code = generate_jni_bridge(
+        &functions,
+        "com.example.test",
+        &["ffi/cpp/arrays.cpp".to_string()],
+    );
+
+    println!("{}", jni_code);
+
+    // Check forward declarations use const reference for arrays
+    assert!(jni_code.contains("std::vector<int> doubleValues(const std::vector<int>&);"));
+    assert!(jni_code.contains("int sumArray(const std::vector<int>&);"));
+    assert!(jni_code.contains("std::vector<std::string> toUpperCase(const std::vector<std::string>&);"));
+
+    // Check JNI function signatures
+    assert!(jni_code.contains("jintArray JNICALL"));
+    assert!(jni_code.contains("jintArray values"));
+
+    // Check array conversions
+    assert!(jni_code.contains("GetArrayLength"));
+    assert!(jni_code.contains("GetIntArrayElements"));
+    assert!(jni_code.contains("ReleaseIntArrayElements"));
+    assert!(jni_code.contains("NewIntArray"));
+    assert!(jni_code.contains("SetIntArrayRegion"));
+
+    // Check string array conversions
+    assert!(jni_code.contains("GetObjectArrayElement"));
+    assert!(jni_code.contains("NewObjectArray"));
+    assert!(jni_code.contains("SetObjectArrayElement"));
+
+    // Check vector construction
+    assert!(jni_code.contains("std::vector<int> cpp_values"));
+    assert!(jni_code.contains("std::vector<std::string> cpp_strings"));
+
+    // Test 5: Generate CMake
+    let cmake_code = generate_cmake(
+        "arrays",
+        &["ffi/cpp/arrays.cpp".to_string()],
+        "build/jni/arrays_bridge.cpp",
+        "17",
+        &[],
+        &[],
+    );
+
+    assert!(cmake_code.contains("project(\"arrays\")"));
+    assert!(cmake_code.contains("ffi/cpp/arrays.cpp"));
+    assert!(cmake_code.contains("build/jni/arrays_bridge.cpp"));
+}

@@ -12,12 +12,38 @@ pub enum CppType {
     Double,
     Bool,
     String,  // Phase 2: String support
+    // Phase 3: Array support
+    IntArray,
+    LongArray,
+    FloatArray,
+    DoubleArray,
+    BoolArray,
+    StringArray,
 }
 
 impl CppType {
     /// Parse C++ type from string
     pub fn from_str(type_str: &str) -> Result<Self> {
         let type_str = type_str.trim();
+
+        // Check for array types (std::vector<T> or const std::vector<T>&)
+        if type_str.starts_with("std::vector<") || type_str.starts_with("const std::vector<") {
+            // Extract the inner type
+            let start = type_str.find('<').unwrap() + 1;
+            let end = type_str.rfind('>').unwrap();
+            let inner_type = type_str[start..end].trim();
+
+            return match inner_type {
+                "int" | "int32_t" => Ok(CppType::IntArray),
+                "long" | "long long" | "int64_t" => Ok(CppType::LongArray),
+                "float" => Ok(CppType::FloatArray),
+                "double" => Ok(CppType::DoubleArray),
+                "bool" => Ok(CppType::BoolArray),
+                "std::string" | "string" => Ok(CppType::StringArray),
+                _ => bail!("Unsupported array element type: '{}'. Phase 3 supports: int, long, float, double, bool, std::string", inner_type),
+            };
+        }
+
         match type_str {
             "void" => Ok(CppType::Void),
             "int" | "int32_t" => Ok(CppType::Int),
@@ -27,7 +53,7 @@ impl CppType {
             "bool" => Ok(CppType::Bool),
             "std::string" => Ok(CppType::String),
             "string" => Ok(CppType::String),
-            _ => bail!("Unsupported C++ type: '{}'. Phase 2 supports: int, long, float, double, bool, std::string", type_str),
+            _ => bail!("Unsupported C++ type: '{}'. Phase 3 supports: int, long, float, double, bool, std::string, std::vector<T>", type_str),
         }
     }
 
@@ -41,6 +67,12 @@ impl CppType {
             CppType::Double => "jdouble",
             CppType::Bool => "jboolean",
             CppType::String => "jstring",
+            CppType::IntArray => "jintArray",
+            CppType::LongArray => "jlongArray",
+            CppType::FloatArray => "jfloatArray",
+            CppType::DoubleArray => "jdoubleArray",
+            CppType::BoolArray => "jbooleanArray",
+            CppType::StringArray => "jobjectArray",
         }
     }
 
@@ -54,6 +86,12 @@ impl CppType {
             CppType::Double => "Double",
             CppType::Bool => "Boolean",
             CppType::String => "String",
+            CppType::IntArray => "IntArray",
+            CppType::LongArray => "LongArray",
+            CppType::FloatArray => "FloatArray",
+            CppType::DoubleArray => "DoubleArray",
+            CppType::BoolArray => "BooleanArray",
+            CppType::StringArray => "Array<String>",
         }
     }
 
@@ -67,6 +105,12 @@ impl CppType {
             CppType::Double => "double",
             CppType::Bool => "bool",
             CppType::String => "std::string",
+            CppType::IntArray => "std::vector<int>",
+            CppType::LongArray => "std::vector<long long>",
+            CppType::FloatArray => "std::vector<float>",
+            CppType::DoubleArray => "std::vector<double>",
+            CppType::BoolArray => "std::vector<bool>",
+            CppType::StringArray => "std::vector<std::string>",
         }
     }
 }
@@ -120,9 +164,14 @@ pub fn parse_cpp_ffi_from_string(content: &str, source_file: &Path) -> Result<Ve
 
     // Regex to match: // @ffi followed by a function signature
     // Pattern: return_type function_name(params) {
-    // Note: Handles multi-word types like "long long" and namespaced types like "std::string"
+    // Note: Handles multi-word types, templates, and references
+    // Pattern breakdown:
+    // - const/typename keywords
+    // - Type name with :: namespace
+    // - Template parameters <...>
+    // - Reference &
     let ffi_regex = Regex::new(
-        r"(?m)^\s*//\s*@ffi\s*\n\s*([\w:]+(?:\s+[\w:]+)*)\s+(\w+)\s*\(([^)]*)\)"
+        r"(?m)^\s*//\s*@ffi\s*\n\s*([a-zA-Z_][\w:<>, &]*)\s+(\w+)\s*\(([^)]*)\)"
     ).unwrap();
 
     for cap in ffi_regex.captures_iter(content) {
@@ -342,6 +391,12 @@ mod tests {
         assert_eq!(CppType::Double.to_jni_type(), "jdouble");
         assert_eq!(CppType::Bool.to_jni_type(), "jboolean");
         assert_eq!(CppType::String.to_jni_type(), "jstring");
+        assert_eq!(CppType::IntArray.to_jni_type(), "jintArray");
+        assert_eq!(CppType::LongArray.to_jni_type(), "jlongArray");
+        assert_eq!(CppType::FloatArray.to_jni_type(), "jfloatArray");
+        assert_eq!(CppType::DoubleArray.to_jni_type(), "jdoubleArray");
+        assert_eq!(CppType::BoolArray.to_jni_type(), "jbooleanArray");
+        assert_eq!(CppType::StringArray.to_jni_type(), "jobjectArray");
 
         assert_eq!(CppType::Int.to_kotlin_type(), "Int");
         assert_eq!(CppType::Long.to_kotlin_type(), "Long");
@@ -349,8 +404,104 @@ mod tests {
         assert_eq!(CppType::Double.to_kotlin_type(), "Double");
         assert_eq!(CppType::Bool.to_kotlin_type(), "Boolean");
         assert_eq!(CppType::String.to_kotlin_type(), "String");
+        assert_eq!(CppType::IntArray.to_kotlin_type(), "IntArray");
+        assert_eq!(CppType::LongArray.to_kotlin_type(), "LongArray");
+        assert_eq!(CppType::FloatArray.to_kotlin_type(), "FloatArray");
+        assert_eq!(CppType::DoubleArray.to_kotlin_type(), "DoubleArray");
+        assert_eq!(CppType::BoolArray.to_kotlin_type(), "BooleanArray");
+        assert_eq!(CppType::StringArray.to_kotlin_type(), "Array<String>");
 
         assert_eq!(CppType::Int.to_cpp_type(), "int");
         assert_eq!(CppType::String.to_cpp_type(), "std::string");
+        assert_eq!(CppType::IntArray.to_cpp_type(), "std::vector<int>");
+        assert_eq!(CppType::StringArray.to_cpp_type(), "std::vector<std::string>");
+    }
+
+    #[test]
+    fn test_array_support() {
+        let cpp = r#"
+            // @ffi
+            std::vector<int> doubleValues(std::vector<int> values) {
+                std::vector<int> result;
+                for (int v : values) {
+                    result.push_back(v * 2);
+                }
+                return result;
+            }
+
+            // @ffi
+            std::vector<std::string> toUpperAll(std::vector<std::string> strings) {
+                return strings;
+            }
+        "#;
+
+        let path = Path::new("test.cpp");
+        let functions = parse_cpp_ffi_from_string(cpp, path).unwrap();
+
+        assert_eq!(functions.len(), 2);
+
+        // First function: vector<int>
+        assert_eq!(functions[0].name, "doubleValues");
+        assert_eq!(functions[0].return_type, CppType::IntArray);
+        assert_eq!(functions[0].params.len(), 1);
+        assert_eq!(functions[0].params[0].1, CppType::IntArray);
+
+        // Second function: vector<string>
+        assert_eq!(functions[1].name, "toUpperAll");
+        assert_eq!(functions[1].return_type, CppType::StringArray);
+        assert_eq!(functions[1].params[0].1, CppType::StringArray);
+    }
+
+    #[test]
+    fn test_all_array_types() {
+        let cpp = r#"
+            // @ffi
+            std::vector<int> processInts(std::vector<int> data) { return data; }
+
+            // @ffi
+            std::vector<long long> processLongs(std::vector<long long> data) { return data; }
+
+            // @ffi
+            std::vector<float> processFloats(std::vector<float> data) { return data; }
+
+            // @ffi
+            std::vector<double> processDoubles(std::vector<double> data) { return data; }
+
+            // @ffi
+            std::vector<bool> processBools(std::vector<bool> data) { return data; }
+
+            // @ffi
+            std::vector<std::string> processStrings(std::vector<std::string> data) { return data; }
+        "#;
+
+        let path = Path::new("test.cpp");
+        let functions = parse_cpp_ffi_from_string(cpp, path).unwrap();
+
+        assert_eq!(functions.len(), 6);
+        assert_eq!(functions[0].return_type, CppType::IntArray);
+        assert_eq!(functions[1].return_type, CppType::LongArray);
+        assert_eq!(functions[2].return_type, CppType::FloatArray);
+        assert_eq!(functions[3].return_type, CppType::DoubleArray);
+        assert_eq!(functions[4].return_type, CppType::BoolArray);
+        assert_eq!(functions[5].return_type, CppType::StringArray);
+    }
+
+    #[test]
+    fn test_const_vector_ref() {
+        let cpp = r#"
+            // @ffi
+            int sumValues(const std::vector<int>& values) {
+                int sum = 0;
+                for (int v : values) sum += v;
+                return sum;
+            }
+        "#;
+
+        let path = Path::new("test.cpp");
+        let functions = parse_cpp_ffi_from_string(cpp, path).unwrap();
+
+        assert_eq!(functions.len(), 1);
+        assert_eq!(functions[0].params[0].1, CppType::IntArray);
+        assert_eq!(functions[0].return_type, CppType::Int);
     }
 }

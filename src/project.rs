@@ -162,7 +162,7 @@ fn is_under_directory(path: &Path, dir: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::config::{AndroidConfig, BuildConfig, ProjectConfig, ToolchainConfig};
+    use crate::config::{AndroidConfig, BuildConfig, FfiConfig, ProjectConfig, ToolchainConfig};
 
     fn make_test_config() -> Config {
         Config {
@@ -177,6 +177,7 @@ mod tests {
             },
             build: BuildConfig::default(),
             toolchain: ToolchainConfig::default(),
+            ffi: FfiConfig::default(),
         }
     }
 
