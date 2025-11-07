@@ -667,6 +667,15 @@ impl ComposeBackend {
         self.indent_level -= 1;
         output.push_str("}\n");
 
+        // Append pass-through Kotlin blocks (Phase 5: Codegen Integration)
+        if !file.kotlin_blocks.is_empty() {
+            output.push('\n');
+            for block in &file.kotlin_blocks {
+                output.push_str(&block.content);
+                output.push_str("\n\n");
+            }
+        }
+
         // Check if Dispatchers were used in the generated output
         if output.contains("Dispatchers.") {
             // Add import at the beginning (we need to insert it in the imports section)

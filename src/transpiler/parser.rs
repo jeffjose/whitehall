@@ -148,6 +148,42 @@ impl Parser {
             Markup::Text(String::new())
         };
 
+        // Phase 5: After markup, capture any remaining Kotlin blocks (e.g., data classes after component markup)
+        loop {
+            self.skip_whitespace();
+
+            if self.peek_char().is_none() {
+                break; // EOF
+            }
+
+            if self.peek_char() == Some('@') {
+                // Collect annotations for next kotlin block
+                self.advance_char(); // Skip @
+                let annotation = self.parse_identifier()?;
+                pending_annotations.push(annotation);
+                continue;
+            }
+
+            if self.is_kotlin_syntax() {
+                let mut block = self.capture_kotlin_block()?;
+
+                // If there are pending annotations, prepend them
+                if !pending_annotations.is_empty() {
+                    let annotations_str = pending_annotations.iter()
+                        .map(|a| format!("@{}", a))
+                        .collect::<Vec<_>>()
+                        .join("\n");
+                    block.content = format!("{}\n{}", annotations_str, block.content);
+                    pending_annotations.clear();
+                }
+
+                kotlin_blocks.push(block);
+            } else {
+                // Unknown syntax after markup - stop parsing
+                break;
+            }
+        }
+
         Ok(WhitehallFile {
             imports,
             props,
