@@ -42,6 +42,20 @@ fn should_build_ffi(config: &Config, project_root: &Path) -> bool {
     }
 }
 
+/// Convert kebab-case or snake_case to PascalCase
+fn to_pascal_case(s: &str) -> String {
+    s.split(|c| c == '-' || c == '_')
+        .filter(|s| !s.is_empty())
+        .map(|word| {
+            let mut chars = word.chars();
+            match chars.next() {
+                None => String::new(),
+                Some(first) => first.to_uppercase().chain(chars).collect(),
+            }
+        })
+        .collect()
+}
+
 /// Build C++ FFI components
 fn build_cpp_ffi(config: &Config, ffi_dir: &Path, build_dir: &Path) -> Result<()> {
     // 1. Discover FFI functions
@@ -51,6 +65,14 @@ fn build_cpp_ffi(config: &Config, ffi_dir: &Path, build_dir: &Path) -> Result<()
     if functions.is_empty() {
         return Ok(());
     }
+
+    // Get library name from config or default to project name
+    let library_name = config.ffi.cpp.library_name
+        .as_ref()
+        .unwrap_or(&config.project.name);
+
+    // Generate PascalCase object name for Kotlin
+    let object_name = to_pascal_case(library_name);
 
     // 2. Generate Kotlin bindings
     let kotlin_dir = build_dir.join("generated/kotlin");
@@ -64,11 +86,11 @@ fn build_cpp_ffi(config: &Config, ffi_dir: &Path, build_dir: &Path) -> Result<()
     let kotlin_code = generate_kotlin_object(
         &functions,
         &kotlin_package,
-        "math", // TODO: Make this configurable
-        "Math",
+        library_name,
+        &object_name,
     );
 
-    let kotlin_file = kotlin_package_dir.join("Math.kt");
+    let kotlin_file = kotlin_package_dir.join(format!("{}.kt", object_name));
     fs::write(&kotlin_file, kotlin_code)
         .context(format!("Failed to write Kotlin binding: {}", kotlin_file.display()))?;
 
@@ -90,7 +112,7 @@ fn build_cpp_ffi(config: &Config, ffi_dir: &Path, build_dir: &Path) -> Result<()
 
     let jni_code = generate_jni_bridge(&functions, &kotlin_package, &source_files);
 
-    let jni_file = jni_dir.join("math_bridge.cpp");
+    let jni_file = jni_dir.join(format!("{}_bridge.cpp", library_name));
     fs::write(&jni_file, jni_code)
         .context(format!("Failed to write JNI bridge: {}", jni_file.display()))?;
 
@@ -109,7 +131,7 @@ fn build_cpp_ffi(config: &Config, ffi_dir: &Path, build_dir: &Path) -> Result<()
     } else {
         // Auto-generate CMakeLists.txt
         let cmake_code = generate_cmake(
-            "math", // TODO: Make this configurable
+            library_name,
             &source_files,
             jni_file.to_string_lossy().as_ref(),
             &config.ffi.cpp.standard,
@@ -134,7 +156,17 @@ fn build_cpp_ffi(config: &Config, ffi_dir: &Path, build_dir: &Path) -> Result<()
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::config::{AndroidConfig, BuildConfig, FfiConfig, ProjectConfig, ToolchainConfig};
+    use crate::config::{AndroidConfig, BuildConfig, FfiConfig, ProjectConfig, ToolchainConfig, CppConfig};
+
+    #[test]
+    fn test_to_pascal_case() {
+        assert_eq!(to_pascal_case("hello-world"), "HelloWorld");
+        assert_eq!(to_pascal_case("hello_world"), "HelloWorld");
+        assert_eq!(to_pascal_case("my-awesome-lib"), "MyAwesomeLib");
+        assert_eq!(to_pascal_case("ffi-cpp-example"), "FfiCppExample");
+        assert_eq!(to_pascal_case("math"), "Math");
+        assert_eq!(to_pascal_case("single"), "Single");
+    }
 
     fn create_test_config(ffi_enabled: Option<bool>) -> Config {
         Config {

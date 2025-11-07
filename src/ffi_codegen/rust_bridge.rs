@@ -342,7 +342,7 @@ mod tests {
                 ("a".to_string(), RustType::Int),
                 ("b".to_string(), RustType::Int),
             ],
-            return_type: RustType::Int,
+            return_type: RustFunctionReturn::plain(RustType::Int),
             source_file: PathBuf::from("lib.rs"),
         };
 
@@ -363,7 +363,7 @@ mod tests {
         let func = RustFfiFunction {
             name: "greet".to_string(),
             params: vec![("name".to_string(), RustType::String)],
-            return_type: RustType::String,
+            return_type: RustFunctionReturn::plain(RustType::String),
             source_file: PathBuf::from("lib.rs"),
         };
 
@@ -381,7 +381,7 @@ mod tests {
         let func = RustFfiFunction {
             name: "double_values".to_string(),
             params: vec![("values".to_string(), RustType::IntArray)],
-            return_type: RustType::IntArray,
+            return_type: RustFunctionReturn::plain(RustType::IntArray),
             source_file: PathBuf::from("lib.rs"),
         };
 

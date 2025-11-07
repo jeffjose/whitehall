@@ -123,6 +123,9 @@ pub struct CppConfig {
     pub flags: Vec<String>,
     #[serde(default)]
     pub libraries: Vec<String>,
+    /// Library name for the C++ FFI library. Defaults to project name if not specified.
+    #[serde(default)]
+    pub library_name: Option<String>,
 }
 
 impl Default for CppConfig {
@@ -131,6 +134,7 @@ impl Default for CppConfig {
             standard: default_cpp_standard(),
             flags: Vec::new(),
             libraries: Vec::new(),
+            library_name: None,
         }
     }
 }
