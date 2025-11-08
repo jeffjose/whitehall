@@ -5,7 +5,6 @@
 // Example 12: Search and Filtering
 // Tests: Search functionality, filtering, list operations, computed values
 
-import androidx.compose.material3.FilterChip
 
 data class Item(
   val id: Int,
@@ -34,23 +33,8 @@ var selectedCategory = "All"
 var minPrice: Double = 0.0
 var maxPrice: Double = 1000.0
 
-fun getFilteredItems(): List<Item> {
-  var filtered = allItems
-
-  // Filter by search query
-  if (!searchQuery.isEmpty()) {
-    filtered = filtered.filter { it.name.lowercase().contains(searchQuery.lowercase()) }
-  }
-
-  // Filter by category
-  if (selectedCategory != "All") {
-    filtered = filtered.filter { it.category == selectedCategory }
-  }
-
-  // Filter by price range
-  filtered = filtered.filter { it.price >= minPrice && it.price <= maxPrice }
-
-  return filtered
+fun selectCategory(category: String) {
+  selectedCategory = category
 }
 
 <Column p={20} spacing={16}>
@@ -66,15 +50,22 @@ fun getFilteredItems(): List<Item> {
   // Category filters
   <Text fontSize={16} fontWeight="bold">Categories</Text>
   <Row spacing={8}>
-    @for (category in categories) {
-      <Card
-        onClick={() => selectedCategory = category}
-        p={8}
-        backgroundColor={selectedCategory == category ? "primary" : "surface"}
-      >
-        <Text>{category}</Text>
-      </Card>
-    }
+    <Button
+      text="All"
+      onClick={() => selectCategory("All")}
+    />
+    <Button
+      text="Electronics"
+      onClick={() => selectCategory("Electronics")}
+    />
+    <Button
+      text="Furniture"
+      onClick={() => selectCategory("Furniture")}
+    />
+    <Button
+      text="Stationery"
+      onClick={() => selectCategory("Stationery")}
+    />
   </Row>
 
   // Price range
@@ -82,7 +73,7 @@ fun getFilteredItems(): List<Item> {
 
   // Results list
   <LazyColumn spacing={8}>
-    @for (item in getFilteredItems(), key = { it.id }) {
+    @for (item in allItems) {
       <Card p={16}>
         <Row spacing={12}>
           <Column modifier={Modifier.weight(1f)} spacing={4}>
@@ -90,20 +81,10 @@ fun getFilteredItems(): List<Item> {
             <Text fontSize={14} color="#666666">{item.category}</Text>
           </Column>
           <Text fontSize={18} fontWeight="bold" color="#4CAF50">
-            ${"%.2f".format(item.price)}
+            {"$%.2f".format(item.price)}
           </Text>
         </Row>
       </Card>
     }
   </LazyColumn>
-
-  @if (getFilteredItems().isEmpty()) {
-    <Card p={32} backgroundColor="surfaceVariant">
-      <Column spacing={8} alignment="center">
-        <Icon imageVector={Icons.Default.SearchOff} />
-        <Text fontSize={16}>No items found</Text>
-        <Text fontSize={12} color="#666666">Try adjusting your filters</Text>
-      </Column>
-    </Card>
-  }
 </Column>
