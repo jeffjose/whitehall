@@ -1,0 +1,158 @@
+/// [app]
+/// name = "Bottom Sheet & Modals"
+/// package = "com.example.bottomsheet"
+
+// Example 13: Bottom Sheets and Modal Dialogs
+// Tests: ModalBottomSheet, bottom sheet state, complex UI patterns
+
+import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.rememberModalBottomSheetState
+import androidx.compose.material3.BottomSheetDefaults
+
+@OptIn(ExperimentalMaterial3Api::class)
+
+var showBottomSheet = false
+var showActionSheet = false
+var selectedOption = "None"
+var sheetContent = "default"
+
+val options = listOf("Option 1", "Option 2", "Option 3", "Option 4")
+
+fun openBottomSheet(content: String) {
+  sheetContent = content
+  showBottomSheet = true
+}
+
+fun closeBottomSheet() {
+  showBottomSheet = false
+}
+
+fun selectOption(option: String) {
+  selectedOption = option
+  closeBottomSheet()
+}
+
+<Column p={20} spacing={16}>
+  <Text fontSize={28} fontWeight="bold">Bottom Sheets</Text>
+
+  // Trigger buttons
+  <Card p={16}>
+    <Column spacing={12}>
+      <Text fontSize={18} fontWeight="bold">Standard Bottom Sheet</Text>
+      <Button
+        text="Show Info Sheet"
+        onClick={() => openBottomSheet("info")}
+      />
+      <Button
+        text="Show Form Sheet"
+        onClick={() => openBottomSheet("form")}
+      />
+      <Button
+        text="Show Action Sheet"
+        onClick={() => showActionSheet = true}
+      />
+    </Column>
+  </Card>
+
+  // Current selection display
+  <Card p={16} backgroundColor="primaryContainer">
+    <Column spacing={8}>
+      <Text fontSize={16} fontWeight="bold">Selected Option</Text>
+      <Text fontSize={20}>{selectedOption}</Text>
+    </Column>
+  </Card>
+
+  // Bottom Sheet
+  @if (showBottomSheet) {
+    <ModalBottomSheet
+      onDismissRequest={() => closeBottomSheet()}
+    >
+      @if (sheetContent == "info") {
+        <BottomSheetInfoContent />
+      } else if (sheetContent == "form") {
+        <BottomSheetFormContent />
+      }
+    </ModalBottomSheet>
+  }
+
+  // Action Sheet
+  @if (showActionSheet) {
+    <ModalBottomSheet
+      onDismissRequest={() => showActionSheet = false}
+    >
+      <BottomSheetActionContent />
+    </ModalBottomSheet>
+  }
+</Column>
+
+// Bottom Sheet Content Components
+fun BottomSheetInfoContent() {
+  <Column p={24} spacing={16}>
+    <Text fontSize={24} fontWeight="bold">Information</Text>
+    <Text>
+      This is a modal bottom sheet. It slides up from the bottom of the screen
+      and can be dismissed by swiping down or tapping outside.
+    </Text>
+    <Button
+      text="Close"
+      onClick={() => closeBottomSheet()}
+      fillMaxWidth={true}
+    />
+  </Column>
+}
+
+fun BottomSheetFormContent() {
+  var name = ""
+  var email = ""
+
+  <Column p={24} spacing={16}>
+    <Text fontSize={24} fontWeight="bold">Quick Form</Text>
+
+    <TextField
+      value={name}
+      onValueChange={(value) => name = value}
+      label="Name"
+    />
+
+    <TextField
+      value={email}
+      onValueChange={(value) => email = value}
+      label="Email"
+    />
+
+    <Row spacing={12}>
+      <Button
+        text="Cancel"
+        onClick={() => closeBottomSheet()}
+        flex={1}
+      />
+      <Button
+        text="Submit"
+        onClick={() => closeBottomSheet()}
+        flex={1}
+      />
+    </Row>
+  </Column>
+}
+
+fun BottomSheetActionContent() {
+  <Column p={24} spacing={8}>
+    <Text fontSize={20} fontWeight="bold" p={16}>Select an option</Text>
+
+    @for (option in options) {
+      <Card
+        onClick={() => selectOption(option)}
+        p={16}
+      >
+        <Text fontSize={16}>{option}</Text>
+      </Card>
+    }
+
+    <Button
+      text="Cancel"
+      onClick={() => showActionSheet = false}
+      fillMaxWidth={true}
+    />
+  </Column>
+}

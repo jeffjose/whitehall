@@ -1,0 +1,131 @@
+/// [app]
+/// name = "Search & Filter"
+/// package = "com.example.search"
+
+// Example 12: Search and Filtering
+// Tests: Search functionality, filtering, list operations, computed values
+
+import androidx.compose.material3.SearchBar
+import androidx.compose.material3.FilterChip
+
+data class Item(
+  val id: Int,
+  val name: String,
+  val category: String,
+  val price: Double
+)
+
+val allItems = listOf(
+  Item(1, "Laptop", "Electronics", 999.99),
+  Item(2, "Mouse", "Electronics", 29.99),
+  Item(3, "Keyboard", "Electronics", 79.99),
+  Item(4, "Desk", "Furniture", 299.99),
+  Item(5, "Chair", "Furniture", 199.99),
+  Item(6, "Monitor", "Electronics", 349.99),
+  Item(7, "Lamp", "Furniture", 49.99),
+  Item(8, "Notebook", "Stationery", 5.99),
+  Item(9, "Pen", "Stationery", 1.99),
+  Item(10, "Headphones", "Electronics", 149.99)
+)
+
+var searchQuery = ""
+var selectedCategory = "All"
+var minPrice = 0.0
+var maxPrice = 1000.0
+
+val categories = listOf("All", "Electronics", "Furniture", "Stationery")
+
+fun getFilteredItems(): List<Item> {
+  var filtered = allItems
+
+  // Filter by search query
+  if (!searchQuery.isEmpty()) {
+    filtered = filtered.filter { it.name.lowercase().contains(searchQuery.lowercase()) }
+  }
+
+  // Filter by category
+  if (selectedCategory != "All") {
+    filtered = filtered.filter { it.category == selectedCategory }
+  }
+
+  // Filter by price range
+  filtered = filtered.filter { it.price >= minPrice && it.price <= maxPrice }
+
+  return filtered
+}
+
+<Column p={20} spacing={16}>
+  <Text fontSize={28} fontWeight="bold">Search & Filter</Text>
+
+  // Search bar
+  <TextField
+    value={searchQuery}
+    onValueChange={(value) => searchQuery = value}
+    label="Search items..."
+    leadingIcon={<Icon imageVector={Icons.Default.Search} />}
+  />
+
+  // Category filters
+  <Text fontSize={16} fontWeight="bold">Categories</Text>
+  <Row spacing={8}>
+    @for (category in categories) {
+      <FilterChip
+        selected={selectedCategory == category}
+        onClick={() => selectedCategory = category}
+        label={<Text>{category}</Text>}
+      />
+    }
+  </Row>
+
+  // Price range
+  <Text fontSize={16} fontWeight="bold">Price Range</Text>
+  <Row spacing={12}>
+    <Column flex={1}>
+      <TextField
+        value={minPrice.toString()}
+        onValueChange={(value) => minPrice = value.toDoubleOrNull() ?: 0.0}
+        label="Min Price"
+      />
+    </Column>
+    <Text fontSize={20}>-</Text>
+    <Column flex={1}>
+      <TextField
+        value={maxPrice.toString()}
+        onValueChange={(value) => maxPrice = value.toDoubleOrNull() ?: 1000.0}
+        label="Max Price"
+      />
+    </Column>
+  </Row>
+
+  // Results count
+  <Text fontSize={14} color="#666666">
+    Showing {getFilteredItems().size} of {allItems.size} items
+  </Text>
+
+  // Results list
+  <LazyColumn spacing={8}>
+    @for (item in getFilteredItems(), key = { it.id }) {
+      <Card p={16}>
+        <Row spacing={12}>
+          <Column flex={1}>
+            <Text fontSize={18} fontWeight="bold">{item.name}</Text>
+            <Text fontSize={14} color="#666666">{item.category}</Text>
+          </Column>
+          <Text fontSize={18} fontWeight="bold" color="#4CAF50">
+            ${String.format("%.2f", item.price)}
+          </Text>
+        </Row>
+      </Card>
+    }
+  </LazyColumn>
+
+  @if (getFilteredItems().isEmpty()) {
+    <Card p={32} backgroundColor="surfaceVariant">
+      <Column spacing={8} alignment="center">
+        <Icon imageVector={Icons.Default.SearchOff} />
+        <Text fontSize={16}>No items found</Text>
+        <Text fontSize={12} color="#666666">Try adjusting your filters</Text>
+      </Column>
+    </Card>
+  }
+</Column>

@@ -1,0 +1,85 @@
+/// [app]
+/// name = "Tabs & Navigation"
+/// package = "com.example.tabs"
+
+// Example 10: Tabs and Tab Navigation
+// Tests: TabRow, Tab switching, state management, conditional rendering
+
+import androidx.compose.material3.TabRow
+import androidx.compose.material3.Tab
+import androidx.compose.material3.HorizontalDivider
+
+var selectedTab = 0
+var homeCounter = 0
+var settingsText = "Default settings"
+
+fun selectTab(index: Int) {
+  selectedTab = index
+}
+
+<Column>
+  <TabRow selectedTabIndex={selectedTab}>
+    <Tab
+      selected={selectedTab == 0}
+      onClick={() => selectTab(0)}
+      text={<Text>Home</Text>}
+    />
+    <Tab
+      selected={selectedTab == 1}
+      onClick={() => selectTab(1)}
+      text={<Text>Profile</Text>}
+    />
+    <Tab
+      selected={selectedTab == 2}
+      onClick={() => selectTab(2)}
+      text={<Text>Settings</Text>}
+    />
+  </TabRow>
+
+  <HorizontalDivider />
+
+  // Tab content
+  <Column p={20} spacing={16}>
+    @if (selectedTab == 0) {
+      <HomeTab counter={homeCounter} onIncrement={() => homeCounter++} />
+    } else if (selectedTab == 1) {
+      <ProfileTab />
+    } else if (selectedTab == 2) {
+      <SettingsTab text={settingsText} onTextChange={(newText) => settingsText = newText} />
+    }
+  </Column>
+</Column>
+
+// Tab content components
+fun HomeTab(counter: Int, onIncrement: () -> Unit) {
+  <Column spacing={12}>
+    <Text fontSize={24} fontWeight="bold">Home Tab</Text>
+    <Text>Counter: {counter}</Text>
+    <Button text="Increment" onClick={onIncrement} />
+  </Column>
+}
+
+fun ProfileTab() {
+  <Column spacing={12}>
+    <Text fontSize={24} fontWeight="bold">Profile Tab</Text>
+    <Card p={16} backgroundColor="primaryContainer">
+      <Column spacing={8}>
+        <Text fontSize={18} fontWeight="bold">User Profile</Text>
+        <Text>Name: John Doe</Text>
+        <Text>Email: john@example.com</Text>
+      </Column>
+    </Card>
+  </Column>
+}
+
+fun SettingsTab(text: String, onTextChange: (String) -> Unit) {
+  <Column spacing={12}>
+    <Text fontSize={24} fontWeight="bold">Settings Tab</Text>
+    <TextField
+      value={text}
+      onValueChange={onTextChange}
+      label="Setting Value"
+    />
+    <Text>Current value: {text}</Text>
+  </Column>
+}
