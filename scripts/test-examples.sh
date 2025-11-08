@@ -13,7 +13,7 @@ transpiler_count=$(echo "$transpiler_output" | grep -oP '✓ All \K\d+/\d+(?= te
 
 echo ""
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-echo "Running Pass-Through Examples (Expected to Fail)"
+echo "Running Pass-Through Examples"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 passthru_output=$(cargo test --test passthru_examples_test tests::examples -- --nocapture 2>&1)
 passthru_exit=$?
@@ -61,9 +61,9 @@ if [ $passthru_exit -eq 0 ]; then
     fi
 else
     if [ -n "$passthru_count" ]; then
-        echo "⚠️  Pass-through examples: EXPECTED FAILURE ($passthru_count) - awaiting implementation"
+        echo "❌ Pass-through examples: FAILED ($passthru_count)"
     else
-        echo "⚠️  Pass-through examples: EXPECTED FAILURE - awaiting implementation"
+        echo "❌ Pass-through examples: FAILED"
     fi
 fi
 
@@ -83,10 +83,9 @@ fi
 
 echo ""
 
-# Pass-through tests are expected to fail, so exclude from overall pass/fail
-if [ $transpiler_exit -eq 0 ] && [ $optimization_exit -eq 0 ]; then
-    echo "🎉 All implemented example tests passed!"
-    echo "ℹ️  Pass-through tests are expected to fail until architecture is implemented (see docs/PASSTHRU.md)"
+# All test suites must pass
+if [ $transpiler_exit -eq 0 ] && [ $passthru_exit -eq 0 ] && [ $optimization_exit -eq 0 ]; then
+    echo "🎉 All example tests passed!"
     exit 0
 else
     echo "⚠️  Some tests failed"
