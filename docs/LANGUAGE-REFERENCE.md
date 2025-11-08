@@ -190,11 +190,18 @@ var enabled = false
 **@when:**
 ```whitehall
 @when (status) {
-  is Loading -> <Text>Loading...</Text>
-  is Success -> <Text>Success</Text>
-  is Error -> <Text>Error: {status.msg}</Text>
+  is Loading -> {
+    <Text>Loading...</Text>
+  }
+  is Success -> {
+    <Text>Success</Text>
+  }
+  is Error -> {
+    <Text>Error: {status.msg}</Text>
+  }
 }
 ```
+**Note:** Each arrow branch requires braces `{ }` around the component markup.
 
 ---
 
