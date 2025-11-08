@@ -1764,7 +1764,9 @@ impl ComposeBackend {
             }
             Markup::Interpolation(expr) => {
                 let indent_str = "    ".repeat(indent);
-                Ok(format!("{}Text(text = ${})\n", indent_str, expr))
+                // Transform ternary operators in interpolated expressions
+                let transformed_expr = self.transform_ternary_to_if_else(expr);
+                Ok(format!("{}Text(text = ${})\n", indent_str, transformed_expr))
             }
             Markup::Sequence(items) => {
                 let mut output = String::new();
@@ -2077,7 +2079,8 @@ impl ComposeBackend {
                             // Card has native onClick parameter, no special imports needed
                             // (handled as regular prop)
                         }
-                        ("TextField", "label") | ("TextField", "placeholder") => {
+                        ("TextField", "label") | ("TextField", "placeholder") |
+                        ("OutlinedTextField", "label") | ("OutlinedTextField", "placeholder") => {
                             // label/placeholder generate Text() components
                             self.add_import_if_missing(component_imports, "androidx.compose.material3.Text");
                         }
@@ -2146,6 +2149,18 @@ impl ComposeBackend {
                     }
                     "HorizontalDivider" => {
                         let import = "androidx.compose.material3.HorizontalDivider".to_string();
+                        if !component_imports.contains(&import) {
+                            component_imports.push(import);
+                        }
+                    }
+                    "OutlinedTextField" => {
+                        let import = "androidx.compose.material3.OutlinedTextField".to_string();
+                        if !component_imports.contains(&import) {
+                            component_imports.push(import);
+                        }
+                    }
+                    "Checkbox" => {
+                        let import = "androidx.compose.material3.Checkbox".to_string();
                         if !component_imports.contains(&import) {
                             component_imports.push(import);
                         }
@@ -2661,7 +2676,7 @@ impl ComposeBackend {
         // Component-specific transformations
         match (component, prop_name) {
             // TextField label → label = { Text("...") }
-            ("TextField", "label") => {
+            ("TextField", "label") | ("OutlinedTextField", "label") => {
                 let label_text = if value.starts_with('"') && value.ends_with('"') {
                     value[1..value.len()-1].to_string()
                 } else {
@@ -2670,7 +2685,7 @@ impl ComposeBackend {
                 Ok(vec![format!("label = {{ Text(\"{}\") }}", label_text)])
             }
             // TextField placeholder → placeholder = { Text("...") }
-            ("TextField", "placeholder") => {
+            ("TextField", "placeholder") | ("OutlinedTextField", "placeholder") => {
                 let placeholder_text = if value.starts_with('"') && value.ends_with('"') {
                     value[1..value.len()-1].to_string()
                 } else {
@@ -3224,6 +3239,88 @@ impl ComposeBackend {
         }
 
         let mut result = expr.to_string();
+
+        // Zeroth pass: Transform assignments to update method calls
+        // varName = expr → viewModel.updateVarName(expr)
+        // This must happen BEFORE variable references are transformed
+        for var_name in &self.mutable_vars {
+            // Match pattern: varName = value (but not ==, !=, <=, >=)
+            // Use regex-like logic to find assignments
+            let mut new_result = String::new();
+            let mut remaining = result.as_str();
+
+            while let Some(idx) = remaining.find(var_name) {
+                // Add everything before the match
+                new_result.push_str(&remaining[..idx]);
+
+                // Check if this is an assignment
+                let after_var = &remaining[idx + var_name.len()..];
+                let trimmed_after = after_var.trim_start();
+
+                // Check if followed by = (but not ==, !=, etc.)
+                if trimmed_after.starts_with('=') && !trimmed_after.starts_with("==") {
+                    // This is an assignment!
+                    // Extract the value being assigned (up to comma, closing brace, or semicolon)
+                    let mut depth = 0;
+                    let mut value_end = 0;
+                    let value_start = trimmed_after.find('=').unwrap() + 1;
+                    let value_part = &trimmed_after[value_start..].trim_start();
+
+                    for (i, ch) in value_part.char_indices() {
+                        match ch {
+                            '(' | '{' | '[' => depth += 1,
+                            ')' | '}' | ']' => {
+                                if depth > 0 {
+                                    depth -= 1;
+                                } else {
+                                    value_end = i;
+                                    break;
+                                }
+                            }
+                            ',' | ';' if depth == 0 => {
+                                value_end = i;
+                                break;
+                            }
+                            _ => {}
+                        }
+                    }
+
+                    if value_end == 0 {
+                        value_end = value_part.len();
+                    }
+
+                    let assigned_value = value_part[..value_end].trim();
+
+                    // Generate update method call
+                    let method_name = format!("update{}{}",
+                        var_name.chars().next().unwrap().to_uppercase(),
+                        &var_name[1..]
+                    );
+                    new_result.push_str(&format!("viewModel.{}({})", method_name, assigned_value));
+
+                    // Skip past the assignment in remaining
+                    // after_var is everything after var_name
+                    // We need to skip: whitespace + "=" + whitespace + value
+                    let trim_offset = after_var.len() - trimmed_after.len(); // whitespace before =
+                    let eq_and_ws = value_start; // includes = and whitespace after
+                    let skip_amount = trim_offset + eq_and_ws + value_end;
+                    if skip_amount <= after_var.len() {
+                        remaining = &after_var[skip_amount..];
+                    } else {
+                        // Safety: if calculation is wrong, just skip to end
+                        remaining = "";
+                    }
+                } else {
+                    // Not an assignment, just keep the variable name for later transformation
+                    new_result.push_str(var_name);
+                    remaining = after_var;
+                }
+            }
+
+            // Add any remaining text
+            new_result.push_str(remaining);
+            result = new_result;
+        }
 
         // First pass: Transform standalone variable references (not in interpolations)
         // This handles cases like: if (varName != null) or text = varName
@@ -3863,6 +3960,30 @@ impl ComposeBackend {
             }
         }
 
+        // Generate update methods for mutable state variables
+        // These allow safe state updates from lambdas in the wrapper component
+        for prop in &public_properties {
+            if prop.getter.is_none() {
+                // Only generate update methods for mutable (non-derived) properties
+                let type_str = if let Some(type_ann) = &prop.type_annotation {
+                    type_ann.clone()
+                } else if let Some(init_val) = &prop.initial_value {
+                    self.infer_type_from_value(init_val)
+                } else {
+                    "String".to_string()
+                };
+
+                // Generate update method: fun updateEmail(value: String) { _uiState.update { it.copy(email = value) } }
+                let method_name = format!("update{}{}",
+                    prop.name.chars().next().unwrap().to_uppercase(),
+                    &prop.name[1..]
+                );
+                output.push_str(&format!("    fun {}(value: {}) {{\n", method_name, type_str));
+                output.push_str(&format!("        _uiState.update {{ it.copy({} = value) }}\n", prop.name));
+                output.push_str("    }\n\n");
+            }
+        }
+
         // Generate functions (skip composable functions with markup - those go in wrapper)
         for func in &class.functions {
             // Skip functions with markup - they're helper composables for the wrapper
@@ -4060,6 +4181,25 @@ impl ComposeBackend {
             let initial_value = self.transform_array_literal(&state.initial_value, false);
             output.push_str(&format!("    val {}{}\n", state.name, type_str));
             output.push_str(&format!("        get() = {}\n\n", initial_value));
+        }
+
+        // Generate update methods for mutable state variables
+        // These allow safe state updates from lambdas in the wrapper component
+        for state in &mutable_state {
+            let type_str = if let Some(type_ann) = &state.type_annotation {
+                type_ann.clone()
+            } else {
+                self.infer_type_from_value(&state.initial_value)
+            };
+
+            // Generate update method: fun updateEmail(value: String) { _uiState.update { it.copy(email = value) } }
+            let method_name = format!("update{}{}",
+                state.name.chars().next().unwrap().to_uppercase(),
+                &state.name[1..]
+            );
+            output.push_str(&format!("    fun {}(value: {}) {{\n", method_name, type_str));
+            output.push_str(&format!("        _uiState.update {{ it.copy({} = value) }}\n", state.name));
+            output.push_str("    }\n\n");
         }
 
         // Generate functions
