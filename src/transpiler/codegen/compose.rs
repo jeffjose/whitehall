@@ -903,7 +903,8 @@ impl ComposeBackend {
                             if prop_expr.starts_with('"') && prop_expr.ends_with('"') {
                                 prop_expr[1..prop_expr.len()-1].to_string()
                             } else {
-                                prop_expr.to_string()
+                                // Transform ternary operators to if-else expressions
+                                self.transform_ternary_to_if_else(prop_expr)
                             }
                         })
                 } else {
@@ -1407,7 +1408,11 @@ impl ComposeBackend {
                         if text.starts_with("R.string.") {
                             let transformed = self.transform_string_resource(&text);
                             output.push_str(&format!("{}    Text(text = \"${{{}}}\")\n", indent_str, transformed));
+                        } else if text.starts_with("if (") {
+                            // It's an if-else expression (from ternary transformation)
+                            output.push_str(&format!("{}    Text(text = {})\n", indent_str, text));
                         } else {
+                            // It's a literal string
                             output.push_str(&format!("{}    Text(\"{}\")\n", indent_str, text));
                         }
                     }
@@ -1453,11 +1458,12 @@ impl ComposeBackend {
             // $lib -> com.example.app.lib
             // $components -> com.example.app.components
             let rest = &path[1..]; // Remove $
-            let base_package = self.package.rsplit('.').nth(1)
-                .and_then(|_parent| self.package.strip_suffix(&format!(".{}", self.package.rsplit('.').next().unwrap_or(""))))
-                .unwrap_or(&self.package);
 
-            // Add a dot between base package and the rest (e.g., "com.example.app" + "." + "models.User")
+            // Components should be in a subpackage of the current package
+            // For package "com.example.profilecard", $components.StatCard -> "com.example.profilecard.components.StatCard"
+            let base_package = &self.package;
+
+            // Add a dot between base package and the rest (e.g., "com.example.profilecard" + "." + "components.StatCard")
             if rest.starts_with('.') {
                 format!("{}{}", base_package, rest)
             } else {
