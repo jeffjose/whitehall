@@ -1064,23 +1064,13 @@ impl ComposeBackend {
                         }
 
                         // Combine into modifier parameter
+                        // For Text/Card, always use multiline format for consistency with expected output
                         if !modifiers.is_empty() {
-                            if modifiers.len() == 1 && !modifiers[0].starts_with('.') {
-                                // Single non-chained modifier (from explicit modifier with ternary)
-                                // Check if it already starts with "Modifier" to avoid duplication
-                                if modifiers[0].starts_with("Modifier") {
-                                    params.push(format!("modifier = {}", modifiers[0]));
-                                } else {
-                                    params.push(format!("modifier = Modifier{}", modifiers[0]));
-                                }
-                            } else {
-                                // Chain of modifiers
-                                let modifier_chain = modifiers.iter()
-                                    .map(|m| format!("            {}", m))
-                                    .collect::<Vec<_>>()
-                                    .join("\n");
-                                params.push(format!("modifier = Modifier\n{}", modifier_chain));
-                            }
+                            let modifier_chain = modifiers.iter()
+                                .map(|m| format!("            {}", m))
+                                .collect::<Vec<_>>()
+                                .join("\n");
+                            params.push(format!("modifier = Modifier\n{}", modifier_chain));
                         }
                     }
 
@@ -1160,12 +1150,18 @@ impl ComposeBackend {
                             }
                         }
 
-                        // Combine into modifier parameter with proper indentation
-                        let modifier_chain = modifiers.iter()
-                            .map(|m| format!("                {}", m))
-                            .collect::<Vec<_>>()
-                            .join("\n");
-                        params.push(format!("modifier = Modifier\n{}", modifier_chain));
+                        // Combine into modifier parameter
+                        if modifiers.len() == 1 {
+                            // Single modifier - format on one line
+                            params.push(format!("modifier = Modifier{}", modifiers[0]));
+                        } else {
+                            // Chain of modifiers - format multiline
+                            let modifier_chain = modifiers.iter()
+                                .map(|m| format!("                {}", m))
+                                .collect::<Vec<_>>()
+                                .join("\n");
+                            params.push(format!("modifier = Modifier\n{}", modifier_chain));
+                        }
 
                         // Process other props, skipping backgroundColor, padding, and shortcuts
                         for prop in &comp.props {
@@ -1233,13 +1229,19 @@ impl ComposeBackend {
                             modifiers.push(format!(".align({})", align_str));
                         }
 
-                        // Combine into modifier parameter with proper indentation
+                        // Combine into modifier parameter
                         if !modifiers.is_empty() {
-                            let modifier_chain = modifiers.iter()
-                                .map(|m| format!("                    {}", m))
-                                .collect::<Vec<_>>()
-                                .join("\n");
-                            params.push(format!("modifier = Modifier\n{}", modifier_chain));
+                            if modifiers.len() == 1 {
+                                // Single modifier - format on one line
+                                params.push(format!("modifier = Modifier{}", modifiers[0]));
+                            } else {
+                                // Chain of modifiers - format multiline
+                                let modifier_chain = modifiers.iter()
+                                    .map(|m| format!("                    {}", m))
+                                    .collect::<Vec<_>>()
+                                    .join("\n");
+                                params.push(format!("modifier = Modifier\n{}", modifier_chain));
+                            }
                         }
                     }
 
@@ -1311,7 +1313,7 @@ impl ComposeBackend {
                                     params.push(format!("model = {}", url_val));
                                 }
 
-                                // Add contentDescription
+                                // Add contentDescription = null if not provided
                                 if content_desc.is_none() {
                                     params.push("contentDescription = null".to_string());
                                 }
@@ -1344,21 +1346,13 @@ impl ComposeBackend {
                         params.extend(transformed?);
                     }
                 }
-                // Special handling for Icon - ensure contentDescription is present
+                // Special handling for Icon
                 else if comp.name == "Icon" {
-                    // Check if contentDescription is provided
-                    let has_content_desc = comp.props.iter().any(|p| p.name == "contentDescription");
-
                     // Add all props
                     for prop in &comp.props {
                         let prop_expr = self.get_prop_expr(&prop.value);
                         let transformed = self.transform_prop(&comp.name, &prop.name, prop_expr);
                         params.extend(transformed?);
-                    }
-
-                    // Add contentDescription = null if not provided
-                    if !has_content_desc {
-                        params.push("contentDescription = null".to_string());
                     }
                 } else {
                     // Check for padding/margin shortcuts that need to be combined
@@ -1400,7 +1394,8 @@ impl ComposeBackend {
                         }
 
                         if !padding_parts.is_empty() {
-                            params.push(format!("modifier = Modifier.padding({})", padding_parts.join(", ")));
+                            // Format as multiline for consistency with expected output
+                            params.push(format!("modifier = Modifier\n            .padding({})", padding_parts.join(", ")));
                         }
                     }
 
@@ -1511,20 +1506,27 @@ impl ComposeBackend {
     fn resolve_import(&self, path: &str) -> String {
         // Resolve $ aliases to actual package paths
         if path.starts_with('$') {
-            // $models -> com.example.app.models
-            // $lib -> com.example.app.lib
-            // $components -> com.example.app.components
             let rest = &path[1..]; // Remove $
 
-            // Components should be in a subpackage of the current package
-            // For package "com.example.profilecard", $components.StatCard -> "com.example.profilecard.components.StatCard"
-            let base_package = &self.package;
+            // Extract the root package by removing common package type suffixes
+            // e.g., "com.example.app.components" -> "com.example.app"
+            // e.g., "com.example.app.screens" -> "com.example.app"
+            let known_suffixes = [".components", ".screens", ".routes", ".lib", ".models", ".utils"];
+            let root_package = known_suffixes.iter()
+                .find_map(|&suffix| {
+                    if self.package.ends_with(suffix) {
+                        Some(&self.package[..self.package.len() - suffix.len()])
+                    } else {
+                        None
+                    }
+                })
+                .unwrap_or(&self.package);
 
-            // Add a dot between base package and the rest (e.g., "com.example.profilecard" + "." + "components.StatCard")
+            // Add a dot between root package and the rest
             if rest.starts_with('.') {
-                format!("{}{}", base_package, rest)
+                format!("{}{}", root_package, rest)
             } else {
-                format!("{}.{}", base_package, rest)
+                format!("{}.{}", root_package, rest)
             }
         } else {
             path.to_string()
