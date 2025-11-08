@@ -5,7 +5,6 @@
 // Example 12: Search and Filtering
 // Tests: Search functionality, filtering, list operations, computed values
 
-import androidx.compose.material3.SearchBar
 import androidx.compose.material3.FilterChip
 
 data class Item(
@@ -28,12 +27,12 @@ val allItems = listOf(
   Item(10, "Headphones", "Electronics", 149.99)
 )
 
+val categories = listOf("All", "Electronics", "Furniture", "Stationery")
+
 var searchQuery = ""
 var selectedCategory = "All"
-var minPrice = 0.0
-var maxPrice = 1000.0
-
-val categories = listOf("All", "Electronics", "Furniture", "Stationery")
+var minPrice: Double = 0.0
+var maxPrice: Double = 1000.0
 
 fun getFilteredItems(): List<Item> {
   var filtered = allItems
@@ -62,57 +61,36 @@ fun getFilteredItems(): List<Item> {
     value={searchQuery}
     onValueChange={(value) => searchQuery = value}
     label="Search items..."
-    leadingIcon={<Icon imageVector={Icons.Default.Search} />}
   />
 
   // Category filters
   <Text fontSize={16} fontWeight="bold">Categories</Text>
   <Row spacing={8}>
     @for (category in categories) {
-      <FilterChip
-        selected={selectedCategory == category}
+      <Card
         onClick={() => selectedCategory = category}
-        label={<Text>{category}</Text>}
-      />
+        p={8}
+        backgroundColor={selectedCategory == category ? "primary" : "surface"}
+      >
+        <Text>{category}</Text>
+      </Card>
     }
   </Row>
 
   // Price range
   <Text fontSize={16} fontWeight="bold">Price Range</Text>
-  <Row spacing={12}>
-    <Column flex={1}>
-      <TextField
-        value={minPrice.toString()}
-        onValueChange={(value) => minPrice = value.toDoubleOrNull() ?: 0.0}
-        label="Min Price"
-      />
-    </Column>
-    <Text fontSize={20}>-</Text>
-    <Column flex={1}>
-      <TextField
-        value={maxPrice.toString()}
-        onValueChange={(value) => maxPrice = value.toDoubleOrNull() ?: 1000.0}
-        label="Max Price"
-      />
-    </Column>
-  </Row>
-
-  // Results count
-  <Text fontSize={14} color="#666666">
-    Showing {getFilteredItems().size} of {allItems.size} items
-  </Text>
 
   // Results list
   <LazyColumn spacing={8}>
     @for (item in getFilteredItems(), key = { it.id }) {
       <Card p={16}>
         <Row spacing={12}>
-          <Column flex={1}>
+          <Column modifier={Modifier.weight(1f)} spacing={4}>
             <Text fontSize={18} fontWeight="bold">{item.name}</Text>
             <Text fontSize={14} color="#666666">{item.category}</Text>
           </Column>
           <Text fontSize={18} fontWeight="bold" color="#4CAF50">
-            ${String.format("%.2f", item.price)}
+            ${"%.2f".format(item.price)}
           </Text>
         </Row>
       </Card>

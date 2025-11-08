@@ -1227,6 +1227,31 @@ impl ComposeBackend {
                         }
                     }
                 }
+                // Special handling for FilterChip with composable label prop
+                else if comp.name == "FilterChip" {
+                    for prop in &comp.props {
+                        // label prop accepts composable content and needs lambda wrapping
+                        if prop.name == "label" {
+                            match &prop.value {
+                                PropValue::Markup(markup) => {
+                                    // Component prop: wrap in lambda
+                                    let content_code = self.generate_markup_with_indent(markup, indent + 2)?;
+                                    let closing_indent = "    ".repeat(indent + 1);
+                                    params.push(format!("label = {{\n{}{}}}", content_code, closing_indent));
+                                }
+                                PropValue::Expression(expr) => {
+                                    // Expression prop: wrap in lambda with Text component
+                                    params.push(format!("label = {{ Text({}) }}", expr));
+                                }
+                            }
+                        } else {
+                            // Other FilterChip props - handle normally (selected, onClick, etc.)
+                            let prop_expr = self.get_prop_expr(&prop.value);
+                            let transformed = self.transform_prop(&comp.name, &prop.name, prop_expr);
+                            params.extend(transformed?);
+                        }
+                    }
+                }
                 // Special handling for Text, Card, and Button with modifier props
                 else if comp.name == "Text" || comp.name == "Card" || comp.name == "Button" {
                     // Collect modifier-related props (including shortcuts)
@@ -2161,6 +2186,12 @@ impl ComposeBackend {
                     }
                     "Checkbox" => {
                         let import = "androidx.compose.material3.Checkbox".to_string();
+                        if !component_imports.contains(&import) {
+                            component_imports.push(import);
+                        }
+                    }
+                    "FilterChip" => {
+                        let import = "androidx.compose.material3.FilterChip".to_string();
                         if !component_imports.contains(&import) {
                             component_imports.push(import);
                         }
