@@ -16,6 +16,7 @@ pub struct ComposeBackend {
     uses_viewmodel: bool, // Phase 2: Track if any stores are used (for imports)
     uses_hilt_viewmodel: bool, // Phase 2: Track if any Hilt stores are used (for imports)
     uses_dispatchers: bool, // Phase 2: Track if dispatcher syntax is used (io/cpu/main)
+    uses_experimental_material3: bool, // Track if experimental Material3 APIs are used (DropdownMenu, etc.)
     // Phase 1.1: ViewModel wrapper context
     in_viewmodel_wrapper: bool, // Are we generating markup inside a ViewModel wrapper?
     mutable_vars: std::collections::HashSet<String>, // Mutable vars (need uiState prefix)
@@ -81,6 +82,7 @@ impl ComposeBackend {
             uses_viewmodel: false, // Phase 2: Track store usage for imports
             uses_hilt_viewmodel: false, // Phase 2: Track Hilt store usage for imports
             uses_dispatchers: false, // Phase 2: Track dispatcher syntax usage
+            uses_experimental_material3: false, // Track experimental Material3 API usage
             in_viewmodel_wrapper: false, // Phase 1.1: Not in ViewModel wrapper by default
             mutable_vars: std::collections::HashSet::new(), // Phase 1.1: Track mutable vars
             derived_props: std::collections::HashSet::new(), // Phase 1.1: Track derived properties
@@ -212,6 +214,11 @@ impl ComposeBackend {
         let mut component_imports = Vec::new();
         self.collect_imports_recursive(&file.markup, &mut prop_imports, &mut component_imports);
 
+        // Check if experimental Material3 APIs are used (DropdownMenu → ExposedDropdownMenuBox)
+        if component_imports.iter().any(|imp| imp.contains("ExposedDropdownMenuBox")) {
+            self.uses_experimental_material3 = true;
+        }
+
         // Import ordering:
         // If there's exactly one component import, no props, no state, no user imports: component first
         // Otherwise: Composable, prop imports, user imports, component imports
@@ -270,6 +277,11 @@ impl ComposeBackend {
             imports.push("androidx.lifecycle.viewmodel.compose.hiltViewModel".to_string());
         }
 
+        // Add ExperimentalMaterial3Api import if using experimental APIs (DropdownMenu, etc.)
+        if self.uses_experimental_material3 {
+            imports.push("androidx.compose.material3.ExperimentalMaterial3Api".to_string());
+        }
+
         // Note: Dispatchers import is added later if needed (see end of generate function)
 
         // Deduplicate and sort imports alphabetically (standard Kotlin convention)
@@ -284,6 +296,10 @@ impl ComposeBackend {
         output.push('\n');
 
         // Component function
+        // Add @OptIn if using experimental Material3 APIs
+        if self.uses_experimental_material3 {
+            output.push_str("@OptIn(ExperimentalMaterial3Api::class)\n");
+        }
         output.push_str("@Composable\n");
         output.push_str(&format!("fun {}(", self.component_name));
 
@@ -938,6 +954,106 @@ impl ComposeBackend {
                         }
                     }
                 }
+                // Special handling for DropdownMenu - transform to ExposedDropdownMenuBox
+                else if comp.name == "DropdownMenu" {
+                    // Mark that we're using experimental Material3 APIs
+                    self.uses_experimental_material3 = true;
+
+                    // Extract props
+                    let value_prop = comp.props.iter().find(|p| p.name == "value");
+                    let on_value_change = comp.props.iter().find(|p| p.name == "onValueChange");
+                    let items_prop = comp.props.iter().find(|p| p.name == "items");
+
+                    if let (Some(value), Some(on_change), Some(items)) = (value_prop, on_value_change, items_prop) {
+                        let value_expr = self.get_prop_expr(&value.value);
+                        let items_expr = self.get_prop_expr(&items.value);
+
+                        // Transform onValueChange lambda
+                        let on_change_expr = self.get_prop_expr(&on_change.value);
+                        let transformed_on_change = self.transform_lambda_arrow(&on_change_expr);
+
+                        // Generate unique variable name for expanded state
+                        // Use a counter to ensure uniqueness (in case multiple dropdowns)
+                        static DROPDOWN_COUNTER: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+                        let dropdown_id = DROPDOWN_COUNTER.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+                        let expanded_var = if dropdown_id == 0 {
+                            "expanded".to_string()
+                        } else {
+                            format!("expanded{}", dropdown_id)
+                        };
+
+                        // Generate the ExposedDropdownMenuBox structure
+                        output.clear(); // Clear the component name we added earlier
+                        output.push_str(&indent_str);
+                        output.push_str(&format!("var {} by remember {{ mutableStateOf(false) }}\n", expanded_var));
+                        output.push_str(&indent_str);
+                        output.push_str("ExposedDropdownMenuBox(\n");
+                        output.push_str(&format!("{}    expanded = {},\n", indent_str, expanded_var));
+                        output.push_str(&format!("{}    onExpandedChange = {{ {} = !{} }}\n", indent_str, expanded_var, expanded_var));
+                        output.push_str(&format!("{}) {{\n", indent_str));
+
+                        // TextField
+                        output.push_str(&format!("{}    TextField(\n", indent_str));
+                        output.push_str(&format!("{}        value = {},\n", indent_str, value_expr));
+                        output.push_str(&format!("{}        onValueChange = {{}},\n", indent_str));
+                        output.push_str(&format!("{}        readOnly = true,\n", indent_str));
+                        output.push_str(&format!("{}        modifier = Modifier.menuAnchor()\n", indent_str));
+                        output.push_str(&format!("{}    )\n", indent_str));
+
+                        // ExposedDropdownMenu
+                        output.push_str(&format!("{}    ExposedDropdownMenu(\n", indent_str));
+                        output.push_str(&format!("{}        expanded = {},\n", indent_str, expanded_var));
+                        output.push_str(&format!("{}        onDismissRequest = {{ {} = false }}\n", indent_str, expanded_var));
+                        output.push_str(&format!("{}    ) {{\n", indent_str));
+
+                        // DropdownMenuItem for each item
+                        output.push_str(&format!("{}        {}.forEach {{ item ->\n", indent_str, items_expr));
+                        output.push_str(&format!("{}            DropdownMenuItem(\n", indent_str));
+                        output.push_str(&format!("{}                text = {{ Text(item) }},\n", indent_str));
+                        output.push_str(&format!("{}                onClick = {{\n", indent_str));
+
+                        // Extract the lambda body from transformed_on_change
+                        // transformed_on_change is like: { country -> selectedCountry = country }
+                        // We need to call it with 'item': onValueChange(item)
+                        // But since we have the lambda, we need to extract just the variable assignment
+                        if let Some(arrow_pos) = transformed_on_change.find("->") {
+                            let after_arrow = transformed_on_change[arrow_pos + 2..].trim();
+
+                            // Extract parameter name from lambda
+                            // Look for the opening brace and extract everything until ->
+                            let before_arrow = if let Some(brace_pos) = transformed_on_change.find('{') {
+                                transformed_on_change[brace_pos + 1..arrow_pos].trim()
+                            } else {
+                                ""
+                            };
+                            let param_name = before_arrow.trim();
+
+                            // Remove trailing brace if present
+                            let assignment = if after_arrow.ends_with('}') {
+                                &after_arrow[..after_arrow.len()-1]
+                            } else {
+                                after_arrow
+                            }.trim();
+
+                            // Replace parameter with 'item' in the assignment
+                            let item_assignment = assignment.replace(param_name, "item");
+
+                            output.push_str(&format!("{}                    {}\n", indent_str, item_assignment));
+                        }
+
+                        output.push_str(&format!("{}                    {} = false\n", indent_str, expanded_var));
+                        output.push_str(&format!("{}                }}\n", indent_str));
+                        output.push_str(&format!("{}            )\n", indent_str));
+                        output.push_str(&format!("{}        }}\n", indent_str));
+                        output.push_str(&format!("{}    }}\n", indent_str));
+                        output.push_str(&format!("{}}}\n", indent_str));
+
+                        // Return early - we've generated the complete structure
+                        return Ok(output);
+                    } else {
+                        return Err("DropdownMenu requires value, onValueChange, and items props".to_string());
+                    }
+                }
                 // Special handling for Scaffold with topBar
                 else if comp.name == "Scaffold" {
                     for prop in &comp.props {
@@ -986,8 +1102,8 @@ impl ComposeBackend {
                         }
                     }
                 }
-                // Special handling for Text and Card with modifier props
-                else if comp.name == "Text" || comp.name == "Card" {
+                // Special handling for Text, Card, and Button with modifier props
+                else if comp.name == "Text" || comp.name == "Card" || comp.name == "Button" {
                     // Collect modifier-related props (including shortcuts)
                     let padding = comp.props.iter().find(|p| p.name == "padding");
                     let fill_max_width = comp.props.iter().find(|p| p.name == "fillMaxWidth");
@@ -1778,7 +1894,7 @@ impl ComposeBackend {
                             self.add_import_if_missing(prop_imports, "androidx.compose.foundation.layout.padding");
                             self.add_import_if_missing(prop_imports, "androidx.compose.ui.unit.dp");
                         }
-                        ("Text", "fillMaxWidth") | ("Card", "fillMaxWidth") => {
+                        ("Text", "fillMaxWidth") | ("Card", "fillMaxWidth") | ("Button", "fillMaxWidth") => {
                             // fillMaxWidth → modifier chain with .fillMaxWidth()
                             self.add_import_if_missing(prop_imports, "androidx.compose.ui.Modifier");
                             self.add_import_if_missing(prop_imports, "androidx.compose.foundation.layout.fillMaxWidth");
@@ -1829,6 +1945,21 @@ impl ComposeBackend {
                         let import = "androidx.compose.material3.TextField".to_string();
                         if !component_imports.contains(&import) {
                             component_imports.push(import);
+                        }
+                    }
+                    "DropdownMenu" => {
+                        // DropdownMenu transforms to ExposedDropdownMenuBox pattern
+                        // Note: ExposedDropdownMenu is part of ExposedDropdownMenuBoxScope, not a separate import
+                        let imports = vec![
+                            "androidx.compose.material3.ExposedDropdownMenuBox".to_string(),
+                            "androidx.compose.material3.DropdownMenuItem".to_string(),
+                            "androidx.compose.material3.TextField".to_string(),
+                            "androidx.compose.material3.Text".to_string(),
+                        ];
+                        for import in imports {
+                            if !component_imports.contains(&import) {
+                                component_imports.push(import);
+                            }
                         }
                     }
                     "Button" => {
@@ -2552,7 +2683,12 @@ impl ComposeBackend {
     }
 
     fn transform_lambda_arrow(&self, value: &str) -> String {
-        // Transform () => expr to { expr }
+        // Transform lambda arrow syntax to Kotlin lambda syntax:
+        // () => expr        → { expr }
+        // (param) => expr   → { param -> expr }
+        // (a, b) => expr    → { a, b -> expr }
+
+        // Check for () => pattern (no parameters)
         if value.contains("() =>") {
             let transformed = value.replace("() =>", "").trim().to_string();
             // Check if already wrapped in braces (multi-line lambda)
@@ -2563,7 +2699,50 @@ impl ComposeBackend {
                 // Wrap in braces
                 format!("{{ {} }}", transformed)
             }
+        }
+        // Check for (params) => pattern (with parameters)
+        else if let Some(arrow_pos) = value.find(" =>") {
+            // Check if there's a parameter list before =>
+            let before_arrow = &value[..arrow_pos].trim();
+
+            // Look for opening paren from the end of before_arrow
+            if let Some(paren_start) = before_arrow.rfind('(') {
+                let potential_params = &before_arrow[paren_start..];
+
+                // Check if it's a proper parameter list: starts with ( and ends with )
+                if potential_params.starts_with('(') && potential_params.ends_with(')') {
+                    // Extract parameters (strip the parens)
+                    let params = &potential_params[1..potential_params.len()-1];
+
+                    // Get the expression after =>
+                    let after_arrow = value[arrow_pos + 3..].trim(); // " =>" is 3 chars
+
+                    // Build Kotlin lambda: { params -> expr }
+                    let kotlin_lambda = if after_arrow.starts_with('{') && after_arrow.ends_with('}') {
+                        // Multi-line lambda already has braces
+                        format!("{{ {} -> {} }}", params, &after_arrow[1..after_arrow.len()-1].trim())
+                    } else {
+                        // Single expression
+                        format!("{{ {} -> {} }}", params, after_arrow)
+                    };
+
+                    // If there was anything before the parameter list, preserve it
+                    let prefix = &before_arrow[..paren_start];
+                    if prefix.is_empty() {
+                        kotlin_lambda
+                    } else {
+                        format!("{}{}", prefix, kotlin_lambda)
+                    }
+                } else {
+                    // Not a proper parameter list, return as-is
+                    value.to_string()
+                }
+            } else {
+                // No opening paren found, return as-is
+                value.to_string()
+            }
         } else {
+            // No arrow function syntax found, return as-is
             value.to_string()
         }
     }
