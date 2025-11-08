@@ -126,25 +126,56 @@ pub fn execute_exec(manifest_path: &str, command: &str, args: &[String]) -> Resu
     // Initialize toolchain manager
     let toolchain = Toolchain::new()?;
 
+    // Special case: 'which' should only use what's already installed, never download
+    let is_which_command = command == "which";
+
     // Lazy-load toolchains based on command
-    let needs_java = matches!(command, "java" | "javac" | "jar" | "jarsigner" | "keytool");
-    let needs_gradle = matches!(command, "gradle" | "gradlew");
-    let needs_android = true; // Always ensure Android SDK for consistency
+    let needs_java = !is_which_command && matches!(command, "java" | "javac" | "jar" | "jarsigner" | "keytool");
+    let needs_gradle = !is_which_command && matches!(command, "gradle" | "gradlew");
+    let needs_android = !is_which_command; // Only ensure for non-which commands
 
     let java_home = if needs_java {
         Some(toolchain.ensure_java(&config.toolchain.java)?)
+    } else if is_which_command {
+        // For 'which', check if Java is already installed (don't download)
+        let java_path = toolchain.root().join(format!("java/{}", config.toolchain.java));
+        if java_path.exists() {
+            Some(if cfg!(target_os = "macos") {
+                java_path.join("Contents/Home")
+            } else {
+                java_path
+            })
+        } else {
+            None
+        }
     } else {
         None
     };
 
     let gradle_bin = if needs_gradle {
         Some(toolchain.ensure_gradle(&config.toolchain.gradle)?)
+    } else if is_which_command {
+        // For 'which', check if Gradle is already installed (don't download)
+        let gradle_path = toolchain.root().join(format!("gradle/{}", config.toolchain.gradle)).join("bin/gradle");
+        if gradle_path.exists() {
+            Some(gradle_path)
+        } else {
+            None
+        }
     } else {
         None
     };
 
     let android_home = if needs_android {
         Some(toolchain.ensure_android_sdk_for_build()?)
+    } else if is_which_command {
+        // For 'which', check if Android SDK is already installed (don't download)
+        let sdk_path = toolchain.root().join("android");
+        if sdk_path.exists() && sdk_path.join("platform-tools/adb").exists() {
+            Some(sdk_path)
+        } else {
+            None
+        }
     } else {
         None
     };
