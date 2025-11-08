@@ -68,6 +68,7 @@ fn execute_single_file(file_path: &str) -> Result<()> {
         build_with_gradle(&toolchain, &config, &result.output_dir)?;
 
         let elapsed = start.elapsed();
+        let apk_path = result.output_dir.join("app/build/outputs/apk/debug/app-debug.apk");
         println!("   {} APK for `{}` v{} ({}) in {:.2}s",
             "Built".green().bold(),
             single_config.app.name,
@@ -75,6 +76,7 @@ fn execute_single_file(file_path: &str) -> Result<()> {
             single_config.app.package,
             elapsed.as_secs_f64()
         );
+        println!("        {} {}", "APK:".dimmed(), apk_path.display());
     } else {
         let elapsed = start.elapsed();
         println!("   {} FFI code generation for `{}` in {:.2}s (FFI-only mode)",
@@ -154,6 +156,7 @@ fn execute_project(manifest_path: &str) -> Result<()> {
         build_with_gradle(&toolchain, &config, &result.output_dir)?;
 
         let elapsed = start.elapsed();
+        let apk_path = result.output_dir.join("app/build/outputs/apk/debug/app-debug.apk");
         println!("   {} APK for `{}` v{} ({}) in {:.2}s",
             "Built".green().bold(),
             config.project.name,
@@ -161,6 +164,7 @@ fn execute_project(manifest_path: &str) -> Result<()> {
             config.android.package,
             elapsed.as_secs_f64()
         );
+        println!("        {} {}", "APK:".dimmed(), apk_path.display());
     } else {
         let elapsed = start.elapsed();
         println!("   {} FFI code generation for `{}` in {:.2}s (FFI-only mode)",
