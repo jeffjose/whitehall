@@ -1,4 +1,3 @@
-#!/usr/bin/env whitehall
 /// [app]
 /// name = "Async Data Loading"
 /// package = "com.example.asyncdata"

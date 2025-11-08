@@ -1,4 +1,3 @@
-#!/usr/bin/env whitehall
 /// [app]
 /// name = "User Profile"
 /// package = "com.example.userprofile"

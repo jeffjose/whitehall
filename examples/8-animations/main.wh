@@ -1,4 +1,3 @@
-#!/usr/bin/env whitehall
 /// [app]
 /// name = "Animations Demo"
 /// package = "com.example.animations"

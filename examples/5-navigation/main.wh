@@ -1,4 +1,3 @@
-#!/usr/bin/env whitehall
 /// [app]
 /// name = "Navigation Demo"
 /// package = "com.example.navigation"
