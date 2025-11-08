@@ -1,5 +1,6 @@
 use anyhow::{Context, Result};
 use colored::Colorize;
+use indicatif::{ProgressBar, ProgressStyle};
 use std::env;
 use std::fs;
 use std::path::Path;
@@ -178,6 +179,17 @@ fn execute_project(manifest_path: &str) -> Result<()> {
 }
 
 fn build_with_gradle(toolchain: &Toolchain, config: &crate::config::Config, output_dir: &Path) -> Result<()> {
+    // Create a spinner to show progress
+    let pb = ProgressBar::new_spinner();
+    pb.set_style(
+        ProgressStyle::default_spinner()
+            .template("{spinner:.dim} {msg}")
+            .unwrap()
+            .tick_strings(&["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"])
+    );
+    pb.set_message("Building APK with Gradle...");
+    pb.enable_steady_tick(std::time::Duration::from_millis(80));
+
     let mut gradle = toolchain.gradle_cmd(&config.toolchain.java, &config.toolchain.gradle)?;
 
     let status = gradle
@@ -185,6 +197,9 @@ fn build_with_gradle(toolchain: &Toolchain, config: &crate::config::Config, outp
         .args(&["assembleDebug", "--console=plain", "--quiet"])
         .status()
         .context("Failed to run Gradle")?;
+
+    // Clear the progress bar (it disappears)
+    pb.finish_and_clear();
 
     if !status.success() {
         anyhow::bail!("Gradle build failed");
