@@ -777,18 +777,9 @@ impl ComposeBackend {
                 let mut output = String::new();
                 let indent_str = "    ".repeat(indent);
 
-                // Phase 6: Check if this loop should use RecyclerView optimization
-                let should_use_recyclerview = self.optimizations.iter().any(|opt| {
-                    matches!(opt, Optimization::UseRecyclerView { collection_name, .. }
-                        if collection_name == &for_loop.collection)
-                });
-
-                if should_use_recyclerview {
-                    // Generate RecyclerView with AndroidView wrapper
-                    return self.generate_recyclerview_inline(for_loop, indent);
-                }
-
                 // Special handling for LazyColumn: use items() instead of forEach
+                // IMPORTANT: Check this BEFORE RecyclerView optimization
+                // LazyColumn should always use Compose items(), never RecyclerView
                 if parent == Some("LazyColumn") {
                     // items(collection, key = { expr }) { item ->
                     let transformed_collection = self.transform_viewmodel_expression(&for_loop.collection);
@@ -812,6 +803,18 @@ impl ComposeBackend {
 
                     output.push_str(&format!("{}}}\n", indent_str));
                     return Ok(output);
+                }
+
+                // Phase 6: Check if this loop should use RecyclerView optimization
+                // Only apply RecyclerView optimization if NOT in LazyColumn
+                let should_use_recyclerview = self.optimizations.iter().any(|opt| {
+                    matches!(opt, Optimization::UseRecyclerView { collection_name, .. }
+                        if collection_name == &for_loop.collection)
+                });
+
+                if should_use_recyclerview {
+                    // Generate RecyclerView with AndroidView wrapper
+                    return self.generate_recyclerview_inline(for_loop, indent);
                 }
 
                 // Regular forEach handling (for non-LazyColumn contexts)
@@ -1489,11 +1492,18 @@ impl ComposeBackend {
                 }
                 // Special handling for Icon
                 else if comp.name == "Icon" {
+                    let has_content_desc = comp.props.iter().any(|p| p.name == "contentDescription");
+
                     // Add all props
                     for prop in &comp.props {
                         let prop_expr = self.get_prop_expr(&prop.value);
                         let transformed = self.transform_prop(&comp.name, &prop.name, prop_expr);
                         params.extend(transformed?);
+                    }
+
+                    // Add contentDescription = null if not provided
+                    if !has_content_desc {
+                        params.push("contentDescription = null".to_string());
                     }
                 } else {
                     // Check for padding/margin shortcuts that need to be combined

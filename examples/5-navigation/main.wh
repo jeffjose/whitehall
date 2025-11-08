@@ -105,21 +105,19 @@ fun navigateToSettings() {
 
       <Spacer h={16} />
 
-      @if (selectedUser != null) {
-        <Card p={16}>
-          <Column spacing={12}>
-            <Text fontSize={24} fontWeight="bold">
-              {selectedUser.name}
-            </Text>
-            <Text fontSize={16} color="#616161">
-              Email: {selectedUser.email}
-            </Text>
-            <Text fontSize={16} color="#616161">
-              ID: {selectedUser.id}
-            </Text>
-          </Column>
-        </Card>
-      }
+      <Card p={16}>
+        <Column spacing={12}>
+          <Text fontSize={24} fontWeight="bold">
+            {selectedUser?.name ?: "No user selected"}
+          </Text>
+          <Text fontSize={16} color="#616161">
+            Email: {selectedUser?.email ?: "N/A"}
+          </Text>
+          <Text fontSize={16} color="#616161">
+            ID: {selectedUser?.id ?: 0}
+          </Text>
+        </Column>
+      </Card>
     </Column>
   } else if (currentRoute == "settings") {
     <Column p={20} spacing={16}>
