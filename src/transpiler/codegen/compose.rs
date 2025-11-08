@@ -3787,6 +3787,18 @@ impl ComposeBackend {
 
         output.push('\n');
 
+        // Add pass-through Kotlin blocks (data classes, sealed classes, etc.)
+        for kotlin_block in &file.kotlin_blocks {
+            output.push_str(&kotlin_block.content);
+            if !kotlin_block.content.ends_with('\n') {
+                output.push('\n');
+            }
+        }
+
+        if !file.kotlin_blocks.is_empty() {
+            output.push('\n');
+        }
+
         // Class declaration with optional SavedStateHandle constructor
         if has_route_params {
             output.push_str(&format!("class {}(\n", viewmodel_name));
@@ -3807,9 +3819,11 @@ impl ComposeBackend {
                 } else {
                     self.infer_type_from_value(&state.initial_value)
                 };
+                // Transform array literals in initial value
+                let initial_value = self.transform_array_literal(&state.initial_value, false);
                 let comma = if i < mutable_state.len() - 1 { "," } else { "" };
                 output.push_str(&format!("        val {}: {} = {}{}\n",
-                    state.name, type_str, state.initial_value, comma));
+                    state.name, type_str, initial_value, comma));
             }
             output.push_str("    )\n\n");
 
@@ -3838,8 +3852,10 @@ impl ComposeBackend {
             } else {
                 String::new()
             };
+            // Transform array literals in initial value
+            let initial_value = self.transform_array_literal(&state.initial_value, false);
             output.push_str(&format!("    val {}{}\n", state.name, type_str));
-            output.push_str(&format!("        get() = {}\n\n", state.initial_value));
+            output.push_str(&format!("        get() = {}\n\n", initial_value));
         }
 
         // Generate functions
@@ -4013,8 +4029,9 @@ impl ComposeBackend {
                 let type_annotation = state.type_annotation.as_ref()
                     .map(|t| format!(": {}", t))
                     .unwrap_or_default();
-                // Transform variable references in the initial value
-                let transformed_value = self.transform_viewmodel_expression(&state.initial_value);
+                // Transform array literals first, then variable references
+                let array_transformed = self.transform_array_literal(&state.initial_value, false);
+                let transformed_value = self.transform_viewmodel_expression(&array_transformed);
 
                 // Check if value contains newlines (multi-line expression)
                 if transformed_value.contains('\n') {
