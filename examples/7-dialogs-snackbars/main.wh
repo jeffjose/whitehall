@@ -1,0 +1,92 @@
+#!/usr/bin/env whitehall
+/// [app]
+/// name = "Dialogs & Snackbars"
+/// package = "com.example.dialogs"
+
+// Example 7: Dialogs and Snackbars
+// Tests: AlertDialog, SnackbarHost, dialog state management, coroutine launch in functions
+
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
+import kotlinx.coroutines.launch
+
+// Dialog and Snackbar demonstration
+var showDialog = false
+var showConfirmDialog = false
+var dialogMessage = "This is a simple dialog"
+var userName = ""
+var snackbarHostState = SnackbarHostState()
+
+fun showSnackbar(message: String) {
+  launch {
+    snackbarHostState.showSnackbar(message)
+  }
+}
+
+<Column p={20} spacing={16}>
+  <Text fontSize={28} fontWeight="bold">Dialogs & Snackbars</Text>
+
+  <Row spacing={12}>
+    <Button
+      text="Show Dialog"
+      onClick={() => showDialog = true}
+    />
+
+    <Button
+      text="Show Confirm"
+      onClick={() => showConfirmDialog = true}
+    />
+
+    <Button
+      text="Show Snackbar"
+      onClick={() => showSnackbar("Hello from Snackbar!")}
+    />
+  </Row>
+
+  @if (userName.isNotEmpty()) {
+    <Card p={16} backgroundColor="#E3F2FD">
+      <Text>Welcome, {userName}!</Text>
+    </Card>
+  }
+
+  // Simple AlertDialog
+  @if (showDialog) {
+    <AlertDialog
+      onDismissRequest={() => showDialog = false}
+      title={<Text>Information</Text>}
+      text={<Text>{dialogMessage}</Text>}
+      confirmButton={
+        <Button
+          text="OK"
+          onClick={() => showDialog = false}
+        />
+      }
+    />
+  }
+
+  // Confirmation Dialog with two actions
+  @if (showConfirmDialog) {
+    <AlertDialog
+      onDismissRequest={() => showConfirmDialog = false}
+      title={<Text>Confirm Action</Text>}
+      text={<Text>Enter your name:</Text>}
+      confirmButton={
+        <Button
+          text="Confirm"
+          onClick={() => {
+            showConfirmDialog = false
+            showSnackbar("Action confirmed!")
+          }}
+        />
+      }
+      dismissButton={
+        <Button
+          text="Cancel"
+          onClick={() => showConfirmDialog = false}
+        />
+      }
+    />
+  }
+
+  <SnackbarHost hostState={snackbarHostState} />
+</Column>

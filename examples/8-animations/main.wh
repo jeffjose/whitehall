@@ -1,0 +1,109 @@
+#!/usr/bin/env whitehall
+/// [app]
+/// name = "Animations Demo"
+/// package = "com.example.animations"
+
+// Example 8: Animations and Transitions
+// Tests: AnimatedVisibility, animateContentSize, animation states, transitions
+
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
+
+var isExpanded = false
+var isVisible = true
+var rotationAngle = 0f
+var boxSize = 100
+
+<Column p={20} spacing={16}>
+  <Text fontSize={28} fontWeight="bold">Animations Demo</Text>
+
+  <!-- Animated Visibility -->
+  <Card p={16}>
+    <Column spacing={12}>
+      <Text fontSize={18} fontWeight="bold">Animated Visibility</Text>
+      <Button
+        text={isVisible ? "Hide" : "Show"}
+        onClick={() => isVisible = !isVisible}
+      />
+
+      <AnimatedVisibility
+        visible={isVisible}
+        enter={fadeIn() + slideInVertically()}
+        exit={fadeOut() + slideOutVertically()}
+      >
+        <Card p={12} backgroundColor="#E3F2FD">
+          <Text>This content fades in and out!</Text>
+        </Card>
+      </AnimatedVisibility>
+    </Column>
+  </Card>
+
+  <!-- Expandable Card with animateContentSize -->
+  <Card p={16} modifier={Modifier.animateContentSize()}>
+    <Column spacing={12}>
+      <Row onClick={() => isExpanded = !isExpanded}>
+        <Text fontSize={18} fontWeight="bold">Expandable Card</Text>
+        <Icon
+          imageVector={isExpanded ? Icons.Default.ExpandLess : Icons.Default.ExpandMore}
+          contentDescription="Expand/Collapse"
+        />
+      </Row>
+
+      @if (isExpanded) {
+        <Text>
+          This is additional content that appears when the card is expanded.
+          The card animates its size smoothly using animateContentSize modifier.
+        </Text>
+      }
+    </Column>
+  </Card>
+
+  <!-- Animated Rotation -->
+  <Card p={16}>
+    <Column spacing={12}>
+      <Text fontSize={18} fontWeight="bold">Rotation Animation</Text>
+      <Button
+        text="Rotate"
+        onClick={() => rotationAngle = rotationAngle + 90f}
+      />
+
+      <Box
+        width={100}
+        height={100}
+        backgroundColor="#FF5722"
+        modifier={Modifier.rotate(animateFloatAsState(
+          targetValue = rotationAngle,
+          animationSpec = tween(durationMillis = 500)
+        ).value)}
+      >
+        <Text color="#FFFFFF" fontWeight="bold">Rotate</Text>
+      </Box>
+    </Column>
+  </Card>
+
+  <!-- Animated Size -->
+  <Card p={16}>
+    <Column spacing={12}>
+      <Text fontSize={18} fontWeight="bold">Size Animation</Text>
+      <Button
+        text={boxSize == 100 ? "Grow" : "Shrink"}
+        onClick={() => boxSize = boxSize == 100 ? 200 : 100}
+      />
+
+      <Box
+        width={animateDpAsState(targetValue = boxSize.dp).value}
+        height={animateDpAsState(targetValue = boxSize.dp).value}
+        backgroundColor="#4CAF50"
+      >
+        <Text color="#FFFFFF" fontWeight="bold">{boxSize}dp</Text>
+      </Box>
+    </Column>
+  </Card>
+</Column>
