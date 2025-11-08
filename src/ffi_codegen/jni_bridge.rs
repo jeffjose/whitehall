@@ -4,7 +4,7 @@ use crate::ffi_parser::cpp::{CppFfiFunction, CppType};
 pub fn generate_jni_bridge(
     functions: &[CppFfiFunction],
     package: &str,
-    source_files: &[String],
+    _source_files: &[String],
 ) -> String {
     let mut output = String::new();
 

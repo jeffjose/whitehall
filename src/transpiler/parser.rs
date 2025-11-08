@@ -686,10 +686,6 @@ impl Parser {
         })
     }
 
-    fn parse_property_declaration(&mut self) -> Result<PropertyDeclaration, String> {
-        self.parse_property_declaration_with_visibility(None)
-    }
-
     fn parse_property_declaration_with_visibility(&mut self, visibility: Option<String>) -> Result<PropertyDeclaration, String> {
         // Parse: [visibility] var name: Type = value or [visibility] val name = value or [visibility] val name get() = expression
         let mutable = if self.consume_word("var") {
@@ -1831,7 +1827,7 @@ impl Parser {
             let after_val = &remaining[4..]; // Skip "val "
             // Look for a dot before colon or newline (indicates extension property)
             // Example: "User.fullName: String" should find '.' at position 4
-            for (i, ch) in after_val.char_indices() {
+            for (_i, ch) in after_val.char_indices() {
                 if ch == '.' {
                     return true; // Found dot, this is an extension property
                 } else if ch == ':' || ch == '\n' || ch == '=' {
