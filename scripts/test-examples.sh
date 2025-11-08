@@ -8,8 +8,9 @@ transpiler_output=$(cargo test --test transpiler_examples_test tests::examples -
 transpiler_exit=$?
 echo "$transpiler_output"
 
-# Extract test count from output (looks for "All X/Y tests passed!")
-transpiler_count=$(echo "$transpiler_output" | grep -oP '✓ All \K\d+/\d+(?= tests passed!)' || echo "")
+# Extract test count from output (looks for "All X/Y tests passed!" or "X/Y tests passed")
+# Strip ANSI color codes first for easier parsing
+transpiler_count=$(echo "$transpiler_output" | sed 's/\x1b\[[0-9;]*m//g' | grep -oP '\d+/\d+(?= tests passed)' | head -1 || echo "")
 
 echo ""
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
@@ -19,8 +20,9 @@ passthru_output=$(cargo test --test passthru_examples_test tests::examples -- --
 passthru_exit=$?
 echo "$passthru_output"
 
-# Extract test count from passthru output
-passthru_count=$(echo "$passthru_output" | grep -oP '\K\d+/\d+(?= tests passed!)' || echo "")
+# Extract test count from passthru output (looks for "X/Y tests passed!" or "X/Y tests passed")
+# Strip ANSI color codes first for easier parsing
+passthru_count=$(echo "$passthru_output" | sed 's/\x1b\[[0-9;]*m//g' | grep -oP '\d+/\d+(?= tests passed)' | head -1 || echo "")
 
 echo ""
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
@@ -30,8 +32,9 @@ optimization_output=$(cargo test --test optimization_examples_test -- --nocaptur
 optimization_exit=$?
 echo "$optimization_output"
 
-# Extract test count from optimization output (looks for "X/Y tests passed!")
-optimization_count=$(echo "$optimization_output" | grep -oP '✓ \K\d+/\d+(?= tests passed!)' || echo "")
+# Extract test count from optimization output (looks for "✓ X/Y tests passed!" or "X/Y tests passed")
+# Strip ANSI color codes first for easier parsing
+optimization_count=$(echo "$optimization_output" | sed 's/\x1b\[[0-9;]*m//g' | grep -oP '\d+/\d+(?= tests passed)' | head -1 || echo "")
 
 echo ""
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
