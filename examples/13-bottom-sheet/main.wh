@@ -1,56 +1,55 @@
 /// [app]
-/// name = "Bottom Sheet & Modals"
-/// package = "com.example.bottomsheet"
+/// name = "Dialogs & Modals"
+/// package = "com.example.dialogs"
 
-// Example 13: Bottom Sheets and Modal Dialogs
-// Tests: ModalBottomSheet, bottom sheet state, complex UI patterns
-
-import androidx.compose.material3.ModalBottomSheet
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.rememberModalBottomSheetState
-import androidx.compose.material3.BottomSheetDefaults
-
-@OptIn(ExperimentalMaterial3Api::class)
-
-var showBottomSheet = false
-var showActionSheet = false
-var selectedOption = "None"
-var sheetContent = "default"
+// Example 13: Dialogs and Modal Patterns
+// Tests: Dialog, modal state management, complex UI patterns
 
 val options = listOf("Option 1", "Option 2", "Option 3", "Option 4")
 
-fun openBottomSheet(content: String) {
-  sheetContent = content
-  showBottomSheet = true
+var showDialog = false
+var showActionDialog = false
+var selectedOption = "None"
+var dialogContent = "default"
+
+// Dialog form state
+var formName = ""
+var formEmail = ""
+
+fun openDialog(content: String) {
+  dialogContent = content
+  showDialog = true
 }
 
-fun closeBottomSheet() {
-  showBottomSheet = false
+fun closeDialog() {
+  showDialog = false
+  formName = ""
+  formEmail = ""
 }
 
 fun selectOption(option: String) {
   selectedOption = option
-  closeBottomSheet()
+  showActionDialog = false
 }
 
 <Column p={20} spacing={16}>
-  <Text fontSize={28} fontWeight="bold">Bottom Sheets</Text>
+  <Text fontSize={28} fontWeight="bold">Dialogs & Modals</Text>
 
   // Trigger buttons
   <Card p={16}>
     <Column spacing={12}>
-      <Text fontSize={18} fontWeight="bold">Standard Bottom Sheet</Text>
+      <Text fontSize={18} fontWeight="bold">Dialog Examples</Text>
       <Button
-        text="Show Info Sheet"
-        onClick={() => openBottomSheet("info")}
+        text="Show Info Dialog"
+        onClick={() => openDialog("info")}
       />
       <Button
-        text="Show Form Sheet"
-        onClick={() => openBottomSheet("form")}
+        text="Show Form Dialog"
+        onClick={() => openDialog("form")}
       />
       <Button
-        text="Show Action Sheet"
-        onClick={() => showActionSheet = true}
+        text="Show Action Dialog"
+        onClick={() => showActionDialog = true}
       />
     </Column>
   </Card>
@@ -63,96 +62,85 @@ fun selectOption(option: String) {
     </Column>
   </Card>
 
-  // Bottom Sheet
-  @if (showBottomSheet) {
-    <ModalBottomSheet
-      onDismissRequest={() => closeBottomSheet()}
-    >
-      @if (sheetContent == "info") {
-        <BottomSheetInfoContent />
-      } else if (sheetContent == "form") {
-        <BottomSheetFormContent />
+  // Info Dialog
+  @if (showDialog && dialogContent == "info") {
+    <AlertDialog
+      onDismissRequest={() => closeDialog()}
+      title={<Text>Information</Text>}
+      text={<DialogInfoContent />}
+      confirmButton={
+        <Button text="Close" onClick={() => closeDialog()} />
       }
-    </ModalBottomSheet>
+    />
   }
 
-  // Action Sheet
-  @if (showActionSheet) {
-    <ModalBottomSheet
-      onDismissRequest={() => showActionSheet = false}
-    >
-      <BottomSheetActionContent />
-    </ModalBottomSheet>
+  // Form Dialog
+  @if (showDialog && dialogContent == "form") {
+    <AlertDialog
+      onDismissRequest={() => closeDialog()}
+      title={<Text>Quick Form</Text>}
+      text={<DialogFormContent
+        formName={formName}
+        formEmail={formEmail}
+        onNameChange={(value) => formName = value}
+        onEmailChange={(value) => formEmail = value}
+      />}
+      confirmButton={
+        <Button text="Submit" onClick={() => closeDialog()} />
+      }
+      dismissButton={
+        <Button text="Cancel" onClick={() => closeDialog()} />
+      }
+    />
+  }
+
+  // Action Dialog
+  @if (showActionDialog) {
+    <AlertDialog
+      onDismissRequest={() => showActionDialog = false}
+      title={<Text>Select an option</Text>}
+      text={<DialogActionContent
+        options={options}
+        onSelectOption={(option) => selectOption(option)}
+      />}
+      confirmButton={
+        <Button text="Cancel" onClick={() => showActionDialog = false} />
+      }
+    />
   }
 </Column>
 
-// Bottom Sheet Content Components
-fun BottomSheetInfoContent() {
-  <Column p={24} spacing={16}>
-    <Text fontSize={24} fontWeight="bold">Information</Text>
-    <Text>
-      This is a modal bottom sheet. It slides up from the bottom of the screen
-      and can be dismissed by swiping down or tapping outside.
-    </Text>
-    <Button
-      text="Close"
-      onClick={() => closeBottomSheet()}
-      fillMaxWidth={true}
-    />
-  </Column>
+// Dialog Content Components
+fun DialogInfoContent() {
+  <Text>This is a modal dialog example. Dialogs appear in the center of the screen and can be dismissed by tapping outside or using the buttons.</Text>
 }
 
-fun BottomSheetFormContent() {
-  var name = ""
-  var email = ""
-
-  <Column p={24} spacing={16}>
-    <Text fontSize={24} fontWeight="bold">Quick Form</Text>
-
+fun DialogFormContent(formName: String, formEmail: String, onNameChange: (String) -> Unit, onEmailChange: (String) -> Unit) {
+  <Column spacing={12}>
     <TextField
-      value={name}
-      onValueChange={(value) => name = value}
+      value={formName}
+      onValueChange={onNameChange}
       label="Name"
     />
 
     <TextField
-      value={email}
-      onValueChange={(value) => email = value}
+      value={formEmail}
+      onValueChange={onEmailChange}
       label="Email"
     />
-
-    <Row spacing={12}>
-      <Button
-        text="Cancel"
-        onClick={() => closeBottomSheet()}
-        flex={1}
-      />
-      <Button
-        text="Submit"
-        onClick={() => closeBottomSheet()}
-        flex={1}
-      />
-    </Row>
   </Column>
 }
 
-fun BottomSheetActionContent() {
-  <Column p={24} spacing={8}>
-    <Text fontSize={20} fontWeight="bold" p={16}>Select an option</Text>
-
+fun DialogActionContent(options: List<String>, onSelectOption: (String) -> Unit) {
+  <Column spacing={8}>
     @for (option in options) {
-      <Card
-        onClick={() => selectOption(option)}
-        p={16}
-      >
-        <Text fontSize={16}>{option}</Text>
+      <Card p={12}>
+        <Row
+          modifier={Modifier.clickable { onSelectOption(option) }.padding(12.dp)}
+        >
+          <Text fontSize={16}>{option}</Text>
+        </Row>
       </Card>
     }
-
-    <Button
-      text="Cancel"
-      onClick={() => showActionSheet = false}
-      fillMaxWidth={true}
-    />
   </Column>
 }
