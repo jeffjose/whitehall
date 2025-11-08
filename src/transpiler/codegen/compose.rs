@@ -1049,7 +1049,18 @@ impl ComposeBackend {
                             let transformed = self.transform_ternary(mod_value);
                             // Convert hex colors in the modifier expression
                             let transformed = self.convert_hex_in_modifier(&transformed)?;
-                            modifiers.push(transformed);
+
+                            // If explicit modifier starts with "Modifier.", strip it for chaining
+                            let chainable = if transformed.starts_with("Modifier.") {
+                                format!(".{}", &transformed[9..]) // "Modifier." is 9 chars
+                            } else if transformed.starts_with("Modifier\n") {
+                                // Multi-line modifier chain starting with "Modifier\n    ."
+                                transformed.replacen("Modifier\n", "", 1)
+                            } else {
+                                transformed
+                            };
+
+                            modifiers.push(chainable);
                         }
 
                         // Combine into modifier parameter

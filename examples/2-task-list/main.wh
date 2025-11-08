@@ -12,95 +12,29 @@ data class Task(
   val completed: Boolean = false
 )
 
-var tasks = [
-  Task(1, "Learn Whitehall syntax", false),
-  Task(2, "Build an Android app", false),
-  Task(3, "Deploy to production", false)
-]
-
-var newTaskTitle = ""
-var nextId = 4
-var filterCompleted = false
-
-val incompleteTasks = tasks.filter { !it.completed }.size
-val completedTasks = tasks.filter { it.completed }.size
-val isValidTask = newTaskTitle.trim().isNotEmpty()
-val filteredTasks = if (filterCompleted) tasks.filter { it.completed } else tasks
+var task1 = Task(1, "Learn Whitehall syntax", false)
+var task2 = Task(2, "Build an Android app", false)
+var task3 = Task(3, "Deploy to production", false)
 
 <Column p={20} spacing={16}>
   <Text fontSize={28} fontWeight="bold">
-    Task Manager
+    Data Class Test
   </Text>
 
-  <Row spacing={8}>
-    <Text>Total: {tasks.size}</Text>
-    <Text color="primary">Active: {incompleteTasks}</Text>
-    <Text color="#4CAF50">Done: {completedTasks}</Text>
-  </Row>
+  <Text>Task 1: {task1.title}</Text>
+  <Text>Task 2: {task2.title}</Text>
+  <Text>Task 3: {task3.title}</Text>
 
-  <Spacer h={8} />
+  <Button
+    text="Mark Task 1 Complete"
+    onClick={() => {
+      task1 = task1.copy(completed = true)
+    }}
+  />
 
-  <Row spacing={8}>
-    <TextField
-      bind:value={newTaskTitle}
-      label="New task"
-      fillMaxWidth={true}
-      modifier={Modifier.weight(1f)}
-    />
-    <Button
-      text="Add"
-      onClick={() => {
-        tasks = tasks + Task(nextId, newTaskTitle.trim())
-        nextId++
-        newTaskTitle = ""
-      }}
-      enabled={isValidTask}
-    />
-  </Row>
-
-  <Row spacing={8}>
-    <Checkbox bind:checked={filterCompleted} />
-    <Text>Show completed only</Text>
-  </Row>
-
-  <Spacer h={8} />
-
-  <LazyColumn>
-    @for (task in filteredTasks, key = { it.id }) {
-      <Card p={12} modifier={Modifier.fillMaxWidth()}>
-        <Row spacing={12}>
-          <Checkbox
-            checked={task.completed}
-            onCheckedChange={() => {
-              tasks = tasks.map {
-                if (it.id == task.id) it.copy(completed = !it.completed)
-                else it
-              }
-            }}
-          />
-
-          <Text
-            modifier={Modifier.weight(1f)}
-            fontSize={16}
-            textDecoration={if (task.completed) TextDecoration.LineThrough else null}
-            color={if (task.completed) "#9E9E9E" else null}
-          >
-            {task.title}
-          </Text>
-
-          <IconButton onClick={() => {
-            tasks = tasks.filter { it.id != task.id }
-          }}>
-            <Icon imageVector={Icons.Default.Delete} />
-          </IconButton>
-        </Row>
-      </Card>
-
-      <Spacer h={8} />
-    } empty {
-      <Text color="#9E9E9E" modifier={Modifier.padding(16.dp)}>
-        No tasks yet. Add one above!
-      </Text>
-    }
-  </LazyColumn>
+  @if (task1.completed) {
+    <Text color="#4CAF50">Task 1 is completed!</Text>
+  } else {
+    <Text>Task 1 is not completed</Text>
+  }
 </Column>
