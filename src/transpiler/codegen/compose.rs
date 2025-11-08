@@ -2267,19 +2267,36 @@ impl ComposeBackend {
             }
             // Button onClick needs braces
             ("Button", "onClick") => {
+                // Note: transform_lambda_arrow has already run at this point
+                // So () => expr has been converted to { expr }
+                // We need to detect if expr is already a complete function call
+
                 if !value.starts_with('{') {
-                    // Simple function name - add (), then transform
-                    // increment → increment() → viewModel.increment()
+                    // Bare function name: increment
+                    // Add (), transform, wrap
                     let with_parens = format!("{}()", value);
                     let transformed = self.transform_viewmodel_expression(&with_parens);
                     Ok(vec![format!("onClick = {{ {} }}", transformed)])
                 } else {
-                    // Already has braces - strip them, add (), transform, re-wrap
-                    // Input: {increment} → increment → increment() → viewModel.increment() → { viewModel.increment() }
+                    // Has braces - strip them and check inner content
                     let inner = value.trim_start_matches('{').trim_end_matches('}').trim();
-                    let with_parens = format!("{}()", inner);
-                    let transformed = self.transform_viewmodel_expression(&with_parens);
-                    Ok(vec![format!("onClick = {{ {} }}", transformed)])
+
+                    // Check if already a complete expression (function call, property access, etc.)
+                    // If it contains '(' or ends with ')', it's likely already complete
+                    let is_complete_expr = inner.contains('(') || inner.ends_with(')');
+
+                    if is_complete_expr {
+                        // Already complete: { clearItems() } or { navigate(Routes.Home) }
+                        // Just transform and re-wrap
+                        let transformed = self.transform_viewmodel_expression(inner);
+                        Ok(vec![format!("onClick = {{ {} }}", transformed)])
+                    } else {
+                        // Bare function with braces: {increment}
+                        // Add (), transform, re-wrap
+                        let with_parens = format!("{}()", inner);
+                        let transformed = self.transform_viewmodel_expression(&with_parens);
+                        Ok(vec![format!("onClick = {{ {} }}", transformed)])
+                    }
                 }
             }
             // Column spacing → verticalArrangement = Arrangement.spacedBy(N.dp)
