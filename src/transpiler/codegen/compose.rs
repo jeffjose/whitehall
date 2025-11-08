@@ -1981,6 +1981,12 @@ impl ComposeBackend {
                             component_imports.push(import);
                         }
                     }
+                    "CircularProgressIndicator" => {
+                        let import = "androidx.compose.material3.CircularProgressIndicator".to_string();
+                        if !component_imports.contains(&import) {
+                            component_imports.push(import);
+                        }
+                    }
                     "TextField" => {
                         let import = "androidx.compose.material3.TextField".to_string();
                         if !component_imports.contains(&import) {

@@ -1442,8 +1442,17 @@ impl Parser {
 
             let pos_before = self.pos;
 
+            // Check for Kotlin code (val declarations, etc.)
+            // Look ahead to see if this is a Kotlin declaration
+            if self.is_kotlin_declaration() {
+                // Parse the Kotlin line and skip it (it will be in the generated code context)
+                let _kotlin_line = self.parse_kotlin_statement()?;
+                // For now, we skip Kotlin statements in markup blocks
+                // They will be handled by the code generator when it processes the conditional
+                continue;
+            }
             // Check for control flow
-            if self.peek_char() == Some('@') {
+            else if self.peek_char() == Some('@') {
                 items.push(self.parse_control_flow()?);
             }
             // Check for component
@@ -2227,6 +2236,33 @@ impl Parser {
             position: start_pos,
             block_type,
         })
+    }
+
+    /// Check if the current position starts a Kotlin declaration (val, var, etc.)
+    fn is_kotlin_declaration(&self) -> bool {
+        let remaining = &self.input[self.pos..];
+
+        // Check for val/var declarations
+        remaining.starts_with("val ") || remaining.starts_with("var ")
+    }
+
+    /// Parse a Kotlin statement (like a val declaration) until newline or semicolon
+    fn parse_kotlin_statement(&mut self) -> Result<String, String> {
+        let mut statement = String::new();
+
+        while let Some(ch) = self.peek_char() {
+            if ch == '\n' || ch == ';' {
+                if ch == ';' {
+                    statement.push(ch);
+                    self.advance_char();
+                }
+                break;
+            }
+            statement.push(ch);
+            self.advance_char();
+        }
+
+        Ok(statement)
     }
 }
 

@@ -3,47 +3,41 @@
 /// package = "com.example.asyncdata"
 
 // Example 6: Async Data Loading
-// Tests: Suspend functions, async/await patterns, loading states, error handling, API simulation
+// Tests: Suspend functions, async operations, loading states, error handling
 
 import kotlinx.coroutines.delay
 
 data class Post(
   val id: Int,
   val title: String,
-  val body: String,
-  val author: String
+  val body: String
 )
 
-sealed class DataState<out T> {
-  object Idle : DataState<Nothing>()
-  object Loading : DataState<Nothing>()
-  data class Success<T>(val data: T) : DataState<T>()
-  data class Error(val message: String) : DataState<Nothing>()
-}
-
-var postsState: DataState<List<Post>> = DataState.Idle
+var posts: List<Post> = []
+var isLoading = false
+var errorMessage: String? = null
 var retryCount = 0
 
 suspend fun loadPosts() {
-  postsState = DataState.Loading
+  isLoading = true
+  errorMessage = null
 
-  io {
-    delay(2000) // Simulate network delay
+  delay(2000) // Simulate network delay
 
-    try {
-      // Simulate API response
-      val posts = [
-        Post(1, "Getting Started with Whitehall", "Learn the basics of building Android apps with Whitehall.", "Alice"),
-        Post(2, "Advanced State Management", "Deep dive into ViewModels and reactive state.", "Bob"),
-        Post(3, "Building Production Apps", "Best practices for large-scale applications.", "Carol")
-      ]
+  try {
+    // Simulate API response
+    posts = listOf(
+      Post(1, "Getting Started", "Learn the basics."),
+      Post(2, "Advanced Topics", "Deep dive into features."),
+      Post(3, "Production", "Best practices.")
+    )
 
-      postsState = DataState.Success(posts)
-      retryCount = 0
-    } catch (e: Exception) {
-      postsState = DataState.Error(e.message ?: "Unknown error occurred")
-    }
+    retryCount = 0
+  } catch (e: Exception) {
+    errorMessage = e.message ?: "Unknown error"
   }
+
+  isLoading = false
 }
 
 suspend fun refreshPosts() {
@@ -63,7 +57,7 @@ onMount {
       Blog Posts
     </Text>
     <Spacer />
-    <IconButton onClick={() => launch { refreshPosts() }}>
+    <IconButton onClick={() => refreshPosts()}>
       <Icon imageVector={Icons.Default.Refresh} />
     </IconButton>
   </Row>
@@ -76,20 +70,29 @@ onMount {
 
   <Spacer h={8} />
 
-  @if (postsState is DataState.Idle) {
-    <Card p={16}>
-      <Text>Press refresh to load posts</Text>
-    </Card>
-  } else if (postsState is DataState.Loading) {
+  @if (isLoading) {
     <Card p={16}>
       <Column spacing={12}>
         <CircularProgressIndicator />
         <Text>Loading posts...</Text>
       </Column>
     </Card>
-  } else if (postsState is DataState.Success) {
-    val posts = (postsState as DataState.Success<List<Post>>).data
-
+  } else if (errorMessage != null) {
+    <Card p={16}>
+      <Column spacing={12}>
+        <Text fontSize={18} fontWeight="bold" color="#F44336">
+          Error Loading Posts
+        </Text>
+        <Text color="#9E9E9E">
+          {errorMessage}
+        </Text>
+        <Button
+          text="Retry"
+          onClick={() => refreshPosts()}
+        />
+      </Column>
+    </Card>
+  } else if (posts.isNotEmpty()) {
     <LazyColumn>
       @for (post in posts, key = { it.id }) {
         <Card p={16}>
@@ -100,9 +103,6 @@ onMount {
             <Text fontSize={14} color="#616161">
               {post.body}
             </Text>
-            <Text fontSize={12} color="primary">
-              By {post.author}
-            </Text>
           </Column>
         </Card>
         <Spacer h={8} />
@@ -110,24 +110,11 @@ onMount {
     </LazyColumn>
 
     <Text fontSize={12} color="#4CAF50">
-      Loaded {posts.size} posts successfully
+      Loaded {posts.size} posts
     </Text>
-  } else if (postsState is DataState.Error) {
-    val error = postsState as DataState.Error
-
+  } else {
     <Card p={16}>
-      <Column spacing={12}>
-        <Text fontSize={18} fontWeight="bold" color="#F44336">
-          Error Loading Posts
-        </Text>
-        <Text color="#9E9E9E">
-          {error.message}
-        </Text>
-        <Button
-          text="Retry"
-          onClick={() => launch { refreshPosts() }}
-        />
-      </Column>
+      <Text>No posts loaded yet. Press refresh!</Text>
     </Card>
   }
 </Column>
