@@ -1,0 +1,131 @@
+#!/usr/bin/env whitehall
+/// [app]
+/// name = "Form Validation"
+/// package = "com.example.formvalidation"
+
+// Example 4: Form Validation
+// Tests: Multiple input types, validation logic, error states, derived validation
+
+data class ValidationError(
+  val field: String,
+  val message: String
+)
+
+var email = ""
+var password = ""
+var confirmPassword = ""
+var agreedToTerms = false
+var selectedCountry = "USA"
+
+val countries = ["USA", "Canada", "UK", "Germany", "France"]
+
+// Validation logic
+val emailError = if (email.isNotEmpty() && !email.contains("@")) {
+  "Invalid email format"
+} else {
+  null
+}
+
+val passwordError = if (password.isNotEmpty() && password.length < 8) {
+  "Password must be at least 8 characters"
+} else {
+  null
+}
+
+val confirmPasswordError = if (confirmPassword.isNotEmpty() && password != confirmPassword) {
+  "Passwords do not match"
+} else {
+  null
+}
+
+val isFormValid = email.isNotEmpty() &&
+                  password.isNotEmpty() &&
+                  confirmPassword.isNotEmpty() &&
+                  emailError == null &&
+                  passwordError == null &&
+                  confirmPasswordError == null &&
+                  agreedToTerms
+
+fun submitForm() {
+  // Simulate form submission
+  email = ""
+  password = ""
+  confirmPassword = ""
+  agreedToTerms = false
+}
+
+<Column p={20} spacing={16}>
+  <Text fontSize={28} fontWeight="bold">
+    Sign Up Form
+  </Text>
+
+  <Column spacing={8}>
+    <TextField
+      bind:value={email}
+      label="Email"
+      placeholder="your@email.com"
+    />
+    @if (emailError != null) {
+      <Text fontSize={12} color="#F44336">
+        {emailError}
+      </Text>
+    }
+  </Column>
+
+  <Column spacing={8}>
+    <TextField
+      bind:value={password}
+      label="Password"
+      type="password"
+    />
+    @if (passwordError != null) {
+      <Text fontSize={12} color="#F44336">
+        {passwordError}
+      </Text>
+    }
+  </Column>
+
+  <Column spacing={8}>
+    <TextField
+      bind:value={confirmPassword}
+      label="Confirm Password"
+      type="password"
+    />
+    @if (confirmPasswordError != null) {
+      <Text fontSize={12} color="#F44336">
+        {confirmPasswordError}
+      </Text>
+    }
+  </Column>
+
+  <Column spacing={8}>
+    <Text fontSize={14}>Country</Text>
+    <DropdownMenu
+      value={selectedCountry}
+      onValueChange={(country) => selectedCountry = country}
+      items={countries}
+    />
+  </Column>
+
+  <Row spacing={8}>
+    <Checkbox bind:checked={agreedToTerms} />
+    <Text fontSize={14}>
+      I agree to the Terms and Conditions
+    </Text>
+  </Row>
+
+  <Spacer h={8} />
+
+  <Button
+    text="Sign Up"
+    onClick={submitForm}
+    enabled={isFormValid}
+    fillMaxWidth={true}
+  />
+
+  @if (isFormValid) {
+    <Text fontSize={12} color="#4CAF50">
+      Form is valid! Ready to submit.
+    </Text>
+  }
+</Column>

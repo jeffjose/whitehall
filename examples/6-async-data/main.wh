@@ -1,0 +1,134 @@
+#!/usr/bin/env whitehall
+/// [app]
+/// name = "Async Data Loading"
+/// package = "com.example.asyncdata"
+
+// Example 6: Async Data Loading
+// Tests: Suspend functions, async/await patterns, loading states, error handling, API simulation
+
+import kotlinx.coroutines.delay
+
+data class Post(
+  val id: Int,
+  val title: String,
+  val body: String,
+  val author: String
+)
+
+sealed class DataState<out T> {
+  object Idle : DataState<Nothing>()
+  object Loading : DataState<Nothing>()
+  data class Success<T>(val data: T) : DataState<T>()
+  data class Error(val message: String) : DataState<Nothing>()
+}
+
+var postsState: DataState<List<Post>> = DataState.Idle
+var retryCount = 0
+
+suspend fun loadPosts() {
+  postsState = DataState.Loading
+
+  io {
+    delay(2000) // Simulate network delay
+
+    try {
+      // Simulate API response
+      val posts = [
+        Post(1, "Getting Started with Whitehall", "Learn the basics of building Android apps with Whitehall.", "Alice"),
+        Post(2, "Advanced State Management", "Deep dive into ViewModels and reactive state.", "Bob"),
+        Post(3, "Building Production Apps", "Best practices for large-scale applications.", "Carol")
+      ]
+
+      postsState = DataState.Success(posts)
+      retryCount = 0
+    } catch (e: Exception) {
+      postsState = DataState.Error(e.message ?: "Unknown error occurred")
+    }
+  }
+}
+
+suspend fun refreshPosts() {
+  retryCount++
+  loadPosts()
+}
+
+onMount {
+  launch {
+    loadPosts()
+  }
+}
+
+<Column p={20} spacing={16}>
+  <Row spacing={8}>
+    <Text fontSize={28} fontWeight="bold">
+      Blog Posts
+    </Text>
+    <Spacer />
+    <IconButton onClick={() => launch { refreshPosts() }}>
+      <Icon imageVector={Icons.Default.Refresh} />
+    </IconButton>
+  </Row>
+
+  @if (retryCount > 0) {
+    <Text fontSize={12} color="#9E9E9E">
+      Retry count: {retryCount}
+    </Text>
+  }
+
+  <Spacer h={8} />
+
+  @if (postsState is DataState.Idle) {
+    <Card p={16}>
+      <Text>Press refresh to load posts</Text>
+    </Card>
+  } else if (postsState is DataState.Loading) {
+    <Card p={16}>
+      <Column spacing={12}>
+        <CircularProgressIndicator />
+        <Text>Loading posts...</Text>
+      </Column>
+    </Card>
+  } else if (postsState is DataState.Success) {
+    val posts = (postsState as DataState.Success<List<Post>>).data
+
+    <LazyColumn>
+      @for (post in posts, key = { it.id }) {
+        <Card p={16}>
+          <Column spacing={8}>
+            <Text fontSize={20} fontWeight="bold">
+              {post.title}
+            </Text>
+            <Text fontSize={14} color="#616161">
+              {post.body}
+            </Text>
+            <Text fontSize={12} color="primary">
+              By {post.author}
+            </Text>
+          </Column>
+        </Card>
+        <Spacer h={8} />
+      }
+    </LazyColumn>
+
+    <Text fontSize={12} color="#4CAF50">
+      Loaded {posts.size} posts successfully
+    </Text>
+  } else if (postsState is DataState.Error) {
+    val error = postsState as DataState.Error
+
+    <Card p={16}>
+      <Column spacing={12}>
+        <Text fontSize={18} fontWeight="bold" color="#F44336">
+          Error Loading Posts
+        </Text>
+        <Text color="#9E9E9E">
+          {error.message}
+        </Text>
+        <Button
+          text="Retry"
+          onClick={() => launch { refreshPosts() }}
+        />
+      </Column>
+    </Card>
+  }
+</Column>
