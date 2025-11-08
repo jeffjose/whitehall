@@ -1108,6 +1108,7 @@ impl ComposeBackend {
                     let padding = comp.props.iter().find(|p| p.name == "padding");
                     let fill_max_width = comp.props.iter().find(|p| p.name == "fillMaxWidth");
                     let explicit_modifier = comp.props.iter().find(|p| p.name == "modifier");
+                    let on_click = comp.props.iter().find(|p| p.name == "onClick");
 
                     // Collect padding/margin shortcuts
                     let padding_shortcuts: Vec<_> = comp.props.iter()
@@ -1116,7 +1117,8 @@ impl ComposeBackend {
                         .collect();
 
                     // Build modifier chain if we have modifier-related props
-                    if padding.is_some() || fill_max_width.is_some() || explicit_modifier.is_some() || !padding_shortcuts.is_empty() {
+                    // For Card, onClick also requires a modifier (clickable)
+                    if padding.is_some() || fill_max_width.is_some() || explicit_modifier.is_some() || !padding_shortcuts.is_empty() || (on_click.is_some() && comp.name == "Card") {
                         let mut modifiers = Vec::new();
 
                         // Add padding first (if present)
@@ -1159,6 +1161,28 @@ impl ComposeBackend {
                             }
                         }
 
+                        // Add onClick as clickable modifier (for Card only)
+                        if let Some(click_prop) = on_click {
+                            if comp.name == "Card" {
+                                let click_value = self.get_prop_expr(&click_prop.value);
+                                // Transform the onClick value (same logic as Button onClick)
+                                let transformed = self.transform_lambda_arrow(click_value);
+
+                                // Handle bare function names vs lambda expressions
+                                let clickable_expr = if !transformed.starts_with('{') {
+                                    // Bare function name: add (), transform for ViewModel, wrap in braces
+                                    let with_parens = format!("{}()", transformed);
+                                    let with_viewmodel = self.transform_viewmodel_expression(&with_parens);
+                                    format!("{{ {} }}", with_viewmodel)
+                                } else {
+                                    // Already a lambda expression, just transform for ViewModel
+                                    self.transform_viewmodel_expression(&transformed)
+                                };
+
+                                modifiers.push(format!(".clickable {}", clickable_expr));
+                            }
+                        }
+
                         // Add explicit modifier last (if present)
                         if let Some(mod_prop) = explicit_modifier {
                             let mod_value = self.get_prop_expr(&mod_prop.value);
@@ -1194,6 +1218,7 @@ impl ComposeBackend {
                     for prop in &comp.props {
                         // Skip props already handled
                         if prop.name == "padding" || prop.name == "fillMaxWidth" || prop.name == "modifier" ||
+                           (prop.name == "onClick" && comp.name == "Card") ||  // onClick on Card handled as clickable modifier
                            matches!(prop.name.as_str(), "p" | "px" | "py" | "pt" | "pb" | "pl" | "pr" |
                                                         "m" | "mx" | "my" | "mt" | "mb" | "ml" | "mr") {
                             continue;
@@ -1904,6 +1929,11 @@ impl ComposeBackend {
                             self.add_import_if_missing(prop_imports, "androidx.compose.ui.Modifier");
                             self.add_import_if_missing(prop_imports, "androidx.compose.foundation.clickable");
                         }
+                        ("Card", "onClick") => {
+                            // onClick on Card → .clickable modifier
+                            self.add_import_if_missing(prop_imports, "androidx.compose.ui.Modifier");
+                            self.add_import_if_missing(prop_imports, "androidx.compose.foundation.clickable");
+                        }
                         ("TextField", "label") | ("TextField", "placeholder") => {
                             // label/placeholder generate Text() components
                             self.add_import_if_missing(component_imports, "androidx.compose.material3.Text");
@@ -2488,7 +2518,7 @@ impl ComposeBackend {
                 Ok(vec![])
             }
             // Button onClick needs braces
-            ("Button", "onClick") => {
+            ("Button", "onClick") | ("IconButton", "onClick") => {
                 // Note: transform_lambda_arrow has already run at this point
                 // So () => expr has been converted to { expr }
                 // We need to detect if expr is already a complete function call
@@ -2653,9 +2683,12 @@ impl ComposeBackend {
                 };
                 Ok(vec![format!("color = {}", color)])
             }
-            // Card onClick → just transform the value
+            // Card onClick → handled as clickable modifier in generate_markup
+            // (see special handling for Text, Card, and Button with modifier props)
             ("Card", "onClick") => {
-                Ok(vec![format!("onClick = {}", value)])
+                // This shouldn't be reached since onClick on Card is skipped in the loop
+                // But if it is, just return empty to avoid duplicate handling
+                Ok(vec![])
             }
             // Card backgroundColor → CardDefaults.cardColors()
             ("Card", "backgroundColor") => {
