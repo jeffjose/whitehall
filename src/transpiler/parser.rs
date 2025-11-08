@@ -91,9 +91,9 @@ impl Parser {
                 parsed_store_class = true; // Mark that we've seen a store class
             } else if self.consume_word("import") {
                 imports.push(self.parse_import()?);
-            } else if parsed_store_class && self.is_kotlin_syntax() {
-                // Pass-through: Kotlin syntax after a store class that doesn't need transformation
-                // Only do this if we've already parsed a store class
+            } else if self.is_kotlin_syntax() {
+                // Pass-through: Kotlin syntax that doesn't need transformation
+                // This includes data classes, sealed classes, typealias, etc.
                 // This check must come BEFORE var/val check to catch extension properties
                 let mut block = self.capture_kotlin_block()?;
 
@@ -1810,13 +1810,11 @@ impl Parser {
            remaining.starts_with("enum class ") ||
            remaining.starts_with("class ") ||  // Regular classes (must come after specific class types)
            remaining.starts_with("typealias ") ||
-           remaining.starts_with("fun ") ||
            remaining.starts_with("object ") ||
-           // Function modifiers
+           // Function modifiers (specialized functions that pass through)
            remaining.starts_with("inline fun ") ||
            remaining.starts_with("infix fun ") ||
            remaining.starts_with("operator fun ") ||
-           remaining.starts_with("suspend fun ") ||
            // Fun interfaces (SAM interfaces)
            remaining.starts_with("fun interface ") {
             return true;

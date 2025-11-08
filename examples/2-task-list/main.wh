@@ -27,25 +27,6 @@ val completedTasks = tasks.filter { it.completed }.size
 val isValidTask = newTaskTitle.trim().isNotEmpty()
 val filteredTasks = if (filterCompleted) tasks.filter { it.completed } else tasks
 
-fun addTask() {
-  if (isValidTask) {
-    tasks = tasks + Task(nextId, newTaskTitle.trim())
-    nextId++
-    newTaskTitle = ""
-  }
-}
-
-fun toggleTask(task: Task) {
-  tasks = tasks.map {
-    if (it.id == task.id) it.copy(completed = !it.completed)
-    else it
-  }
-}
-
-fun deleteTask(taskId: Int) {
-  tasks = tasks.filter { it.id != taskId }
-}
-
 <Column p={20} spacing={16}>
   <Text fontSize={28} fontWeight="bold">
     Task Manager
@@ -68,7 +49,11 @@ fun deleteTask(taskId: Int) {
     />
     <Button
       text="Add"
-      onClick={addTask}
+      onClick={() => {
+        tasks = tasks + Task(nextId, newTaskTitle.trim())
+        nextId++
+        newTaskTitle = ""
+      }}
       enabled={isValidTask}
     />
   </Row>
@@ -86,7 +71,12 @@ fun deleteTask(taskId: Int) {
         <Row spacing={12}>
           <Checkbox
             checked={task.completed}
-            onCheckedChange={() => toggleTask(task)}
+            onCheckedChange={() => {
+              tasks = tasks.map {
+                if (it.id == task.id) it.copy(completed = !it.completed)
+                else it
+              }
+            }}
           />
 
           <Text
@@ -98,7 +88,9 @@ fun deleteTask(taskId: Int) {
             {task.title}
           </Text>
 
-          <IconButton onClick={() => deleteTask(task.id)}>
+          <IconButton onClick={() => {
+            tasks = tasks.filter { it.id != task.id }
+          }}>
             <Icon imageVector={Icons.Default.Delete} />
           </IconButton>
         </Row>

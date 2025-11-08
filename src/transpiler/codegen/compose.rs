@@ -1332,6 +1332,23 @@ impl ComposeBackend {
                         let transformed = self.transform_prop(&comp.name, &prop.name, prop_expr);
                         params.extend(transformed?);
                     }
+                }
+                // Special handling for Icon - ensure contentDescription is present
+                else if comp.name == "Icon" {
+                    // Check if contentDescription is provided
+                    let has_content_desc = comp.props.iter().any(|p| p.name == "contentDescription");
+
+                    // Add all props
+                    for prop in &comp.props {
+                        let prop_expr = self.get_prop_expr(&prop.value);
+                        let transformed = self.transform_prop(&comp.name, &prop.name, prop_expr);
+                        params.extend(transformed?);
+                    }
+
+                    // Add contentDescription = null if not provided
+                    if !has_content_desc {
+                        params.push("contentDescription = null".to_string());
+                    }
                 } else {
                     // Check for padding/margin shortcuts that need to be combined
                     let padding_shortcuts: Vec<_> = comp.props.iter()
@@ -1526,6 +1543,26 @@ impl ComposeBackend {
                     let prop_expr = self.get_prop_expr(&prop.value);
 
                     // Generic prop value checks
+
+                    // Check for Icons usage (Icons.Default.*, Icons.Filled.*, etc.)
+                    if prop_expr.contains("Icons.Default.") {
+                        self.add_import_if_missing(prop_imports, "androidx.compose.material.icons.Icons");
+                        self.add_import_if_missing(prop_imports, "androidx.compose.material.icons.filled.*");
+                    }
+                    if prop_expr.contains("Icons.Filled.") {
+                        self.add_import_if_missing(prop_imports, "androidx.compose.material.icons.Icons");
+                        self.add_import_if_missing(prop_imports, "androidx.compose.material.icons.filled.*");
+                    }
+                    if prop_expr.contains("Icons.Outlined.") {
+                        self.add_import_if_missing(prop_imports, "androidx.compose.material.icons.Icons");
+                        self.add_import_if_missing(prop_imports, "androidx.compose.material.icons.outlined.*");
+                    }
+
+                    // Check for TextDecoration usage
+                    if prop_expr.contains("TextDecoration") {
+                        self.add_import_if_missing(prop_imports, "androidx.compose.ui.text.style.TextDecoration");
+                    }
+
                     if prop_expr.contains("Modifier") {
                         let import = "androidx.compose.ui.Modifier".to_string();
                         if !prop_imports.contains(&import) {
@@ -1819,6 +1856,12 @@ impl ComposeBackend {
                     }
                     "Icon" => {
                         let import = "androidx.compose.material3.Icon".to_string();
+                        if !component_imports.contains(&import) {
+                            component_imports.push(import);
+                        }
+                    }
+                    "IconButton" => {
+                        let import = "androidx.compose.material3.IconButton".to_string();
                         if !component_imports.contains(&import) {
                             component_imports.push(import);
                         }
