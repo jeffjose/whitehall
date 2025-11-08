@@ -201,7 +201,16 @@ var enabled = false
   }
 }
 ```
-**Note:** Each arrow branch requires braces `{ }` around the component markup.
+**⚠️ Current Limitation:** Each arrow branch requires braces `{ }` around the component markup. Single-line branches like `is Loading -> <Text>Loading</Text>` are not yet supported but planned for a future release.
+
+**Workaround:** Use `@if/@else if/@else` for pattern matching until single-line @when branches are supported:
+```whitehall
+@if (status is Loading) {
+  <Text>Loading...</Text>
+} else if (status is Success) {
+  <Text>Success</Text>
+}
+```
 
 ---
 

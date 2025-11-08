@@ -166,23 +166,32 @@ See `docs/QOL.md` for full list. Top priorities:
 
 **Not critical but worth noting:**
 
-1. **Import system edge cases**
+1. **@when single-line branches not supported** ⚠️
+   - **Issue**: Parser requires braces around all arrow branches
+   - **Current**: `is Loading -> { <Text>Loading</Text> }` ✅
+   - **Desired**: `is Loading -> <Text>Loading</Text>` ❌
+   - **Workaround**: Use `@if/@else if/@else` for pattern matching
+   - **Fix Plan**: Update parser to detect component markup after `->` without requiring braces
+   - **Effort**: 2-3 hours (parser modification + tests)
+   - **Priority**: Medium (workaround exists, but DX impact)
+
+2. **Import system edge cases**
    - Circular imports not detected
    - Import path resolution could be more robust
 
-2. **Type inference limitations**
+3. **Type inference limitations**
    - Some complex expressions need manual type hints
    - Derives types from usage, not always accurate
 
-3. **Compose compatibility**
+4. **Compose compatibility**
    - Targets Compose 1.5.x
    - May need updates for Compose 2.0
 
-4. **Performance**
+5. **Performance**
    - Transpilation is fast (<100ms for small files)
    - Large projects (100+ files) not tested
 
-5. **Windows support**
+6. **Windows support**
    - Toolchain management only supports Linux/macOS
    - Transpiler should work on Windows (untested)
 
