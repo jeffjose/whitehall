@@ -1,0 +1,114 @@
+#!/usr/bin/env whitehall
+/// [app]
+/// name = "Task List"
+/// package = "com.example.tasklist"
+
+// Example 2: Task List - Intermediate Syntax
+// Tests: data binding, lists with @for, arrays, data classes, derived state, form validation
+
+data class Task(
+  val id: Int,
+  val title: String,
+  val completed: Boolean = false
+)
+
+var tasks = [
+  Task(1, "Learn Whitehall syntax", false),
+  Task(2, "Build an Android app", false),
+  Task(3, "Deploy to production", false)
+]
+
+var newTaskTitle = ""
+var nextId = 4
+var filterCompleted = false
+
+val incompleteTasks = tasks.filter { !it.completed }.size
+val completedTasks = tasks.filter { it.completed }.size
+val isValidTask = newTaskTitle.trim().isNotEmpty()
+val filteredTasks = if (filterCompleted) tasks.filter { it.completed } else tasks
+
+fun addTask() {
+  if (isValidTask) {
+    tasks = tasks + Task(nextId, newTaskTitle.trim())
+    nextId++
+    newTaskTitle = ""
+  }
+}
+
+fun toggleTask(task: Task) {
+  tasks = tasks.map {
+    if (it.id == task.id) it.copy(completed = !it.completed)
+    else it
+  }
+}
+
+fun deleteTask(taskId: Int) {
+  tasks = tasks.filter { it.id != taskId }
+}
+
+<Column p={20} spacing={16}>
+  <Text fontSize={28} fontWeight="bold">
+    Task Manager
+  </Text>
+
+  <Row spacing={8}>
+    <Text>Total: {tasks.size}</Text>
+    <Text color="primary">Active: {incompleteTasks}</Text>
+    <Text color="#4CAF50">Done: {completedTasks}</Text>
+  </Row>
+
+  <Spacer h={8} />
+
+  <Row spacing={8}>
+    <TextField
+      bind:value={newTaskTitle}
+      label="New task"
+      fillMaxWidth={true}
+      modifier={Modifier.weight(1f)}
+    />
+    <Button
+      text="Add"
+      onClick={addTask}
+      enabled={isValidTask}
+    />
+  </Row>
+
+  <Row spacing={8}>
+    <Checkbox bind:checked={filterCompleted} />
+    <Text>Show completed only</Text>
+  </Row>
+
+  <Spacer h={8} />
+
+  <LazyColumn>
+    @for (task in filteredTasks, key = { it.id }) {
+      <Card p={12} modifier={Modifier.fillMaxWidth()}>
+        <Row spacing={12}>
+          <Checkbox
+            checked={task.completed}
+            onCheckedChange={() => toggleTask(task)}
+          />
+
+          <Text
+            modifier={Modifier.weight(1f)}
+            fontSize={16}
+            textDecoration={if (task.completed) TextDecoration.LineThrough else null}
+            color={if (task.completed) "#9E9E9E" else null}
+          >
+            {task.title}
+          </Text>
+
+          <IconButton onClick={() => deleteTask(task.id)}>
+            <Icon imageVector={Icons.Default.Delete} />
+          </IconButton>
+        </Row>
+      </Card>
+
+      <Spacer h={8} />
+    } empty {
+      <Text color="#9E9E9E" modifier={Modifier.padding(16.dp)}>
+        No tasks yet. Add one above!
+      </Text>
+    }
+  </LazyColumn>
+</Column>

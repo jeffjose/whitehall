@@ -1,0 +1,227 @@
+#!/usr/bin/env whitehall
+/// [app]
+/// name = "User Profile"
+/// package = "com.example.userprofile"
+
+// Example 3: User Profile - Advanced Syntax
+// Tests: ViewModel generation, suspend functions, lifecycle hooks, loading states, @when, derivedStateOf
+
+import kotlinx.coroutines.delay
+
+data class UserProfile(
+  val username: String,
+  val bio: String,
+  val avatarUrl: String,
+  val followers: Int,
+  val following: Int
+)
+
+sealed class LoadingState<out T> {
+  object Idle : LoadingState<Nothing>()
+  object Loading : LoadingState<Nothing>()
+  data class Success<T>(val data: T) : LoadingState<T>()
+  data class Error(val message: String) : LoadingState<Nothing>()
+}
+
+class ProfileStore {
+  var loadingState: LoadingState<UserProfile> = LoadingState.Idle
+  var editMode = false
+  var editedBio = ""
+
+  val profile: UserProfile? get() = when (val state = loadingState) {
+    is LoadingState.Success -> state.data
+    else -> null
+  }
+
+  val canSave: Boolean get() = editedBio.trim().isNotEmpty() && editedBio != profile?.bio
+
+  suspend fun loadProfile(username: String) {
+    loadingState = LoadingState.Loading
+
+    io {
+      delay(1500) // Simulate network call
+
+      try {
+        val profile = UserProfile(
+          username = username,
+          bio = "Android developer passionate about Kotlin and Jetpack Compose. Building amazing apps with Whitehall!",
+          avatarUrl = "https://api.dicebear.com/7.x/avataaars/png?seed=$username",
+          followers = 1234,
+          following = 567
+        )
+        loadingState = LoadingState.Success(profile)
+        editedBio = profile.bio
+      } catch (e: Exception) {
+        loadingState = LoadingState.Error(e.message ?: "Unknown error")
+      }
+    }
+  }
+
+  suspend fun saveBio() {
+    val currentProfile = profile ?: return
+
+    loadingState = LoadingState.Loading
+
+    io {
+      delay(1000) // Simulate API call
+
+      val updated = currentProfile.copy(bio = editedBio.trim())
+      loadingState = LoadingState.Success(updated)
+      editMode = false
+    }
+  }
+
+  fun startEdit() {
+    editedBio = profile?.bio ?: ""
+    editMode = true
+  }
+
+  fun cancelEdit() {
+    editedBio = profile?.bio ?: ""
+    editMode = false
+  }
+}
+
+val store = ProfileStore()
+
+onMount {
+  launch {
+    store.loadProfile("johndoe")
+  }
+}
+
+<Column p={20} spacing={16}>
+  <Text fontSize={28} fontWeight="bold">
+    User Profile
+  </Text>
+
+  @when (store.loadingState) {
+    is LoadingState.Idle -> {
+      <Text>Initializing...</Text>
+    }
+
+    is LoadingState.Loading -> {
+      <Column spacing={12} modifier={Modifier.fillMaxWidth()}>
+        <CircularProgressIndicator />
+        <Text>Loading profile...</Text>
+      </Column>
+    }
+
+    is LoadingState.Error -> {
+      <Column spacing={12}>
+        <Text color="#F44336" fontWeight="bold">
+          Error Loading Profile
+        </Text>
+        <Text color="#9E9E9E">
+          {(store.loadingState as LoadingState.Error).message}
+        </Text>
+        <Button
+          text="Retry"
+          onClick={() => launch { store.loadProfile("johndoe") }}
+        />
+      </Column>
+    }
+
+    is LoadingState.Success -> {
+      val profile = (store.loadingState as LoadingState.Success<UserProfile>).data
+
+      <Column spacing={16}>
+        <Card p={16}>
+          <Column spacing={12}>
+            <Row spacing={16}>
+              <AsyncImage(
+                model = profile.avatarUrl,
+                contentDescription = "Avatar",
+                modifier = Modifier.size(80.dp).clip(CircleShape)
+              )
+
+              <Column spacing={4}>
+                <Text fontSize={24} fontWeight="bold">
+                  {profile.username}
+                </Text>
+
+                <Row spacing={16}>
+                  <Column>
+                    <Text fontSize={20} fontWeight="bold">
+                      {profile.followers}
+                    </Text>
+                    <Text fontSize={12} color="#9E9E9E">
+                      Followers
+                    </Text>
+                  </Column>
+
+                  <Column>
+                    <Text fontSize={20} fontWeight="bold">
+                      {profile.following}
+                    </Text>
+                    <Text fontSize={12} color="#9E9E9E">
+                      Following
+                    </Text>
+                  </Column>
+                </Row>
+              </Column>
+            </Row>
+
+            <Spacer h={8} />
+
+            <Text fontSize={16} fontWeight="bold">
+              Bio
+            </Text>
+
+            @if (store.editMode) {
+              <TextField
+                bind:value={store.editedBio}
+                label="Edit your bio"
+                modifier={Modifier.fillMaxWidth().height(120.dp)}
+                maxLines={5}
+              />
+
+              <Row spacing={8}>
+                <Button
+                  text="Save"
+                  onClick={() => launch { store.saveBio() }}
+                  enabled={store.canSave}
+                />
+                <Button
+                  text="Cancel"
+                  onClick={store.cancelEdit}
+                />
+              </Row>
+            } else {
+              <Text fontSize={14} color="#616161">
+                {profile.bio}
+              </Text>
+
+              <Button
+                text="Edit Bio"
+                onClick={store.startEdit}
+              />
+            }
+          </Column>
+        </Card>
+
+        <Card p={16}>
+          <Column spacing={8}>
+            <Text fontSize={18} fontWeight="bold">
+              Quick Stats
+            </Text>
+
+            <Row spacing={8}>
+              <Text>Follower Ratio:</Text>
+              <Text fontWeight="bold" color="primary">
+                {String.format("%.2f", profile.followers.toFloat() / profile.following)}
+              </Text>
+            </Row>
+
+            <Row spacing={8}>
+              <Text>Total Connections:</Text>
+              <Text fontWeight="bold">
+                {profile.followers + profile.following}
+              </Text>
+            </Row>
+          </Column>
+        </Card>
+      </Column>
+    }
+  }
+</Column>
