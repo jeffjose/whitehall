@@ -66,6 +66,14 @@ enum Commands {
         #[arg(trailing_var_arg = true, allow_hyphen_values = true)]
         command: Vec<String>,
     },
+    /// Find the path to a command in the toolchain environment (alias for 'exec which')
+    Which {
+        /// Path to whitehall.toml (defaults to current directory)
+        #[arg(long, default_value = "whitehall.toml")]
+        manifest: String,
+        /// Command to locate
+        command: String,
+    },
     /// Launch an interactive shell with the project's toolchain environment
     Shell {
         /// Path to whitehall.toml (defaults to current directory)
@@ -155,6 +163,10 @@ fn main() {
                 std::process::exit(1);
             }
             commands::toolchain::execute_exec(&manifest, &command[0], &command[1..])
+        }
+        Commands::Which { manifest, command } => {
+            // Alias for 'exec which'
+            commands::toolchain::execute_exec(&manifest, "which", &[command])
         }
         Commands::Shell { manifest } => {
             commands::toolchain::execute_shell(&manifest)

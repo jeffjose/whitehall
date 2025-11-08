@@ -118,7 +118,7 @@ fn get_dir_size(path: &std::path::Path) -> Result<u64> {
     Ok(size)
 }
 
-/// Execute a command with the project's toolchain environment
+/// Execute a command with the project's toolchain environment (lazy-loading)
 pub fn execute_exec(manifest_path: &str, command: &str, args: &[String]) -> Result<()> {
     // Load project config to get toolchain requirements
     let config = config::load_config(manifest_path)?;
@@ -126,10 +126,28 @@ pub fn execute_exec(manifest_path: &str, command: &str, args: &[String]) -> Resu
     // Initialize toolchain manager
     let toolchain = Toolchain::new()?;
 
-    // Ensure toolchains are available
-    let java_home = toolchain.ensure_java(&config.toolchain.java)?;
-    let gradle_bin = toolchain.ensure_gradle(&config.toolchain.gradle)?;
-    let android_home = toolchain.ensure_android_sdk()?;
+    // Lazy-load toolchains based on command
+    let needs_java = matches!(command, "java" | "javac" | "jar" | "jarsigner" | "keytool");
+    let needs_gradle = matches!(command, "gradle" | "gradlew");
+    let needs_android = true; // Always ensure Android SDK for consistency
+
+    let java_home = if needs_java {
+        Some(toolchain.ensure_java(&config.toolchain.java)?)
+    } else {
+        None
+    };
+
+    let gradle_bin = if needs_gradle {
+        Some(toolchain.ensure_gradle(&config.toolchain.gradle)?)
+    } else {
+        None
+    };
+
+    let android_home = if needs_android {
+        Some(toolchain.ensure_android_sdk_for_build()?)
+    } else {
+        None
+    };
 
     // If running emulator, ensure system image is installed (lazy loading)
     if command == "emulator" {
@@ -137,13 +155,19 @@ pub fn execute_exec(manifest_path: &str, command: &str, args: &[String]) -> Resu
     }
 
     // Build PATH with toolchain binaries
-    let mut path_components = vec![
-        java_home.join("bin").display().to_string(),
-        gradle_bin.parent().unwrap().display().to_string(),
-        android_home.join("emulator").display().to_string(),
-        android_home.join("platform-tools").display().to_string(),
-        android_home.join("cmdline-tools/latest/bin").display().to_string(),
-    ];
+    let mut path_components = Vec::new();
+
+    if let Some(ref java) = java_home {
+        path_components.push(java.join("bin").display().to_string());
+    }
+    if let Some(ref gradle) = gradle_bin {
+        path_components.push(gradle.parent().unwrap().display().to_string());
+    }
+    if let Some(ref android) = android_home {
+        path_components.push(android.join("emulator").display().to_string());
+        path_components.push(android.join("platform-tools").display().to_string());
+        path_components.push(android.join("cmdline-tools/latest/bin").display().to_string());
+    }
 
     // Add existing PATH
     if let Ok(existing_path) = std::env::var("PATH") {
@@ -153,14 +177,22 @@ pub fn execute_exec(manifest_path: &str, command: &str, args: &[String]) -> Resu
     let new_path = path_components.join(":");
 
     // Execute command with toolchain environment
-    let status = std::process::Command::new(command)
-        .args(args)
-        .env("JAVA_HOME", java_home)
-        .env("GRADLE_HOME", gradle_bin.parent().unwrap())
-        .env("ANDROID_HOME", &android_home)
-        .env_remove("ANDROID_SDK_ROOT")  // Prevent conflicts with ANDROID_HOME
-        .env("PATH", new_path)
-        .status()
+    let mut cmd = std::process::Command::new(command);
+    cmd.args(args);
+    cmd.env("PATH", new_path);
+    cmd.env_remove("ANDROID_SDK_ROOT");  // Prevent conflicts with ANDROID_HOME
+
+    if let Some(java) = java_home {
+        cmd.env("JAVA_HOME", java);
+    }
+    if let Some(gradle) = gradle_bin {
+        cmd.env("GRADLE_HOME", gradle.parent().unwrap());
+    }
+    if let Some(android) = android_home {
+        cmd.env("ANDROID_HOME", android);
+    }
+
+    let status = cmd.status()
         .with_context(|| format!("Failed to execute command: {}", command))?;
 
     if !status.success() {
