@@ -519,6 +519,11 @@ impl ComposeBackend {
                         }
                     }
 
+                    // For non-suspend functions with launch calls, prefix with coroutineScope.
+                    if !func.is_suspend && (transformed_line.trim().starts_with("launch ") || transformed_line.trim().starts_with("launch{")) {
+                        output.push_str("coroutineScope.");
+                    }
+
                     output.push_str(&transformed_line);
                     output.push('\n');
                 }
@@ -541,8 +546,13 @@ impl ComposeBackend {
             h.hook_type == "onMount" && (h.body.contains("launch ") || h.body.contains("launch{"))
         });
 
-        // Generate coroutineScope if there are onMount hooks with launch calls
-        if has_launch_in_on_mount {
+        // Check if any non-suspend function contains launch calls
+        let has_launch_in_functions = file.functions.iter().any(|f| {
+            !f.is_suspend && (f.body.contains("launch ") || f.body.contains("launch{"))
+        });
+
+        // Generate coroutineScope if there are launch calls in onMount hooks or regular functions
+        if has_launch_in_on_mount || has_launch_in_functions {
             output.push_str(&self.indent());
             output.push_str("val coroutineScope = rememberCoroutineScope()\n\n");
         }
@@ -666,6 +676,11 @@ impl ComposeBackend {
                         if trimmed.starts_with("navigate(") {
                             output.push_str("navController.");
                         }
+                    }
+
+                    // For non-suspend functions with launch calls, prefix with coroutineScope.
+                    if !func.is_suspend && (transformed_line.trim().starts_with("launch ") || transformed_line.trim().starts_with("launch{")) {
+                        output.push_str("coroutineScope.");
                     }
 
                     output.push_str(&transformed_line);
@@ -1105,6 +1120,37 @@ impl ComposeBackend {
                         }
                     }
                 }
+                // Special handling for AlertDialog with composable content props
+                else if comp.name == "AlertDialog" {
+                    for prop in &comp.props {
+                        // Props that accept composable content need lambda wrapping
+                        if matches!(prop.name.as_str(), "title" | "text" | "confirmButton" | "dismissButton") {
+                            match &prop.value {
+                                PropValue::Markup(markup) => {
+                                    // Component prop: wrap in lambda
+                                    let content_code = self.generate_markup_with_indent(markup, indent + 2)?;
+                                    let closing_indent = "    ".repeat(indent + 1);
+                                    params.push(format!("{} = {{\n{}{}}}", prop.name, content_code, closing_indent));
+                                }
+                                PropValue::Expression(expr) => {
+                                    // Expression prop: wrap in lambda with component
+                                    // e.g., text = { Text(expr) }
+                                    if prop.name == "title" || prop.name == "text" {
+                                        params.push(format!("{} = {{ Text({}) }}", prop.name, expr));
+                                    } else {
+                                        // For buttons, just pass the expression (lambda expected)
+                                        params.push(format!("{} = {}", prop.name, expr));
+                                    }
+                                }
+                            }
+                        } else {
+                            // Other AlertDialog props - handle normally (onDismissRequest, etc.)
+                            let prop_expr = self.get_prop_expr(&prop.value);
+                            let transformed = self.transform_prop(&comp.name, &prop.name, prop_expr);
+                            params.extend(transformed?);
+                        }
+                    }
+                }
                 // Special handling for Text, Card, and Button with modifier props
                 else if comp.name == "Text" || comp.name == "Card" || comp.name == "Button" {
                     // Collect modifier-related props (including shortcuts)
@@ -1355,7 +1401,13 @@ impl ComposeBackend {
                         if let Some(color) = bg_color {
                             let color_str = if color.starts_with('"') && color.ends_with('"') {
                                 let c = &color[1..color.len()-1];
-                                format!("Color.{}", c.chars().next().unwrap().to_uppercase().collect::<String>() + &c[1..])
+                                if c.starts_with('#') {
+                                    // Hex color: convert to Color(0xFFRRGGBB)
+                                    convert_hex_to_color(&c[1..]).unwrap_or_else(|_| format!("Color.White"))
+                                } else {
+                                    // Named color: Color.Red, Color.Blue, etc.
+                                    format!("Color.{}", c.chars().next().unwrap().to_uppercase().collect::<String>() + &c[1..])
+                                }
                             } else {
                                 color.to_string()
                             };
@@ -1870,6 +1922,8 @@ impl ComposeBackend {
                             // backgroundColor → CardDefaults.cardColors()
                             self.add_import_if_missing(prop_imports, "androidx.compose.material3.CardDefaults");
                             self.add_import_if_missing(prop_imports, "androidx.compose.material3.MaterialTheme");
+                            // Add Color import for hex colors (Color(0xFFRRGGBB))
+                            self.add_import_if_missing(prop_imports, "androidx.compose.ui.graphics.Color");
                         }
                         ("Card", "elevation") => {
                             // elevation → CardDefaults.cardElevation()
@@ -1983,6 +2037,18 @@ impl ComposeBackend {
                     }
                     "CircularProgressIndicator" => {
                         let import = "androidx.compose.material3.CircularProgressIndicator".to_string();
+                        if !component_imports.contains(&import) {
+                            component_imports.push(import);
+                        }
+                    }
+                    "AlertDialog" => {
+                        let import = "androidx.compose.material3.AlertDialog".to_string();
+                        if !component_imports.contains(&import) {
+                            component_imports.push(import);
+                        }
+                    }
+                    "SnackbarHost" => {
+                        let import = "androidx.compose.material3.SnackbarHost".to_string();
                         if !component_imports.contains(&import) {
                             component_imports.push(import);
                         }
@@ -2708,15 +2774,22 @@ impl ComposeBackend {
             }
             // Card backgroundColor → CardDefaults.cardColors()
             ("Card", "backgroundColor") => {
-                // value is a string like "errorContainer", "primaryContainer", etc.
-                let color_name = if value.starts_with('"') && value.ends_with('"') {
-                    &value[1..value.len()-1]
+                let color = if value.starts_with('"') && value.ends_with('"') {
+                    let s = &value[1..value.len()-1];
+                    if s.starts_with('#') {
+                        // Hex color: convert to Color(0xFFRRGGBB)
+                        convert_hex_to_color(&s[1..])?
+                    } else {
+                        // Theme color: use MaterialTheme.colorScheme
+                        format!("MaterialTheme.colorScheme.{}", s)
+                    }
                 } else {
-                    value.as_str()
+                    // Expression or variable
+                    value.to_string()
                 };
                 Ok(vec![format!(
-                    "colors = CardDefaults.cardColors(\n                    containerColor = MaterialTheme.colorScheme.{}\n                )",
-                    color_name
+                    "colors = CardDefaults.cardColors(\n                    containerColor = {}\n                )",
+                    color
                 )])
             }
             // Card elevation → CardDefaults.cardElevation() (Material3 API)

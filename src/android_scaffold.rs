@@ -164,8 +164,18 @@ dependencies {{
     Ok(())
 }
 
+/// Escape XML special characters
+fn escape_xml(text: &str) -> String {
+    text.replace('&', "&amp;")
+        .replace('<', "&lt;")
+        .replace('>', "&gt;")
+        .replace('"', "&quot;")
+        .replace('\'', "&apos;")
+}
+
 /// Generate AndroidManifest.xml
 fn generate_manifest(config: &Config, output_dir: &Path) -> Result<()> {
+    let escaped_name = escape_xml(&config.project.name);
     let content = format!(
         r#"<?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
@@ -190,7 +200,7 @@ fn generate_manifest(config: &Config, output_dir: &Path) -> Result<()> {
 
 </manifest>
 "#,
-        config.project.name
+        escaped_name
     );
 
     let manifest_dir = output_dir.join("app/src/main");
