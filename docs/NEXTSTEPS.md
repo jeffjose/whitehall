@@ -79,10 +79,11 @@
 
 See `docs/QOL.md` for full list. Top priorities:
 
-1. **Alignment shortcuts** - `align="center"` vs `horizontalAlignment="CenterHorizontally"`
-2. **onClick on any component** - Auto-wrap in clickable modifier
-3. **Boolean props** - `enabled` vs `enabled={true}`
-4. **Divider component** - Common UI element
+1. **@when single-line branches** - Remove required braces (see Known Gaps #1)
+2. **Alignment shortcuts** - `align="center"` vs `horizontalAlignment="CenterHorizontally"`
+3. **onClick on any component** - Auto-wrap in clickable modifier
+4. **Boolean props** - `enabled` vs `enabled={true}`
+5. **Divider component** - Common UI element
 
 **Estimated Effort**: 2-3 hours per feature
 
