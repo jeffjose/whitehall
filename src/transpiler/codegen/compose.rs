@@ -1086,16 +1086,22 @@ impl ComposeBackend {
                         params.extend(transformed?);
                     }
                 }
-                // Special handling for Column/Row with backgroundColor + padding
+                // Special handling for Column/Row with backgroundColor + padding + shortcuts
                 else if comp.name == "Column" || comp.name == "Row" {
-                    // Check if we have both backgroundColor and padding that need to be combined
+                    // Check for background color, padding, and shortcuts
                     let background_color = comp.props.iter().find(|p| p.name == "backgroundColor")
                         .map(|p| self.get_prop_expr(&p.value));
                     let padding = comp.props.iter().find(|p| p.name == "padding")
                         .map(|p| self.get_prop_expr(&p.value));
 
-                    // Build chained modifier if both props exist
-                    if background_color.is_some() && padding.is_some() {
+                    // Collect padding/margin shortcuts
+                    let padding_shortcuts: Vec<_> = comp.props.iter()
+                        .filter(|p| matches!(p.name.as_str(), "p" | "px" | "py" | "pt" | "pb" | "pl" | "pr" |
+                                                               "m" | "mx" | "my" | "mt" | "mb" | "ml" | "mr"))
+                        .collect();
+
+                    // Build chained modifier if any modifier-related props exist
+                    if background_color.is_some() || padding.is_some() || !padding_shortcuts.is_empty() {
                         let mut modifiers = Vec::new();
 
                         if let Some(color) = background_color {
@@ -1122,6 +1128,27 @@ impl ComposeBackend {
                             modifiers.push(format!(".padding({})", padding_value));
                         }
 
+                        // Add padding shortcuts
+                        if !padding_shortcuts.is_empty() {
+                            let mut padding_parts = Vec::new();
+                            for prop in &padding_shortcuts {
+                                let value = self.get_prop_expr(&prop.value);
+                                match prop.name.as_str() {
+                                    "p" | "m" => padding_parts.push(format!("{}.dp", value)),
+                                    "px" | "mx" => padding_parts.push(format!("horizontal = {}.dp", value)),
+                                    "py" | "my" => padding_parts.push(format!("vertical = {}.dp", value)),
+                                    "pt" | "mt" => padding_parts.push(format!("top = {}.dp", value)),
+                                    "pb" | "mb" => padding_parts.push(format!("bottom = {}.dp", value)),
+                                    "pl" | "ml" => padding_parts.push(format!("start = {}.dp", value)),
+                                    "pr" | "mr" => padding_parts.push(format!("end = {}.dp", value)),
+                                    _ => {}
+                                }
+                            }
+                            if !padding_parts.is_empty() {
+                                modifiers.push(format!(".padding({})", padding_parts.join(", ")));
+                            }
+                        }
+
                         // Combine into modifier parameter with proper indentation
                         let modifier_chain = modifiers.iter()
                             .map(|m| format!("                {}", m))
@@ -1129,9 +1156,11 @@ impl ComposeBackend {
                             .join("\n");
                         params.push(format!("modifier = Modifier\n{}", modifier_chain));
 
-                        // Process other props, skipping backgroundColor and padding
+                        // Process other props, skipping backgroundColor, padding, and shortcuts
                         for prop in &comp.props {
-                            if prop.name == "backgroundColor" || prop.name == "padding" {
+                            if prop.name == "backgroundColor" || prop.name == "padding" ||
+                               matches!(prop.name.as_str(), "p" | "px" | "py" | "pt" | "pb" | "pl" | "pr" |
+                                                            "m" | "mx" | "my" | "mt" | "mb" | "ml" | "mr") {
                                 continue;
                             }
                             let prop_expr = self.get_prop_expr(&prop.value);
@@ -2287,21 +2316,35 @@ impl ComposeBackend {
                     // Has braces - strip them and check inner content
                     let inner = value.trim_start_matches('{').trim_end_matches('}').trim();
 
-                    // Check if already a complete expression (function call, property access, etc.)
-                    // If it contains '(' or ends with ')', it's likely already complete
-                    let is_complete_expr = inner.contains('(') || inner.ends_with(')');
+                    // Check if it's a multi-line block or contains statements
+                    // Multi-line blocks and statement blocks should be preserved as-is
+                    let is_statement_block = inner.contains('\n') ||
+                                            inner.contains(';') ||
+                                            inner.contains("++") ||
+                                            inner.contains("--") ||
+                                            (inner.contains('=') && !inner.starts_with("=="));
 
-                    if is_complete_expr {
-                        // Already complete: { clearItems() } or { navigate(Routes.Home) }
-                        // Just transform and re-wrap
+                    if is_statement_block {
+                        // Multi-line or statement block: preserve as-is
+                        // Just transform viewmodel references
                         let transformed = self.transform_viewmodel_expression(inner);
                         Ok(vec![format!("onClick = {{ {} }}", transformed)])
                     } else {
-                        // Bare function with braces: {increment}
-                        // Add (), transform, re-wrap
-                        let with_parens = format!("{}()", inner);
-                        let transformed = self.transform_viewmodel_expression(&with_parens);
-                        Ok(vec![format!("onClick = {{ {} }}", transformed)])
+                        // Single-line expression - check if it's complete
+                        let is_complete_expr = inner.contains('(') || inner.ends_with(')');
+
+                        if is_complete_expr {
+                            // Already complete: { clearItems() } or { navigate(Routes.Home) }
+                            // Just transform and re-wrap
+                            let transformed = self.transform_viewmodel_expression(inner);
+                            Ok(vec![format!("onClick = {{ {} }}", transformed)])
+                        } else {
+                            // Bare function with braces: {increment}
+                            // Add (), transform, re-wrap
+                            let with_parens = format!("{}()", inner);
+                            let transformed = self.transform_viewmodel_expression(&with_parens);
+                            Ok(vec![format!("onClick = {{ {} }}", transformed)])
+                        }
                     }
                 }
             }
@@ -2456,8 +2499,14 @@ impl ComposeBackend {
         // Transform () => expr to { expr }
         if value.contains("() =>") {
             let transformed = value.replace("() =>", "").trim().to_string();
-            // Wrap in braces
-            format!("{{ {} }}", transformed)
+            // Check if already wrapped in braces (multi-line lambda)
+            if transformed.starts_with('{') && transformed.ends_with('}') {
+                // Already has braces, return as-is
+                transformed
+            } else {
+                // Wrap in braces
+                format!("{{ {} }}", transformed)
+            }
         } else {
             value.to_string()
         }
