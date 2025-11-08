@@ -200,7 +200,7 @@ fn normalize_whitespace(s: &str) -> String {
 
 /// Print a colored diff between expected and actual output
 fn print_colored_diff(expected: &str, actual: &str) {
-    let diff = TextDiff::from_lines(expected, actual);
+    let diff = TextDiff::from_lines(actual, expected);
 
     eprintln!("\n{}", "=".repeat(80));
     for change in diff.iter_all_changes() {

@@ -215,7 +215,7 @@ mod tests {
                 println!("\x1b[31m✗\x1b[0m [FAIL] {}", filename);
                 println!("\n===== Expected vs Actual Diff =====");
 
-                let diff = TextDiff::from_lines(&expected, &actual);
+                let diff = TextDiff::from_lines(&actual, &expected);
                 for change in diff.iter_all_changes() {
                     let (sign, style) = match change.tag() {
                         ChangeTag::Delete => ("-", "\x1b[31m"),
