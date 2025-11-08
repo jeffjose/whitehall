@@ -2381,7 +2381,8 @@ impl ComposeBackend {
                 // Single interpolation - wrap in string template to ensure string conversion
                 Markup::Interpolation(expr) => {
                     let transformed = self.transform_string_resource(expr);
-                    let with_vm = self.transform_viewmodel_expression(&transformed);
+                    let with_ternary = self.transform_ternary_to_if_else(&transformed);
+                    let with_vm = self.transform_viewmodel_expression(&with_ternary);
                     let with_assertions = self.add_null_assertions(&with_vm);
                     return Ok(format!("\"${{{}}}\"", with_assertions));
                 }
@@ -2406,7 +2407,8 @@ impl ComposeBackend {
                 }
                 Markup::Interpolation(expr) => {
                     let str_res_transformed = self.transform_string_resource(expr);
-                    let with_vm = self.transform_viewmodel_expression(&str_res_transformed);
+                    let with_ternary = self.transform_ternary_to_if_else(&str_res_transformed);
+                    let with_vm = self.transform_viewmodel_expression(&with_ternary);
                     let transformed = self.add_null_assertions(&with_vm);
                     // Always use braces for safety - handles literals, keywords, and expressions
                     parts.push(format!("${{{}}}", transformed));
@@ -3264,7 +3266,11 @@ impl ComposeBackend {
                     let mut depth = 0;
                     let mut value_end = 0;
                     let value_start = trimmed_after.find('=').unwrap() + 1;
-                    let value_part = &trimmed_after[value_start..].trim_start();
+
+                    // Get the part after = and track how many spaces we trim
+                    let before_trim = &trimmed_after[value_start..];
+                    let value_part = before_trim.trim_start();
+                    let spaces_trimmed = before_trim.len() - value_part.len();
 
                     for (i, ch) in value_part.char_indices() {
                         match ch {
@@ -3299,11 +3305,14 @@ impl ComposeBackend {
                     new_result.push_str(&format!("viewModel.{}({})", method_name, assigned_value));
 
                     // Skip past the assignment in remaining
-                    // after_var is everything after var_name
-                    // We need to skip: whitespace + "=" + whitespace + value
-                    let trim_offset = after_var.len() - trimmed_after.len(); // whitespace before =
-                    let eq_and_ws = value_start; // includes = and whitespace after
-                    let skip_amount = trim_offset + eq_and_ws + value_end;
+                    // Calculate total amount to skip:
+                    // - whitespace before = (trim_offset)
+                    // - the = sign (included in value_start)
+                    // - whitespace after = (spaces_trimmed)
+                    // - the value itself (value_end)
+                    let trim_offset = after_var.len() - trimmed_after.len();
+                    let skip_amount = trim_offset + value_start + spaces_trimmed + value_end;
+
                     if skip_amount <= after_var.len() {
                         remaining = &after_var[skip_amount..];
                     } else {
