@@ -1166,8 +1166,9 @@ impl ComposeBackend {
                         .collect();
 
                     // Build modifier chain if we have modifier-related props
-                    // For Card, onClick also requires a modifier (clickable)
-                    if padding.is_some() || fill_max_width.is_some() || explicit_modifier.is_some() || !padding_shortcuts.is_empty() || (on_click.is_some() && comp.name == "Card") {
+                    // Note: Card has native onClick parameter, doesn't need clickable modifier
+                    // Text needs clickable modifier for onClick since it doesn't have native onClick
+                    if padding.is_some() || fill_max_width.is_some() || explicit_modifier.is_some() || !padding_shortcuts.is_empty() || (on_click.is_some() && comp.name == "Text") {
                         let mut modifiers = Vec::new();
 
                         // Add padding first (if present)
@@ -1210,9 +1211,9 @@ impl ComposeBackend {
                             }
                         }
 
-                        // Add onClick as clickable modifier (for Card only)
+                        // Add onClick as clickable modifier (for Text only, Card has native onClick)
                         if let Some(click_prop) = on_click {
-                            if comp.name == "Card" {
+                            if comp.name == "Text" {
                                 let click_value = self.get_prop_expr(&click_prop.value);
                                 // Transform the onClick value (same logic as Button onClick)
                                 let transformed = self.transform_lambda_arrow(click_value);
@@ -1267,7 +1268,7 @@ impl ComposeBackend {
                     for prop in &comp.props {
                         // Skip props already handled
                         if prop.name == "padding" || prop.name == "fillMaxWidth" || prop.name == "modifier" ||
-                           (prop.name == "onClick" && comp.name == "Card") ||  // onClick on Card handled as clickable modifier
+                           (prop.name == "onClick" && comp.name == "Text") ||  // onClick on Text handled as clickable modifier
                            matches!(prop.name.as_str(), "p" | "px" | "py" | "pt" | "pb" | "pl" | "pr" |
                                                         "m" | "mx" | "my" | "mt" | "mb" | "ml" | "mr") {
                             continue;
@@ -1544,18 +1545,11 @@ impl ComposeBackend {
                 }
                 // Special handling for Icon
                 else if comp.name == "Icon" {
-                    let has_content_desc = comp.props.iter().any(|p| p.name == "contentDescription");
-
                     // Add all props
                     for prop in &comp.props {
                         let prop_expr = self.get_prop_expr(&prop.value);
                         let transformed = self.transform_prop(&comp.name, &prop.name, prop_expr);
                         params.extend(transformed?);
-                    }
-
-                    // Add contentDescription = null if not provided
-                    if !has_content_desc {
-                        params.push("contentDescription = null".to_string());
                     }
                 } else {
                     // Check for padding/margin shortcuts that need to be combined
@@ -1922,8 +1916,13 @@ impl ComposeBackend {
                             // backgroundColor → CardDefaults.cardColors()
                             self.add_import_if_missing(prop_imports, "androidx.compose.material3.CardDefaults");
                             self.add_import_if_missing(prop_imports, "androidx.compose.material3.MaterialTheme");
-                            // Add Color import for hex colors (Color(0xFFRRGGBB))
-                            self.add_import_if_missing(prop_imports, "androidx.compose.ui.graphics.Color");
+                            // Add Color import only for hex colors (Color(0xFFRRGGBB))
+                            if prop_expr.starts_with('"') {
+                                let s = &prop_expr[1..prop_expr.len()-1];
+                                if s.starts_with('#') {
+                                    self.add_import_if_missing(prop_imports, "androidx.compose.ui.graphics.Color");
+                                }
+                            }
                         }
                         ("Card", "elevation") => {
                             // elevation → CardDefaults.cardElevation()
@@ -1993,10 +1992,14 @@ impl ComposeBackend {
                             self.add_import_if_missing(prop_imports, "androidx.compose.ui.Modifier");
                             self.add_import_if_missing(prop_imports, "androidx.compose.foundation.clickable");
                         }
-                        ("Card", "onClick") => {
-                            // onClick on Card → .clickable modifier
+                        ("Text", "onClick") => {
+                            // onClick on Text → .clickable modifier (Text doesn't have native onClick)
                             self.add_import_if_missing(prop_imports, "androidx.compose.ui.Modifier");
                             self.add_import_if_missing(prop_imports, "androidx.compose.foundation.clickable");
+                        }
+                        ("Card", "onClick") => {
+                            // Card has native onClick parameter, no special imports needed
+                            // (handled as regular prop)
                         }
                         ("TextField", "label") | ("TextField", "placeholder") => {
                             // label/placeholder generate Text() components
@@ -2765,12 +2768,19 @@ impl ComposeBackend {
                 };
                 Ok(vec![format!("color = {}", color)])
             }
-            // Card onClick → handled as clickable modifier in generate_markup
-            // (see special handling for Text, Card, and Button with modifier props)
+            // Card onClick → Card has native onClick parameter (Material3)
             ("Card", "onClick") => {
-                // This shouldn't be reached since onClick on Card is skipped in the loop
-                // But if it is, just return empty to avoid duplicate handling
-                Ok(vec![])
+                let transformed = self.transform_lambda_arrow(&value);
+                let onClick_value = if !transformed.starts_with('{') {
+                    // Bare function name: add (), transform for ViewModel, wrap in braces
+                    let with_parens = format!("{}()", transformed);
+                    let with_viewmodel = self.transform_viewmodel_expression(&with_parens);
+                    format!("{{ {} }}", with_viewmodel)
+                } else {
+                    // Already a lambda expression, just transform for ViewModel
+                    self.transform_viewmodel_expression(&transformed)
+                };
+                Ok(vec![format!("onClick = {}", onClick_value)])
             }
             // Card backgroundColor → CardDefaults.cardColors()
             ("Card", "backgroundColor") => {
