@@ -492,43 +492,68 @@ impl ComposeBackend {
         if functions_first {
             // Generate function declarations before lifecycle
             for func in &file.functions {
-                output.push_str(&self.indent());
-                let return_type_str = if let Some(ref rt) = func.return_type {
-                    format!(": {}", rt)
-                } else {
-                    String::new()
-                };
-                let suspend_keyword = if func.is_suspend { "suspend " } else { "" };
-                output.push_str(&format!("{}fun {}({}){} {{\n", suspend_keyword, func.name, func.params, return_type_str));
-                // Output function body with proper indentation and transformations
-                for line in func.body.lines() {
+                // Check if this function has markup (composable helper function)
+                if let Some(ref markup) = func.markup {
+                    // Generate @Composable helper function with transpiled markup
                     output.push_str(&self.indent());
-                    output.push_str("    ");
+                    output.push_str("@Composable\n");
+                    output.push_str(&self.indent());
+                    let return_type_str = if let Some(ref rt) = func.return_type {
+                        format!(": {}", rt)
+                    } else {
+                        String::new()
+                    };
+                    let suspend_keyword = if func.is_suspend { "suspend " } else { "" };
+                    output.push_str(&format!("{}fun {}({}){} {{\n", suspend_keyword, func.name, func.params, return_type_str));
 
-                    // Transform $routes.login → Routes.Login
-                    let mut transformed_line = self.transform_route_aliases(line);
+                    // Transpile the markup
+                    self.indent_level += 1;
+                    let markup_code = self.generate_markup(markup)?;
+                    output.push_str(&markup_code);
+                    self.indent_level -= 1;
 
-                    // Transform $screen.params.{name} → {name}
-                    transformed_line = transformed_line.replace("$screen.params.", "");
+                    output.push_str(&self.indent());
+                    output.push_str("}\n");
+                } else {
+                    // Regular function with string body
+                    output.push_str(&self.indent());
+                    let return_type_str = if let Some(ref rt) = func.return_type {
+                        format!(": {}", rt)
+                    } else {
+                        String::new()
+                    };
+                    let suspend_keyword = if func.is_suspend { "suspend " } else { "" };
+                    output.push_str(&format!("{}fun {}({}){} {{\n", suspend_keyword, func.name, func.params, return_type_str));
+                    // Output function body with proper indentation and transformations
+                    for line in func.body.lines() {
+                        output.push_str(&self.indent());
+                        output.push_str("    ");
 
-                    // For screens, transform navigate() to navController.navigate()
-                    if self.component_type.as_deref() == Some("screen") {
-                        let trimmed = transformed_line.trim();
-                        if trimmed.starts_with("navigate(") {
-                            output.push_str("navController.");
+                        // Transform $routes.login → Routes.Login
+                        let mut transformed_line = self.transform_route_aliases(line);
+
+                        // Transform $screen.params.{name} → {name}
+                        transformed_line = transformed_line.replace("$screen.params.", "");
+
+                        // For screens, transform navigate() to navController.navigate()
+                        if self.component_type.as_deref() == Some("screen") {
+                            let trimmed = transformed_line.trim();
+                            if trimmed.starts_with("navigate(") {
+                                output.push_str("navController.");
+                            }
                         }
-                    }
 
-                    // For non-suspend functions with launch calls, prefix with coroutineScope.
-                    if !func.is_suspend && (transformed_line.trim().starts_with("launch ") || transformed_line.trim().starts_with("launch{")) {
-                        output.push_str("coroutineScope.");
-                    }
+                        // For non-suspend functions with launch calls, prefix with coroutineScope.
+                        if !func.is_suspend && (transformed_line.trim().starts_with("launch ") || transformed_line.trim().starts_with("launch{")) {
+                            output.push_str("coroutineScope.");
+                        }
 
-                    output.push_str(&transformed_line);
-                    output.push('\n');
+                        output.push_str(&transformed_line);
+                        output.push('\n');
+                    }
+                    output.push_str(&self.indent());
+                    output.push_str("}\n");
                 }
-                output.push_str(&self.indent());
-                output.push_str("}\n");
             }
 
             if !file.functions.is_empty() {
@@ -651,43 +676,69 @@ impl ComposeBackend {
         // Generate functions after lifecycle if not functions_first
         if !functions_first && !file.functions.is_empty() {
             for func in &file.functions {
-                output.push_str(&self.indent());
-                let return_type_str = if let Some(ref rt) = func.return_type {
-                    format!(": {}", rt)
-                } else {
-                    String::new()
-                };
-                let suspend_keyword = if func.is_suspend { "suspend " } else { "" };
-                output.push_str(&format!("{}fun {}({}){} {{\n", suspend_keyword, func.name, func.params, return_type_str));
-                // Output function body with proper indentation and transformations
-                for line in func.body.lines() {
+                // Check if this function has markup (composable helper function)
+                if let Some(ref markup) = func.markup {
+                    // Generate @Composable helper function with transpiled markup
+                    output.push_str("\n");
                     output.push_str(&self.indent());
-                    output.push_str("    ");
+                    output.push_str("@Composable\n");
+                    output.push_str(&self.indent());
+                    let return_type_str = if let Some(ref rt) = func.return_type {
+                        format!(": {}", rt)
+                    } else {
+                        String::new()
+                    };
+                    let suspend_keyword = if func.is_suspend { "suspend " } else { "" };
+                    output.push_str(&format!("{}fun {}({}){} {{\n", suspend_keyword, func.name, func.params, return_type_str));
 
-                    // Transform $routes.login → Routes.Login
-                    let mut transformed_line = self.transform_route_aliases(line);
+                    // Transpile the markup
+                    self.indent_level += 1;
+                    let markup_code = self.generate_markup(markup)?;
+                    output.push_str(&markup_code);
+                    self.indent_level -= 1;
 
-                    // Transform $screen.params.{name} → {name}
-                    transformed_line = transformed_line.replace("$screen.params.", "");
+                    output.push_str(&self.indent());
+                    output.push_str("}\n");
+                } else {
+                    // Regular function with string body
+                    output.push_str(&self.indent());
+                    let return_type_str = if let Some(ref rt) = func.return_type {
+                        format!(": {}", rt)
+                    } else {
+                        String::new()
+                    };
+                    let suspend_keyword = if func.is_suspend { "suspend " } else { "" };
+                    output.push_str(&format!("{}fun {}({}){} {{\n", suspend_keyword, func.name, func.params, return_type_str));
+                    // Output function body with proper indentation and transformations
+                    for line in func.body.lines() {
+                        output.push_str(&self.indent());
+                        output.push_str("    ");
 
-                    // For screens, transform navigate() to navController.navigate()
-                    if self.component_type.as_deref() == Some("screen") {
-                        let trimmed = transformed_line.trim();
-                        if trimmed.starts_with("navigate(") {
-                            output.push_str("navController.");
+                        // Transform $routes.login → Routes.Login
+                        let mut transformed_line = self.transform_route_aliases(line);
+
+                        // Transform $screen.params.{name} → {name}
+                        transformed_line = transformed_line.replace("$screen.params.", "");
+
+                        // For screens, transform navigate() to navController.navigate()
+                        if self.component_type.as_deref() == Some("screen") {
+                            let trimmed = transformed_line.trim();
+                            if trimmed.starts_with("navigate(") {
+                                output.push_str("navController.");
+                            }
                         }
-                    }
 
-                    // For non-suspend functions with launch calls, prefix with coroutineScope.
-                    if !func.is_suspend && (transformed_line.trim().starts_with("launch ") || transformed_line.trim().starts_with("launch{")) {
-                        output.push_str("coroutineScope.");
-                    }
+                        // For non-suspend functions with launch calls, prefix with coroutineScope.
+                        if !func.is_suspend && (transformed_line.trim().starts_with("launch ") || transformed_line.trim().starts_with("launch{")) {
+                            output.push_str("coroutineScope.");
+                        }
 
-                    output.push_str(&transformed_line);
-                    output.push('\n');
+                        output.push_str(&transformed_line);
+                        output.push('\n');
+                    }
+                    output.push_str(&self.indent());
+                    output.push_str("}\n\n");
                 }
-                output.push_str(&self.indent());
-                output.push_str("}\n\n");
             }
         }
 
@@ -1145,6 +1196,31 @@ impl ComposeBackend {
                             }
                         } else {
                             // Other AlertDialog props - handle normally (onDismissRequest, etc.)
+                            let prop_expr = self.get_prop_expr(&prop.value);
+                            let transformed = self.transform_prop(&comp.name, &prop.name, prop_expr);
+                            params.extend(transformed?);
+                        }
+                    }
+                }
+                // Special handling for Tab with composable text prop
+                else if comp.name == "Tab" {
+                    for prop in &comp.props {
+                        // text prop accepts composable content and needs lambda wrapping
+                        if prop.name == "text" {
+                            match &prop.value {
+                                PropValue::Markup(markup) => {
+                                    // Component prop: wrap in lambda
+                                    let content_code = self.generate_markup_with_indent(markup, indent + 2)?;
+                                    let closing_indent = "    ".repeat(indent + 1);
+                                    params.push(format!("text = {{\n{}{}}}", content_code, closing_indent));
+                                }
+                                PropValue::Expression(expr) => {
+                                    // Expression prop: wrap in lambda with Text component
+                                    params.push(format!("text = {{ Text({}) }}", expr));
+                                }
+                            }
+                        } else {
+                            // Other Tab props - handle normally (selected, onClick, etc.)
                             let prop_expr = self.get_prop_expr(&prop.value);
                             let transformed = self.transform_prop(&comp.name, &prop.name, prop_expr);
                             params.extend(transformed?);
@@ -2046,6 +2122,30 @@ impl ComposeBackend {
                     }
                     "AlertDialog" => {
                         let import = "androidx.compose.material3.AlertDialog".to_string();
+                        if !component_imports.contains(&import) {
+                            component_imports.push(import);
+                        }
+                    }
+                    "Tab" => {
+                        let import = "androidx.compose.material3.Tab".to_string();
+                        if !component_imports.contains(&import) {
+                            component_imports.push(import);
+                        }
+                    }
+                    "TabRow" => {
+                        let import = "androidx.compose.material3.TabRow".to_string();
+                        if !component_imports.contains(&import) {
+                            component_imports.push(import);
+                        }
+                    }
+                    "Divider" => {
+                        let import = "androidx.compose.material3.Divider".to_string();
+                        if !component_imports.contains(&import) {
+                            component_imports.push(import);
+                        }
+                    }
+                    "HorizontalDivider" => {
+                        let import = "androidx.compose.material3.HorizontalDivider".to_string();
                         if !component_imports.contains(&import) {
                             component_imports.push(import);
                         }
@@ -3763,8 +3863,13 @@ impl ComposeBackend {
             }
         }
 
-        // Generate functions
+        // Generate functions (skip composable functions with markup - those go in wrapper)
         for func in &class.functions {
+            // Skip functions with markup - they're helper composables for the wrapper
+            if func.markup.is_some() {
+                continue;
+            }
+
             output.push_str(&format!("    fun {}({})", func.name, func.params));
             if let Some(return_type) = &func.return_type {
                 output.push_str(&format!(": {}", return_type));
@@ -4035,10 +4140,17 @@ impl ComposeBackend {
         // Package declaration
         output.push_str(&format!("package {}\n\n", self.package));
 
-        // Collect imports from markup
+        // Collect imports from markup and helper function markup
         let mut prop_imports = Vec::new();
         let mut component_imports = Vec::new();
         self.collect_imports_recursive(&file.markup, &mut prop_imports, &mut component_imports);
+
+        // Also collect imports from helper composable functions
+        for func in &file.functions {
+            if let Some(ref markup) = func.markup {
+                self.collect_imports_recursive(markup, &mut prop_imports, &mut component_imports);
+            }
+        }
 
         let mut imports = Vec::new();
 
@@ -4162,6 +4274,28 @@ impl ComposeBackend {
 
         self.indent_level -= 1;
         output.push_str("}\n");
+
+        // Generate helper composable functions that have markup
+        for func in &file.functions {
+            if let Some(ref markup) = func.markup {
+                output.push_str("\n@Composable\n");
+                let return_type_str = if let Some(ref rt) = func.return_type {
+                    format!(": {}", rt)
+                } else {
+                    String::new()
+                };
+                let suspend_keyword = if func.is_suspend { "suspend " } else { "" };
+                output.push_str(&format!("{}fun {}({}){} {{\n", suspend_keyword, func.name, func.params, return_type_str));
+
+                // Transpile the markup
+                self.indent_level += 1;
+                let markup_code = self.generate_markup(markup)?;
+                output.push_str(&markup_code);
+                self.indent_level -= 1;
+
+                output.push_str("}\n");
+            }
+        }
 
         Ok(output)
     }

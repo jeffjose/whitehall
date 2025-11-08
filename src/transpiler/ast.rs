@@ -40,6 +40,7 @@ pub struct FunctionDeclaration {
     pub return_type: Option<String>, // Optional return type (e.g., "String", "Unit")
     pub body: String,                // Just capture the whole function body as a string
     pub is_suspend: bool,            // Whether this is a suspend function
+    pub markup: Option<Markup>,      // If function body is markup, store parsed markup here
 }
 
 #[derive(Debug, Clone, PartialEq)]

@@ -171,6 +171,88 @@ impl Parser {
                 continue;
             }
 
+            // Check if this is a function with markup content (helper composable)
+            let remaining = &self.input[self.pos..];
+            if remaining.starts_with("fun ") || remaining.starts_with("suspend fun ") {
+                // Peek ahead to see if function body contains markup
+                let is_suspend = if remaining.starts_with("suspend fun ") {
+                    self.consume_word("suspend");
+                    self.skip_whitespace();
+                    true
+                } else {
+                    false
+                };
+
+                // Save position to potentially backtrack
+                let func_start_pos = self.pos;
+
+                // Try to parse as function with markup
+                if self.consume_word("fun") {
+                    self.skip_whitespace();
+                    let name = self.parse_identifier()?;
+                    self.skip_whitespace();
+
+                    // Parse params
+                    self.expect_char('(')?;
+                    let param_start = self.pos;
+                    let mut paren_depth = 1;
+                    while paren_depth > 0 {
+                        match self.peek_char() {
+                            Some('(') => paren_depth += 1,
+                            Some(')') => paren_depth -= 1,
+                            None => return Err("Unexpected EOF in function params".to_string()),
+                            _ => {}
+                        }
+                        self.advance_char();
+                    }
+                    let params = self.input[param_start..self.pos - 1].to_string();
+                    self.skip_whitespace();
+
+                    // Parse optional return type
+                    let return_type = if self.peek_char() == Some(':') {
+                        self.expect_char(':')?;
+                        self.skip_whitespace();
+                        Some(self.parse_type()?)
+                    } else {
+                        None
+                    };
+                    self.skip_whitespace();
+
+                    // Check if body starts with {
+                    if self.peek_char() == Some('{') {
+                        self.expect_char('{')?;
+                        self.skip_whitespace();
+
+                        // Check if body contains markup (starts with <)
+                        if self.peek_char() == Some('<') {
+                            // This is a composable function with markup - parse the markup
+                            let markup = self.parse_markup()?;
+                            self.skip_whitespace();
+                            self.expect_char('}')?;
+
+                            functions.push(FunctionDeclaration {
+                                name,
+                                params,
+                                return_type,
+                                body: String::new(), // Body is in markup field
+                                is_suspend,
+                                markup: Some(markup),
+                            });
+                            continue;
+                        } else {
+                            // Not markup - backtrack and treat as kotlin block
+                            self.pos = func_start_pos;
+                        }
+                    } else {
+                        // No body braces - backtrack
+                        self.pos = func_start_pos;
+                    }
+                } else {
+                    // Failed to parse as function - backtrack
+                    self.pos = func_start_pos;
+                }
+            }
+
             // After markup, all Kotlin syntax passes through (including plain functions)
             // Context is always "after store" because we're past the component definition
             if self.is_kotlin_syntax(true) {
@@ -517,6 +599,7 @@ impl Parser {
             return_type,
             body: body.trim().to_string(),
             is_suspend,
+            markup: None,
         })
     }
 
