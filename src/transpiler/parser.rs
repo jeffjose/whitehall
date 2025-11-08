@@ -91,9 +91,10 @@ impl Parser {
                 parsed_store_class = true; // Mark that we've seen a store class
             } else if self.consume_word("import") {
                 imports.push(self.parse_import()?);
-            } else if self.is_kotlin_syntax() {
+            } else if self.is_kotlin_syntax(parsed_store_class) {
                 // Pass-through: Kotlin syntax that doesn't need transformation
                 // This includes data classes, sealed classes, typealias, etc.
+                // After store class, also includes plain functions (extensions, helpers)
                 // This check must come BEFORE var/val check to catch extension properties
                 let mut block = self.capture_kotlin_block()?;
 
@@ -112,7 +113,8 @@ impl Parser {
                 // Parse state declarations (only for non-extension properties)
                 state.push(self.parse_state_declaration()?);
             } else if !parsed_store_class && self.peek_word() == Some("suspend") {
-                // Handle suspend fun (only before store class, after that they pass through)
+                // Parse suspend functions as component functions (before store class only)
+                // After store class, is_kotlin_syntax() will catch these and pass through
                 self.consume_word("suspend");
                 self.skip_whitespace();
                 if !self.consume_word("fun") {
@@ -120,7 +122,8 @@ impl Parser {
                 }
                 functions.push(self.parse_function_declaration(true)?);
             } else if !parsed_store_class && self.consume_word("fun") {
-                // Parse functions only before store class, after that they pass through
+                // Parse plain functions as component functions (before store class only)
+                // After store class, is_kotlin_syntax() will catch these and pass through
                 functions.push(self.parse_function_declaration(false)?);
             } else if self.consume_word("onMount") {
                 lifecycle_hooks.push(self.parse_lifecycle_hook("onMount")?);
@@ -168,7 +171,9 @@ impl Parser {
                 continue;
             }
 
-            if self.is_kotlin_syntax() {
+            // After markup, all Kotlin syntax passes through (including plain functions)
+            // Context is always "after store" because we're past the component definition
+            if self.is_kotlin_syntax(true) {
                 let mut block = self.capture_kotlin_block()?;
 
                 // If there are pending annotations, prepend them
@@ -1799,8 +1804,21 @@ impl Parser {
     // ========== Pass-Through Architecture Helpers ==========
 
     /// Check if the current position is at Kotlin syntax that should pass through unchanged.
-    /// These are Kotlin language constructs that don't need Whitehall transformation.
-    fn is_kotlin_syntax(&self) -> bool {
+    ///
+    /// # Context-Aware Behavior
+    ///
+    /// The `after_store_class` parameter affects how plain functions are handled:
+    /// - **Before store class:** `fun` declarations are parsed as component functions (transformed to ViewModel methods)
+    /// - **After store class:** `fun` declarations pass through unchanged (helpers, extensions, top-level functions)
+    /// - **After markup:** `fun` declarations always pass through unchanged
+    ///
+    /// # Always Pass-Through (regardless of context):
+    /// - Data classes, sealed classes, enum classes
+    /// - Type aliases, objects, interfaces
+    /// - Specialized function modifiers (inline, infix, operator)
+    /// - Fun interfaces (SAM)
+    /// - Extension properties
+    fn is_kotlin_syntax(&self, after_store_class: bool) -> bool {
         let remaining = &self.input[self.pos..];
 
         // Check for Kotlin keywords that we don't explicitly parse
@@ -1811,7 +1829,7 @@ impl Parser {
            remaining.starts_with("class ") ||  // Regular classes (must come after specific class types)
            remaining.starts_with("typealias ") ||
            remaining.starts_with("object ") ||
-           // Function modifiers (specialized functions that pass through)
+           // Specialized function modifiers (always pass through)
            remaining.starts_with("inline fun ") ||
            remaining.starts_with("infix fun ") ||
            remaining.starts_with("operator fun ") ||
@@ -1820,7 +1838,19 @@ impl Parser {
             return true;
         }
 
-        // Check for extension properties: val Type.property
+        // Plain functions - context-dependent behavior
+        if after_store_class {
+            // After store class, ALL functions pass through (including plain fun and suspend fun)
+            if remaining.starts_with("fun ") {
+                return true;
+            }
+            // Also handle suspend functions after store class
+            if remaining.starts_with("suspend fun ") {
+                return true;
+            }
+        }
+
+        // Extension properties: val Type.property
         if remaining.starts_with("val ") {
             let after_val = &remaining[4..]; // Skip "val "
             // Look for a dot before colon or newline (indicates extension property)
