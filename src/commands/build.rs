@@ -62,7 +62,7 @@ fn execute_single_file(file_path: &str) -> Result<()> {
     if !config.ffi.ffi_only {
         // Initialize toolchain and build APK
         let toolchain = Toolchain::new()?;
-        toolchain.ensure_all_parallel(&config.toolchain.java, &config.toolchain.gradle)?;
+        toolchain.ensure_all_for_build(&config.toolchain.java, &config.toolchain.gradle)?;
 
         build_with_gradle(&toolchain, &config, &result.output_dir)?;
 
@@ -148,7 +148,7 @@ fn execute_project(manifest_path: &str) -> Result<()> {
     if !config.ffi.ffi_only {
         // Initialize toolchain and build APK
         let toolchain = Toolchain::new()?;
-        toolchain.ensure_all_parallel(&config.toolchain.java, &config.toolchain.gradle)?;
+        toolchain.ensure_all_for_build(&config.toolchain.java, &config.toolchain.gradle)?;
 
         build_with_gradle(&toolchain, &config, &result.output_dir)?;
 

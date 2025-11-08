@@ -165,11 +165,15 @@ impl Toolchain {
     /// Ensure Android SDK is installed
     ///
     /// Downloads and installs Android SDK if not present
-    pub fn ensure_android_sdk(&self) -> Result<PathBuf> {
+    /// Ensure Android SDK is installed with optional emulator
+    ///
+    /// # Arguments
+    /// * `include_emulator` - Whether to include emulator components
+    fn ensure_android_sdk_internal(&self, include_emulator: bool) -> Result<PathBuf> {
         let sdk_root = self.root.join("android");
 
         if !sdk_root.exists() {
-            self.download_android_sdk()?;
+            self.download_android_sdk(include_emulator)?;
         }
 
         // Verify critical components exist
@@ -184,8 +188,26 @@ impl Toolchain {
         Ok(sdk_root)
     }
 
+    /// Ensure Android SDK is installed (for backward compatibility, includes emulator)
+    pub fn ensure_android_sdk(&self) -> Result<PathBuf> {
+        self.ensure_android_sdk_internal(true)
+    }
+
+    /// Ensure Android SDK is installed for build (without emulator)
+    pub fn ensure_android_sdk_for_build(&self) -> Result<PathBuf> {
+        self.ensure_android_sdk_internal(false)
+    }
+
+    /// Ensure Android SDK is installed with emulator
+    pub fn ensure_android_sdk_with_emulator(&self) -> Result<PathBuf> {
+        self.ensure_android_sdk_internal(true)
+    }
+
     /// Download and install Android SDK
-    fn download_android_sdk(&self) -> Result<()> {
+    ///
+    /// # Arguments
+    /// * `include_emulator` - Whether to include emulator components
+    fn download_android_sdk(&self, include_emulator: bool) -> Result<()> {
         let platform = Platform::detect()?;
         let url = downloader::get_android_cmdline_tools_url(platform)?;
 
@@ -213,14 +235,35 @@ impl Toolchain {
         // Clean up archive
         std::fs::remove_file(&archive_path)?;
 
-        // Now use sdkmanager to install essential components
-        self.install_sdk_components()?;
+        // Now use sdkmanager to install components
+        self.install_sdk_components(include_emulator)?;
 
         Ok(())
     }
 
-    /// Use sdkmanager to install essential SDK components
-    fn install_sdk_components(&self) -> Result<()> {
+    /// Get the list of SDK components to install
+    ///
+    /// # Arguments
+    /// * `include_emulator` - Whether to include emulator components
+    fn get_sdk_components(include_emulator: bool) -> Vec<&'static str> {
+        let mut components = vec![
+            "platform-tools",        // adb, fastboot
+            "build-tools;34.0.0",    // aapt, dx, etc.
+            "platforms;android-34",  // Android 14 platform
+        ];
+
+        if include_emulator {
+            components.push("emulator");  // Android emulator
+        }
+
+        components
+    }
+
+    /// Use sdkmanager to install SDK components
+    ///
+    /// # Arguments
+    /// * `include_emulator` - Whether to include emulator components
+    fn install_sdk_components(&self, include_emulator: bool) -> Result<()> {
         let sdk_root = self.root.join("android");
         let sdkmanager = sdk_root.join("cmdline-tools/latest/bin/sdkmanager");
 
@@ -244,13 +287,8 @@ impl Toolchain {
             anyhow::bail!("Failed to accept SDK licenses");
         }
 
-        // Install essential components
-        let components = vec![
-            "platform-tools",        // adb, fastboot
-            "build-tools;34.0.0",    // aapt, dx, etc.
-            "platforms;android-34",  // Android 14 platform
-            "emulator",              // Android emulator
-        ];
+        // Install components
+        let components = Self::get_sdk_components(include_emulator);
 
         for component in components {
             let output = Command::new(&sdkmanager)
@@ -691,7 +729,7 @@ impl Toolchain {
 
             let handle = thread::spawn(move || {
                 let _permit = permit_rx.lock().unwrap().recv().unwrap(); // Acquire permit (will wait for slot)
-                let result = Self::download_android_sdk_with_pb(&root, pb);
+                let result = Self::download_android_sdk_with_pb(&root, true, pb); // include_emulator=true for backward compat
                 let mut res_lock = results.lock().unwrap();
                 res_lock.push(result.map(|_| "android-sdk".to_string()));
                 drop(res_lock);
@@ -728,6 +766,171 @@ impl Toolchain {
             self.ensure_gradle(&gradle_ver)?,
             self.ensure_android_sdk()?,
         ))
+    }
+
+    /// Ensure all toolchains for build (Java, Gradle, Android SDK - excludes emulator)
+    ///
+    /// This is the recommended method for `whitehall build` and `whitehall run` commands.
+    /// It installs essential build components but skips emulator and system images.
+    ///
+    /// # Arguments
+    /// * `java_version` - Java version to ensure
+    /// * `gradle_version` - Gradle version to ensure
+    pub fn ensure_all_for_build(&self, java_version: &str, gradle_version: &str) -> Result<(PathBuf, PathBuf, PathBuf)> {
+        use indicatif::MultiProgress;
+        use std::sync::{mpsc, Arc, Mutex};
+        use std::thread;
+
+        let root = self.root.clone();
+        let java_ver = java_version.to_string();
+        let gradle_ver = gradle_version.to_string();
+
+        let results: Arc<Mutex<Vec<Result<String>>>> = Arc::new(Mutex::new(Vec::new()));
+        let multi = Arc::new(MultiProgress::new());
+
+        use colored::Colorize;
+        use indicatif::{ProgressBar, ProgressStyle};
+
+        let pb_java = multi.add(ProgressBar::new(100));
+        pb_java.set_style(
+            ProgressStyle::default_bar()
+                .template(&format!("{{msg:20}} {}{{bar:40.dim}}{} \x1b[2m{{bytes:>10}}/{{total_bytes:>10}}\x1b[0m", "[".dimmed(), "]".dimmed()))
+                .unwrap()
+                .progress_chars("=> "),
+        );
+        pb_java.set_message(format!("{}", format!("java-{}", java_ver).dimmed()));
+
+        let pb_gradle = multi.add(ProgressBar::new(100));
+        pb_gradle.set_style(
+            ProgressStyle::default_bar()
+                .template(&format!("{{msg:20}} {}{{bar:40.dim}}{} \x1b[2m{{bytes:>10}}/{{total_bytes:>10}}\x1b[0m", "[".dimmed(), "]".dimmed()))
+                .unwrap()
+                .progress_chars("=> "),
+        );
+        pb_gradle.set_message(format!("{}", format!("gradle-{}", gradle_ver).dimmed()));
+
+        let pb_android = multi.add(ProgressBar::new(100));
+        pb_android.set_style(
+            ProgressStyle::default_bar()
+                .template(&format!("{{msg:20}} {}{{bar:40.dim}}{} \x1b[2m{{bytes:>10}}/{{total_bytes:>10}}\x1b[0m", "[".dimmed(), "]".dimmed()))
+                .unwrap()
+                .progress_chars("=> "),
+        );
+        pb_android.set_message(format!("{}", "android-sdk".dimmed()));
+
+        let pb_java = Arc::new(pb_java);
+        let pb_gradle = Arc::new(pb_gradle);
+        let pb_android = Arc::new(pb_android);
+
+        let (permit_tx, permit_rx) = mpsc::sync_channel::<()>(2);
+        permit_tx.send(()).unwrap();
+        permit_tx.send(()).unwrap();
+        let permit_rx = Arc::new(Mutex::new(permit_rx));
+
+        let mut handles = vec![];
+
+        // Thread 1: Java
+        {
+            let java_ver = java_ver.clone();
+            let root = root.clone();
+            let results = Arc::clone(&results);
+            let pb = Arc::clone(&pb_java);
+            let permit_rx = Arc::clone(&permit_rx);
+            let permit_tx = permit_tx.clone();
+
+            let handle = thread::spawn(move || {
+                let _permit = permit_rx.lock().unwrap().recv().unwrap();
+                let result = Self::download_java_with_pb(&root, &java_ver, pb);
+                let mut res_lock = results.lock().unwrap();
+                res_lock.push(result.map(|_| format!("java-{}", java_ver)));
+                drop(res_lock);
+                permit_tx.send(()).unwrap();
+            });
+            handles.push(handle);
+        }
+
+        // Thread 2: Gradle
+        {
+            let gradle_ver = gradle_ver.clone();
+            let root = root.clone();
+            let results = Arc::clone(&results);
+            let pb = Arc::clone(&pb_gradle);
+            let permit_rx = Arc::clone(&permit_rx);
+            let permit_tx = permit_tx.clone();
+
+            let handle = thread::spawn(move || {
+                let _permit = permit_rx.lock().unwrap().recv().unwrap();
+                let result = Self::download_gradle_with_pb(&root, &gradle_ver, pb);
+                let mut res_lock = results.lock().unwrap();
+                res_lock.push(result.map(|_| format!("gradle-{}", gradle_ver)));
+                drop(res_lock);
+                permit_tx.send(()).unwrap();
+            });
+            handles.push(handle);
+        }
+
+        // Thread 3: Android SDK (without emulator)
+        {
+            let root = root.clone();
+            let results = Arc::clone(&results);
+            let pb = Arc::clone(&pb_android);
+            let permit_rx = Arc::clone(&permit_rx);
+            let permit_tx = permit_tx.clone();
+
+            let handle = thread::spawn(move || {
+                let _permit = permit_rx.lock().unwrap().recv().unwrap();
+                let result = Self::download_android_sdk_with_pb(&root, false, pb); // exclude emulator
+                let mut res_lock = results.lock().unwrap();
+                res_lock.push(result.map(|_| "android-sdk".to_string()));
+                drop(res_lock);
+                permit_tx.send(()).unwrap();
+            });
+            handles.push(handle);
+        }
+
+        for handle in handles {
+            handle.join().expect("Thread panicked");
+        }
+
+        multi.clear().ok();
+
+        let results_vec = results.lock().unwrap();
+        let mut errors = Vec::new();
+
+        for result in results_vec.iter() {
+            if let Err(e) = result {
+                errors.push(format!("{}", e));
+            }
+        }
+
+        if !errors.is_empty() {
+            anyhow::bail!("Some downloads failed:\n  {}", errors.join("\n  "));
+        }
+
+        Ok((
+            self.ensure_java(&java_ver)?,
+            self.ensure_gradle(&gradle_ver)?,
+            self.ensure_android_sdk_for_build()?,
+        ))
+    }
+
+    /// Ensure all toolchains including emulator (Java, Gradle, Android SDK + emulator, system images)
+    ///
+    /// This is the recommended method for `whitehall toolchain install` command.
+    /// It installs all components including emulator and system images.
+    ///
+    /// # Arguments
+    /// * `java_version` - Java version to ensure
+    /// * `gradle_version` - Gradle version to ensure
+    /// * `target_sdk` - Target SDK version for system images
+    pub fn ensure_all_with_emulator(&self, java_version: &str, gradle_version: &str, target_sdk: u32) -> Result<(PathBuf, PathBuf, PathBuf)> {
+        // First ensure all core components with emulator
+        let (java_home, gradle_bin, android_home) = self.ensure_all_parallel(java_version, gradle_version)?;
+
+        // Then ensure system images
+        self.ensure_system_image(target_sdk)?;
+
+        Ok((java_home, gradle_bin, android_home))
     }
 
     // Static helper functions for parallel downloads with pre-created progress bars
@@ -834,7 +1037,7 @@ impl Toolchain {
         Ok(())
     }
 
-    fn download_android_sdk_with_pb(root: &Path, pb: Arc<indicatif::ProgressBar>) -> Result<()> {
+    fn download_android_sdk_with_pb(root: &Path, include_emulator: bool, pb: Arc<indicatif::ProgressBar>) -> Result<()> {
         use colored::Colorize;
         use indicatif::ProgressStyle;
 
@@ -910,13 +1113,8 @@ impl Toolchain {
 
         pb.set_position(10); // License acceptance done
 
-        // Install essential components
-        let components = vec![
-            "platform-tools",
-            "build-tools;34.0.0",
-            "platforms;android-34",
-            "emulator",
-        ];
+        // Install components based on parameter
+        let components = Self::get_sdk_components(include_emulator);
 
         let progress_per_component = 90 / components.len() as u64; // 90% total for all components
 

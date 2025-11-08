@@ -12,14 +12,12 @@ pub fn execute_install(manifest_path: &str) -> Result<()> {
     // Initialize toolchain manager
     let toolchain = Toolchain::new()?;
 
-    // Download all toolchains in parallel for faster installation
-    toolchain.ensure_all_parallel(
+    // Download all toolchains including emulator and system images
+    toolchain.ensure_all_with_emulator(
         &config.toolchain.java,
-        &config.toolchain.gradle
+        &config.toolchain.gradle,
+        config.android.target_sdk
     )?;
-
-    // Install system image for emulator based on target_sdk
-    toolchain.ensure_system_image(config.android.target_sdk)?;
 
     Ok(())
 }
