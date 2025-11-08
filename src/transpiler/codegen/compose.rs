@@ -2268,9 +2268,18 @@ impl ComposeBackend {
             // Button onClick needs braces
             ("Button", "onClick") => {
                 if !value.starts_with('{') {
-                    Ok(vec![format!("onClick = {{ {}() }}", value)])
+                    // Simple function name - add (), then transform
+                    // increment → increment() → viewModel.increment()
+                    let with_parens = format!("{}()", value);
+                    let transformed = self.transform_viewmodel_expression(&with_parens);
+                    Ok(vec![format!("onClick = {{ {} }}", transformed)])
                 } else {
-                    Ok(vec![format!("onClick = {}", value)])
+                    // Already has braces - strip them, add (), transform, re-wrap
+                    // Input: {increment} → increment → increment() → viewModel.increment() → { viewModel.increment() }
+                    let inner = value.trim_start_matches('{').trim_end_matches('}').trim();
+                    let with_parens = format!("{}()", inner);
+                    let transformed = self.transform_viewmodel_expression(&with_parens);
+                    Ok(vec![format!("onClick = {{ {} }}", transformed)])
                 }
             }
             // Column spacing → verticalArrangement = Arrangement.spacedBy(N.dp)
@@ -2680,6 +2689,7 @@ impl ComposeBackend {
         // First pass: Transform standalone variable references (not in interpolations)
         // This handles cases like: if (varName != null) or text = varName
         // We need to be careful to only match whole words
+        // Note: function names are NOT transformed here - they're handled in the third pass with ()
         for var_name in &self.mutable_vars {
             result = self.replace_identifier(&result, var_name, &format!("uiState.{}", var_name));
         }

@@ -263,7 +263,33 @@ fn generate_main_activity(
         let source = fs::read_to_string(&main_file.path)?;
         let result = transpiler::transpile_with_registry(&source, &config.android.package, "App", None, Some(global_store_registry))
             .map_err(|e| anyhow::anyhow!(e))?;
-        // Get primary content (main.wh should generate single file)
+
+        // Handle Multiple results (e.g., when main.wh has inline vars → generates ViewModel)
+        match &result {
+            transpiler::TranspileResult::Multiple(files) => {
+                // Write secondary files (e.g., AppViewModel.kt)
+                // Note: main.wh is transpiled with component_name="App", so we use "App" for filenames
+                let package_path = config.android.package.replace('.', "/");
+                for (suffix, content) in files {
+                    if !suffix.is_empty() {
+                        let filename = format!("App{}.kt", suffix);
+                        let output_path = output_dir
+                            .join("app/src/main/kotlin")
+                            .join(&package_path)
+                            .join(filename);
+                        fs::create_dir_all(output_path.parent().unwrap())
+                            .context("Failed to create output directories")?;
+                        fs::write(&output_path, content)
+                            .context(format!("Failed to write {}", output_path.display()))?;
+                    }
+                }
+            }
+            transpiler::TranspileResult::Single(_) => {
+                // Single file, no extra files to write
+            }
+        }
+
+        // Get primary content (main.wh should generate single file or wrapper component)
         result.primary_content().to_string()
     } else if !discovered_routes.is_empty() {
         // Generate MainActivity with NavHost for routing
