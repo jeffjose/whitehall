@@ -1,0 +1,27 @@
+@prop val title: String
+@prop val content: String
+@prop val category: String
+@prop val onDelete: () -> Unit
+
+<Card padding={16}>
+  <Column spacing={8}>
+    <Row spacing={8}>
+      <Text fontSize={18} fontWeight="bold">
+        {title}
+      </Text>
+      <Spacer />
+      <Card backgroundColor="primaryContainer" padding={4}>
+        <Text fontSize={12}>{category}</Text>
+      </Card>
+    </Row>
+    <Text fontSize={14} color="#666666">
+      {content}
+    </Text>
+    <Row>
+      <Spacer />
+      <Button onClick={onDelete}>
+        <Text color="#F44336">Delete</Text>
+      </Button>
+    </Row>
+  </Column>
+</Card>

@@ -1,0 +1,144 @@
+/// [app]
+/// name = "Notes"
+/// package = "com.example.notes"
+
+// Example 19: Notes App with Categories
+// Tests: CRUD operations, categories, filtering
+// Demonstrates: Note-taking, category management, search/filter
+
+import $components.NoteCard
+import androidx.compose.material3.OutlinedTextField
+
+var notes: List<Note> = emptyList()
+var nextId = 1
+
+var newTitle = ""
+var newContent = ""
+var selectedCategory = "Personal"
+var filterCategory = "All"
+
+val categories = listOf("Personal", "Work", "Ideas", "Tasks")
+
+fun addNote() {
+  if (newTitle.isNotEmpty() && newContent.isNotEmpty()) {
+    notes = notes + Note(nextId, newTitle, newContent, selectedCategory)
+    nextId = nextId + 1
+    newTitle = ""
+    newContent = ""
+  }
+}
+
+fun deleteNote(id: Int) {
+  notes = notes.filter { it.id != id }
+}
+
+<Column padding={20} spacing={16}>
+  <Text fontSize={32} fontWeight="bold">My Notes</Text>
+
+  <Card padding={16} backgroundColor="primaryContainer">
+    <Column spacing={12}>
+      <Text fontSize={18} fontWeight="bold">New Note</Text>
+
+      <OutlinedTextField
+        value={newTitle}
+        onValueChange={(value) => newTitle = value}
+        label="Title"
+      />
+
+      <OutlinedTextField
+        value={newContent}
+        onValueChange={(value) => newContent = value}
+        label="Content"
+      />
+
+      <Column spacing={8}>
+        <Text fontSize={14} fontWeight="bold">Category</Text>
+        <Column spacing={8}>
+          <Row spacing={8}>
+            <Button onClick={() => selectedCategory = "Personal"}>
+              <Text>Personal</Text>
+            </Button>
+            <Button onClick={() => selectedCategory = "Work"}>
+              <Text>Work</Text>
+            </Button>
+          </Row>
+          <Row spacing={8}>
+            <Button onClick={() => selectedCategory = "Ideas"}>
+              <Text>Ideas</Text>
+            </Button>
+            <Button onClick={() => selectedCategory = "Tasks"}>
+              <Text>Tasks</Text>
+            </Button>
+          </Row>
+        </Column>
+        <Text fontSize={12} color="#666666">
+          Selected: {selectedCategory}
+        </Text>
+      </Column>
+
+      <Button onClick={() => addNote()} fillMaxWidth={true}>
+        <Text>Add Note</Text>
+      </Button>
+    </Column>
+  </Card>
+
+  <Card padding={16}>
+    <Column spacing={8}>
+      <Text fontSize={18} fontWeight="bold">Filter by Category</Text>
+      <Column spacing={8}>
+        <Row spacing={8}>
+          <Button onClick={() => filterCategory = "All"}>
+            <Text>All</Text>
+          </Button>
+          <Button onClick={() => filterCategory = "Personal"}>
+            <Text>Personal</Text>
+          </Button>
+          <Button onClick={() => filterCategory = "Work"}>
+            <Text>Work</Text>
+          </Button>
+        </Row>
+        <Row spacing={8}>
+          <Button onClick={() => filterCategory = "Ideas"}>
+            <Text>Ideas</Text>
+          </Button>
+          <Button onClick={() => filterCategory = "Tasks"}>
+            <Text>Tasks</Text>
+          </Button>
+        </Row>
+      </Column>
+      <Text fontSize={12} color="#666666">
+        Showing: {filterCategory}
+      </Text>
+    </Column>
+  </Card>
+
+  @if (notes.isEmpty()) {
+    <Card padding={24}>
+      <Text fontSize={16}>No notes yet. Create one above!</Text>
+    </Card>
+  } else {
+    <LazyColumn spacing={12}>
+      @for (note in notes) {
+        <NoteCard
+          title={note.title}
+          content={note.content}
+          category={note.category}
+          onDelete={() => deleteNote(note.id)}
+        />
+      }
+    </LazyColumn>
+  }
+
+  <Card padding={12} backgroundColor="surfaceVariant">
+    <Text fontSize={12} color="#666666">
+      Total notes: {notes.size}
+    </Text>
+  </Card>
+</Column>
+
+data class Note(
+  val id: Int,
+  val title: String,
+  val content: String,
+  val category: String
+)

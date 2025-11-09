@@ -1,0 +1,7 @@
+@prop val text: String
+@prop val onClick: () -> Unit
+@prop val backgroundColor: String = "surface"
+
+<Button onClick={onClick}>
+  <Text fontSize={24} fontWeight="bold">{text}</Text>
+</Button>

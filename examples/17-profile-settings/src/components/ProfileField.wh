@@ -1,0 +1,11 @@
+import androidx.compose.material3.OutlinedTextField
+
+@prop val label: String
+@prop val value: String
+@prop val onValueChange: (String) -> Unit
+
+<OutlinedTextField
+  value={value}
+  onValueChange={onValueChange}
+  label={label}
+/>

@@ -1,0 +1,141 @@
+/// [app]
+/// name = "Profile Editor"
+/// package = "com.example.profile"
+
+// Example 17: Profile Editor with Image
+// Tests: Form inputs, profile management, image display
+// Demonstrates: User profile editing, validation, save/cancel
+
+import $components.ProfileField
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Person
+import androidx.compose.material3.Icon
+
+var name = "John Doe"
+var email = "john@example.com"
+var phone = "+1 (555) 123-4567"
+var bio = "Software developer passionate about mobile apps"
+var location = "San Francisco, CA"
+
+var isSaved = true
+var showSuccess = false
+
+fun hasChanges(): Boolean {
+  return !isSaved
+}
+
+fun saveProfile() {
+  isSaved = true
+  showSuccess = true
+}
+
+fun resetProfile() {
+  name = "John Doe"
+  email = "john@example.com"
+  phone = "+1 (555) 123-4567"
+  bio = "Software developer passionate about mobile apps"
+  location = "San Francisco, CA"
+  isSaved = true
+}
+
+fun markChanged() {
+  isSaved = false
+  showSuccess = false
+}
+
+<Column padding={20} spacing={16}>
+  <Text fontSize={32} fontWeight="bold">Profile Editor</Text>
+
+  <Card padding={24}>
+    <Column spacing={16}>
+      <Card backgroundColor="primary" padding={32}>
+        <Icon
+          imageVector={Icons.Default.Person}
+          contentDescription="Profile"
+        />
+      </Card>
+
+      <Text fontSize={16} fontWeight="bold">Profile Picture</Text>
+      <Button onClick={markChanged} fillMaxWidth={true}>
+        <Text>Change Photo</Text>
+      </Button>
+    </Column>
+  </Card>
+
+  <Card padding={16}>
+    <Column spacing={16}>
+      <Text fontSize={20} fontWeight="bold">Personal Information</Text>
+
+      <ProfileField
+        label="Full Name"
+        value={name}
+        onValueChange={(value) => { name = value; markChanged() }}
+      />
+
+      <ProfileField
+        label="Email"
+        value={email}
+        onValueChange={(value) => { email = value; markChanged() }}
+      />
+
+      <ProfileField
+        label="Phone"
+        value={phone}
+        onValueChange={(value) => { phone = value; markChanged() }}
+      />
+
+      <ProfileField
+        label="Location"
+        value={location}
+        onValueChange={(value) => { location = value; markChanged() }}
+      />
+
+      <Column spacing={4}>
+        <Text fontSize={14} fontWeight="bold">Bio</Text>
+        <OutlinedTextField
+          value={bio}
+          onValueChange={(value) => { bio = value; markChanged() }}
+          label="About you"
+        />
+      </Column>
+    </Column>
+  </Card>
+
+  @if (showSuccess) {
+    <Card padding={16} backgroundColor="primaryContainer">
+      <Text color="#4CAF50" fontSize={16} fontWeight="bold">
+        Profile saved successfully!
+      </Text>
+    </Card>
+  }
+
+  @if (hasChanges()) {
+    <Card padding={16} backgroundColor="errorContainer">
+      <Text fontSize={14}>You have unsaved changes</Text>
+    </Card>
+  }
+
+  <Row spacing={12}>
+    <Button
+      onClick={() => saveProfile()}
+      enabled={hasChanges()}
+    >
+      <Text>Save Changes</Text>
+    </Button>
+    <Button
+      onClick={() => resetProfile()}
+      enabled={hasChanges()}
+    >
+      <Text>Cancel</Text>
+    </Button>
+  </Row>
+
+  <Card padding={16} backgroundColor="surfaceVariant">
+    <Column spacing={8}>
+      <Text fontSize={16} fontWeight="bold">Profile Summary</Text>
+      <Text fontSize={14}>Name: {name}</Text>
+      <Text fontSize={14}>Email: {email}</Text>
+      <Text fontSize={14}>Location: {location}</Text>
+    </Column>
+  </Card>
+</Column>

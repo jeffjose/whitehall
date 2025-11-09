@@ -1,0 +1,129 @@
+/// [app]
+/// name = "Calculator"
+/// package = "com.example.calculator"
+
+// Example 18: Calculator App
+// Tests: Math operations, state management, button grid
+// Demonstrates: Calculator logic, grid layout, number formatting
+
+import $components.CalcButton
+
+var display = "0"
+var currentValue = 0.0
+var operator = ""
+var waitingForOperand = false
+
+fun appendDigit(digit: String) {
+  if (waitingForOperand || display == "0") {
+    display = digit
+    waitingForOperand = false
+  } else {
+    display = display + digit
+  }
+}
+
+fun appendDecimal() {
+  if (waitingForOperand) {
+    display = "0."
+    waitingForOperand = false
+  } else if (!display.contains(".")) {
+    display = display + "."
+  }
+}
+
+fun chooseOperator(op: String) {
+  currentValue = display.toDouble()
+  operator = op
+  waitingForOperand = true
+}
+
+fun calculate() {
+  val inputValue = display.toDouble()
+  val result = when (operator) {
+    "+" -> currentValue + inputValue
+    "-" -> currentValue - inputValue
+    "×" -> currentValue * inputValue
+    "÷" -> if (inputValue != 0.0) currentValue / inputValue else 0.0
+    else -> inputValue
+  }
+  display = if (result % 1.0 == 0.0) {
+    result.toInt().toString()
+  } else {
+    "%.2f".format(result)
+  }
+  operator = ""
+  waitingForOperand = true
+}
+
+fun clear() {
+  display = "0"
+  currentValue = 0.0
+  operator = ""
+  waitingForOperand = false
+}
+
+fun backspace() {
+  if (display.length > 1) {
+    display = display.dropLast(1)
+  } else {
+    display = "0"
+  }
+}
+
+<Column padding={20} spacing={16}>
+  <Text fontSize={32} fontWeight="bold">Calculator</Text>
+
+  <Card padding={24} backgroundColor="primaryContainer">
+    <Column spacing={8}>
+      @if (!operator.isEmpty()) {
+        <Text fontSize={16} color="#666666">
+          {currentValue} {operator}
+        </Text>
+      }
+      <Text fontSize={48} fontWeight="bold">
+        {display}
+      </Text>
+    </Column>
+  </Card>
+
+  <Column spacing={8}>
+    <Row spacing={8}>
+      <CalcButton text="C" onClick={() => clear()} />
+      <CalcButton text="←" onClick={() => backspace()} />
+      <CalcButton text="÷" onClick={() => chooseOperator("÷")} />
+    </Row>
+
+    <Row spacing={8}>
+      <CalcButton text="7" onClick={() => appendDigit("7")} />
+      <CalcButton text="8" onClick={() => appendDigit("8")} />
+      <CalcButton text="9" onClick={() => appendDigit("9")} />
+      <CalcButton text="×" onClick={() => chooseOperator("×")} />
+    </Row>
+
+    <Row spacing={8}>
+      <CalcButton text="4" onClick={() => appendDigit("4")} />
+      <CalcButton text="5" onClick={() => appendDigit("5")} />
+      <CalcButton text="6" onClick={() => appendDigit("6")} />
+      <CalcButton text="-" onClick={() => chooseOperator("-")} />
+    </Row>
+
+    <Row spacing={8}>
+      <CalcButton text="1" onClick={() => appendDigit("1")} />
+      <CalcButton text="2" onClick={() => appendDigit("2")} />
+      <CalcButton text="3" onClick={() => appendDigit("3")} />
+      <CalcButton text="+" onClick={() => chooseOperator("+")} />
+    </Row>
+
+    <Row spacing={8}>
+      <CalcButton text="0" onClick={() => appendDigit("0")} />
+      <CalcButton text="." onClick={() => appendDecimal()} />
+      <CalcButton text="=" onClick={() => calculate()} />
+    </Row>
+  </Column>
+
+  <Card padding={12} backgroundColor="surfaceVariant">
+    <Text fontSize={12} color="#666666">
+      Basic calculator with +, -, ×, ÷ operations
+    </Text>
+  </Card>
+</Column>
