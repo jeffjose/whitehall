@@ -2477,18 +2477,32 @@ impl ComposeBackend {
     /// Transform ternary to if-else expression (for values, not modifiers)
     /// Transforms: condition ? value : value
     /// To: if (condition) value else value
+    /// Note: Skips Elvis operator ?:
     fn transform_ternary_to_if_else(&self, expr: &str) -> String {
         // Find ? and : at the same depth level
         let mut depth = 0;
         let mut question_pos = None;
         let mut colon_pos = None;
 
+        let chars: Vec<char> = expr.chars().collect();
         for (i, ch) in expr.char_indices() {
             match ch {
                 '(' | '{' | '[' => depth += 1,
                 ')' | '}' | ']' => depth -= 1,
-                '?' if depth == 0 && question_pos.is_none() => question_pos = Some(i),
-                ':' if depth == 0 && question_pos.is_some() && colon_pos.is_none() => colon_pos = Some(i),
+                '?' if depth == 0 && question_pos.is_none() => {
+                    // Check if this is Elvis operator (?:) - if so, skip it
+                    if i + 1 < chars.len() && chars[i + 1] == ':' {
+                        continue; // Skip Elvis operator
+                    }
+                    question_pos = Some(i);
+                },
+                ':' if depth == 0 && question_pos.is_some() && colon_pos.is_none() => {
+                    // Make sure this : is not part of Elvis operator that we already skipped
+                    if i > 0 && chars[i - 1] == '?' {
+                        continue; // This : is part of ?:, skip it
+                    }
+                    colon_pos = Some(i);
+                },
                 _ => {}
             }
         }
@@ -3733,7 +3747,7 @@ impl ComposeBackend {
             self.generate_singleton_store(file, class)
         } else {
             // Generate ViewModel code (for both Class and ComponentInline sources)
-            self.generate_view_model_store(file, class)
+            self.generate_view_model_store(file, class, source)
         }
     }
 
@@ -3847,7 +3861,7 @@ impl ComposeBackend {
     }
 
     /// Generate ViewModel code for reactive class
-    fn generate_view_model_store(&self, file: &WhitehallFile, class: &ClassDeclaration) -> Result<String, String> {
+    fn generate_view_model_store(&self, file: &WhitehallFile, class: &ClassDeclaration, source: crate::transpiler::analyzer::StoreSource) -> Result<String, String> {
         let mut output = String::new();
 
         // Package declaration
@@ -4002,31 +4016,34 @@ impl ComposeBackend {
 
         // Generate update methods for mutable state variables
         // These allow safe state updates from lambdas in the wrapper component
-        for prop in &public_properties {
-            if prop.getter.is_none() {
-                // Only generate update methods for mutable (non-derived) properties
-                let type_str = if let Some(type_ann) = &prop.type_annotation {
-                    type_ann.clone()
-                } else if let Some(init_val) = &prop.initial_value {
-                    self.infer_type_from_value(init_val)
-                } else {
-                    "String".to_string()
-                };
+        // Only generate for ComponentInline (components with inline vars), not for regular store classes
+        if source == crate::transpiler::analyzer::StoreSource::ComponentInline {
+            for prop in &public_properties {
+                if prop.getter.is_none() {
+                    // Only generate update methods for mutable (non-derived) properties
+                    let type_str = if let Some(type_ann) = &prop.type_annotation {
+                        type_ann.clone()
+                    } else if let Some(init_val) = &prop.initial_value {
+                        self.infer_type_from_value(init_val)
+                    } else {
+                        "String".to_string()
+                    };
 
-                // Generate update method: fun updateEmail(value: String) { _uiState.update { it.copy(email = value) } }
-                let method_name = format!("update{}{}",
-                    prop.name.chars().next().unwrap().to_uppercase(),
-                    &prop.name[1..]
-                );
+                    // Generate update method: fun updateEmail(value: String) { _uiState.update { it.copy(email = value) } }
+                    let method_name = format!("update{}{}",
+                        prop.name.chars().next().unwrap().to_uppercase(),
+                        &prop.name[1..]
+                    );
 
-                // Check if user already defined a function with this name
-                let user_defined = class.functions.iter().any(|f| f.name == method_name);
+                    // Check if user already defined a function with this name
+                    let user_defined = class.functions.iter().any(|f| f.name == method_name);
 
-                // Only generate if user hasn't defined it
-                if !user_defined {
-                    output.push_str(&format!("    fun {}(value: {}) {{\n", method_name, type_str));
-                    output.push_str(&format!("        _uiState.update {{ it.copy({} = value) }}\n", prop.name));
-                    output.push_str("    }\n\n");
+                    // Only generate if user hasn't defined it
+                    if !user_defined {
+                        output.push_str(&format!("    fun {}(value: {}) {{\n", method_name, type_str));
+                        output.push_str(&format!("        _uiState.update {{ it.copy({} = value) }}\n", prop.name));
+                        output.push_str("    }\n\n");
+                    }
                 }
             }
         }
