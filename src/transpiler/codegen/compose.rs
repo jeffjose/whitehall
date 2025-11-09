@@ -2237,12 +2237,6 @@ impl ComposeBackend {
                             component_imports.push(import);
                         }
                     }
-                    "Checkbox" => {
-                        let import = "androidx.compose.material3.Checkbox".to_string();
-                        if !component_imports.contains(&import) {
-                            component_imports.push(import);
-                        }
-                    }
                     "Switch" => {
                         let import = "androidx.compose.material3.Switch".to_string();
                         if !component_imports.contains(&import) {
@@ -2948,7 +2942,7 @@ impl ComposeBackend {
             // Card onClick → Card has native onClick parameter (Material3)
             ("Card", "onClick") => {
                 let transformed = self.transform_lambda_arrow(&value);
-                let onClick_value = if !transformed.starts_with('{') {
+                let on_click_value = if !transformed.starts_with('{') {
                     // Bare function name: add (), transform for ViewModel, wrap in braces
                     let with_parens = format!("{}()", transformed);
                     let with_viewmodel = self.transform_viewmodel_expression(&with_parens);
@@ -2957,7 +2951,7 @@ impl ComposeBackend {
                     // Already a lambda expression, just transform for ViewModel
                     self.transform_viewmodel_expression(&transformed)
                 };
-                Ok(vec![format!("onClick = {}", onClick_value)])
+                Ok(vec![format!("onClick = {}", on_click_value)])
             }
             // Card backgroundColor → CardDefaults.cardColors()
             ("Card", "backgroundColor") => {
