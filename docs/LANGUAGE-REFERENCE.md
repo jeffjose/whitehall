@@ -50,7 +50,7 @@ class UserStore {
 
 // Component markup
 <LazyColumn>
-  @for (user in store.users, key = { it.id }) {
+  @for (user in store.users) {
     <Text>{user.displayName}</Text>
   }
 </LazyColumn>
@@ -180,12 +180,14 @@ var enabled = false
 
 **@for:**
 ```whitehall
-@for (item in items, key = { it.id }) {
+@for (item in items) {
   <Text>{item.name}</Text>
 } empty {
   <Text>No items</Text>
 }
 ```
+
+**⚠️ Current Limitation:** The `key` parameter (`key = { it.id }`) is not yet supported by the parser. Use simple iteration without keys. This is planned for a future release.
 
 **@when:**
 ```whitehall
@@ -274,12 +276,12 @@ var enabled = false
 **LazyColumn:**
 ```whitehall
 <LazyColumn>
-  @for (item in items, key = { it.id }) {
+  @for (item in items) {
     <ItemCard item={item} />
   }
 </LazyColumn>
 ```
-→ Auto-transforms to `items()` with proper key
+→ Auto-transforms to `items()` for lazy rendering
 
 ---
 
@@ -411,6 +413,101 @@ onClick={doSomething}              // Direct ref
 ```
 Both → `onClick = { doSomething() }`
 
+**Kotlin operators (supported):**
+```whitehall
+// Safe navigation and elvis operators work as-is
+<Text>{user?.name ?: "Unknown"}</Text>
+<Text>{profile?.email ?: "No email"}</Text>
+
+// Ternary operator transforms to if/else
+<Text>{count > 0 ? "Items" : "No items"}</Text>  // → if (count > 0) "Items" else "No items"
+```
+
+**Helper composable functions:**
+```whitehall
+// Functions with markup bodies are auto-transpiled as @Composable
+fun UserCard(user: User, onClick: () -> Unit) {
+  <Card p={16}>
+    <Column spacing={8}>
+      <Text fontSize={18} fontWeight="bold">{user.name}</Text>
+      <Text fontSize={14} color="#666666">{user.email}</Text>
+      <Button text="View Profile" onClick={onClick} />
+    </Column>
+  </Card>
+}
+
+// Use in main component
+@for (user in users) {
+  <UserCard user={user} onClick={() => navigateTo(user)} />
+}
+```
+→ Helper functions are placed after the main @Composable wrapper and correctly transpiled
+
+---
+
+### Component Limitations & Experimental APIs
+
+**Experimental Material3 APIs (require @OptIn):**
+
+Some Material3 components are marked as experimental and require special handling:
+
+```whitehall
+// ⚠️ These are experimental - avoid or use workarounds
+
+// Card onClick (experimental)
+<Card onClick={() => action()}>  // ❌ Requires @OptIn
+  <Text>Content</Text>
+</Card>
+
+// Workaround: Use clickable modifier
+<Card p={16}>
+  <Column modifier={Modifier.clickable { action() }}>
+    <Text>Content</Text>
+  </Column>
+</Card>
+
+// FilterChip (experimental)
+<FilterChip                        // ❌ Requires @OptIn
+  selected={isSelected}
+  onClick={() => toggle()}
+  label="Filter"
+/>
+
+// Workaround: Use Button
+<Button
+  text="Filter"
+  onClick={() => toggle()}
+/>
+
+// ModalBottomSheet (experimental)
+<ModalBottomSheet>                 // ❌ Requires @OptIn
+  <Content />
+</ModalBottomSheet>
+
+// Workaround: Use AlertDialog
+<AlertDialog
+  onDismissRequest={() => close()}
+  title={<Text>Title</Text>}
+  text={<Content />}
+  confirmButton={<Button text="Close" onClick={() => close()} />}
+/>
+```
+
+**Supported stable components:**
+- ✅ Text, Button, TextField, OutlinedTextField
+- ✅ Column, Row, Box, LazyColumn, LazyRow
+- ✅ Card, Checkbox, Switch, Icon
+- ✅ AlertDialog, Spacer
+- ✅ CircularProgressIndicator
+- ✅ Tab, TabRow, Divider
+
+**Auto-generated parameters:**
+```whitehall
+// Icon automatically gets contentDescription if not provided
+<Icon imageVector={Icons.Default.Home} />
+// → Icon(imageVector = Icons.Default.Home, contentDescription = null)
+```
+
 ---
 
 ## Prop Transformations
@@ -424,6 +521,11 @@ Both → `onClick = { doSomething() }`
 | Button | `text` | `text="Click"` | `Button { Text("Click") }` |
 | TextField | `label` | `label="Name"` | `label = { Text("Name") }` |
 | TextField | `type` | `type="password"` | `PasswordVisualTransformation()` |
+| OutlinedTextField | `label` | `label="Email"` | `label = { Text("Email") }` |
+| Tab | `text` | `text={<Text>Home</Text>}` | `text = { Text("Home") }` |
+| AlertDialog | `title` | `title={<Text>Alert</Text>}` | `title = { Text("Alert") }` |
+| AlertDialog | `text` | `text={<Content />}` | `text = { Content() }` |
+| Icon | (auto) | `<Icon imageVector={...} />` | Adds `contentDescription = null` |
 | Spacer | `h/w` | `h={16}` | `Modifier.height(16.dp)` |
 | Any | `p` | `p={16}` | `Modifier.padding(16.dp)` |
 | Any | `px/py` | `px={20} py={8}` | `padding(horizontal=20.dp, vertical=8.dp)` |
@@ -528,7 +630,7 @@ onMount {
   <CircularProgressIndicator />
 } else {
   <LazyColumn>
-    @for (item in items, key = { it.id }) {
+    @for (item in items) {
       <ItemCard item={item} />
     }
   </LazyColumn>
