@@ -46,6 +46,3 @@ pub fn is_prime(n: i32) -> bool {
     }
     true
 }
-
-// Auto-generated JNI bridge
-mod jni_bridge;

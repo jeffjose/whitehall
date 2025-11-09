@@ -53,6 +53,3 @@ pub fn prettify_json(json_str: String) -> String {
         Err(_) => json_str
     }
 }
-
-// Auto-generated JNI bridge
-mod jni_bridge;
