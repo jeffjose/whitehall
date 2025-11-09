@@ -16,14 +16,22 @@ declare -a results=()
 
 # Build numbered examples only (directories starting with a digit)
 for example_dir in examples/[0-9]*/; do
-  if [ -f "$example_dir/main.wh" ]; then
-    example_name=$(basename "$example_dir")
+  example_name=$(basename "$example_dir")
+  main_file=""
 
+  # Check for main.wh in root or src/
+  if [ -f "$example_dir/main.wh" ]; then
+    main_file="$example_dir/main.wh"
+  elif [ -f "$example_dir/src/main.wh" ]; then
+    main_file="$example_dir/src/main.wh"
+  fi
+
+  if [ -n "$main_file" ]; then
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
     echo "📦 Building example: $example_name"
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 
-    if cargo run -- build "$example_dir/main.wh"; then
+    if cargo run -- build "$main_file"; then
       results+=("✅ $example_name")
       echo ""
     else
