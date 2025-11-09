@@ -32,7 +32,3 @@ pub fn is_positive(n: i32) -> bool {
 fn helper(x: i32) -> i32 {
     x * 2
 }
-
-
-// Auto-generated JNI bridge (Phase 1.6)
-mod jni_bridge;
