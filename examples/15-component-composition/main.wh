@@ -1,0 +1,54 @@
+/// [app]
+/// name = "Component Patterns"
+/// package = "com.example.patterns"
+
+// Example 15: Component Patterns
+// Teaches: Organizing UI with repeated patterns
+// Complexity: Single file, ~50 lines
+// Focus: ONLY showing composition by extracting common patterns
+
+var count1 = 0
+var count2 = 0
+var count3 = 0
+
+<Column padding={20} spacing={16}>
+  <Text fontSize={32} fontWeight="bold">Component Patterns</Text>
+
+  <Card padding={16} backgroundColor="primaryContainer">
+    <Text fontSize={14}>Notice how the counter cards below share the same structure.</Text>
+  </Card>
+
+  <Card padding={16}>
+    <Column spacing={12}>
+      <Text fontSize={18} fontWeight="bold">Counter #1</Text>
+      <Text fontSize={32}>{count1}</Text>
+      <Button onClick={() => count1++} fillMaxWidth={true}>
+        <Text>Increment</Text>
+      </Button>
+    </Column>
+  </Card>
+
+  <Card padding={16}>
+    <Column spacing={12}>
+      <Text fontSize={18} fontWeight="bold">Counter #2</Text>
+      <Text fontSize={32}>{count2}</Text>
+      <Button onClick={() => count2++} fillMaxWidth={true}>
+        <Text>Increment</Text>
+      </Button>
+    </Column>
+  </Card>
+
+  <Card padding={16}>
+    <Column spacing={12}>
+      <Text fontSize={18} fontWeight="bold">Counter #3</Text>
+      <Text fontSize={32}>{count3}</Text>
+      <Button onClick={() => count3++} fillMaxWidth={true}>
+        <Text>Increment</Text>
+      </Button>
+    </Column>
+  </Card>
+
+  <Card padding={12} backgroundColor="surfaceVariant">
+    <Text fontSize={12} color="#666666">Repeated patterns like these can be extracted into reusable components.</Text>
+  </Card>
+</Column>

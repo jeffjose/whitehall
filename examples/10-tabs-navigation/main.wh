@@ -1,93 +1,59 @@
 /// [app]
-/// name = "Tabs & Navigation"
+/// name = "Tabs"
 /// package = "com.example.tabs"
 
-// Example 10: Tabs and Tab Navigation
-// Tests: TabRow, Tab switching, state management, conditional rendering
+// Example 10: Tabs
+// Teaches: TabRow and tab switching
+// Complexity: Single file, ~60 lines
+// Focus: ONLY tabs - no complex navigation or state
 
 import androidx.compose.material3.TabRow
 import androidx.compose.material3.Tab
 import androidx.compose.material3.Divider
 
 var selectedTab = 0
-var homeCounter = 0
-var settingsText = "Default settings"
-
-fun selectTab(index: Int) {
-  selectedTab = index
-}
-
-fun incrementCounter() {
-  homeCounter++
-}
-
-fun updateSettingsText(newText: String) {
-  settingsText = newText
-}
 
 <Column>
   <TabRow selectedTabIndex={selectedTab}>
     <Tab
       selected={selectedTab == 0}
-      onClick={() => selectTab(0)}
-      text={<Text>Home</Text>}
+      onClick={() => selectedTab = 0}
+      text={<Text>Tab 1</Text>}
     />
     <Tab
       selected={selectedTab == 1}
-      onClick={() => selectTab(1)}
-      text={<Text>Profile</Text>}
+      onClick={() => selectedTab = 1}
+      text={<Text>Tab 2</Text>}
     />
     <Tab
       selected={selectedTab == 2}
-      onClick={() => selectTab(2)}
-      text={<Text>Settings</Text>}
+      onClick={() => selectedTab = 2}
+      text={<Text>Tab 3</Text>}
     />
   </TabRow>
 
   <Divider />
 
-  // Tab content
-  <Column p={20} spacing={16}>
+  <Column padding={20} spacing={16}>
     @if (selectedTab == 0) {
-      <HomeTab counter={homeCounter} onIncrement={() => incrementCounter()} />
+      <Text fontSize={32} fontWeight="bold">Tab 1 Content</Text>
+      <Card padding={16} backgroundColor="primaryContainer">
+        <Text fontSize={16}>This is the first tab. Tabs organize content into separate views.</Text>
+      </Card>
     } else if (selectedTab == 1) {
-      <ProfileTab />
+      <Text fontSize={32} fontWeight="bold">Tab 2 Content</Text>
+      <Card padding={16} backgroundColor="secondaryContainer">
+        <Text fontSize={16}>This is the second tab. Each tab can have different content.</Text>
+      </Card>
     } else if (selectedTab == 2) {
-      <SettingsTab text={settingsText} onTextChange={(newText) => updateSettingsText(newText)} />
+      <Text fontSize={32} fontWeight="bold">Tab 3 Content</Text>
+      <Card padding={16} backgroundColor="tertiaryContainer">
+        <Text fontSize={16}>This is the third tab. Use tabs for related content sections.</Text>
+      </Card>
     }
-  </Column>
-</Column>
 
-// Tab content components
-fun HomeTab(counter: Int, onIncrement: () -> Unit) {
-  <Column spacing={12}>
-    <Text fontSize={24} fontWeight="bold">Home Tab</Text>
-    <Text>Counter: {counter}</Text>
-    <Button text="Increment" onClick={onIncrement} />
-  </Column>
-}
-
-fun ProfileTab() {
-  <Column spacing={12}>
-    <Text fontSize={24} fontWeight="bold">Profile Tab</Text>
-    <Card p={16} backgroundColor="primaryContainer">
-      <Column spacing={8}>
-        <Text fontSize={18} fontWeight="bold">User Profile</Text>
-        <Text>Name: John Doe</Text>
-        <Text>Email: john@example.com</Text>
-      </Column>
+    <Card padding={12} backgroundColor="surfaceVariant">
+      <Text fontSize={12} color="#666666">Current tab: {selectedTab + 1}</Text>
     </Card>
   </Column>
-}
-
-fun SettingsTab(text: String, onTextChange: (String) -> Unit) {
-  <Column spacing={12}>
-    <Text fontSize={24} fontWeight="bold">Settings Tab</Text>
-    <TextField
-      value={text}
-      onValueChange={onTextChange}
-      label="Setting Value"
-    />
-    <Text>Current value: {text}</Text>
-  </Column>
-}
+</Column>

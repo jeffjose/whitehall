@@ -1,0 +1,95 @@
+/// [app]
+/// name = "Form Validation"
+/// package = "com.example.formvalidation"
+
+// Example 11: Form Validation
+// Teaches: Validating form inputs before submission
+// Complexity: Single file, ~70 lines
+// Focus: ONLY validation - no complex state or backend
+
+var email = ""
+var password = ""
+var confirmPassword = ""
+var errorMessage = ""
+var successMessage = ""
+
+fun isValidEmail(email: String): Boolean {
+  return email.contains("@") && email.contains(".")
+}
+
+fun validateForm() {
+  errorMessage = ""
+  successMessage = ""
+
+  if (email.isEmpty()) {
+    errorMessage = "Email is required"
+    return
+  }
+
+  if (!isValidEmail(email)) {
+    errorMessage = "Please enter a valid email"
+    return
+  }
+
+  if (password.length < 6) {
+    errorMessage = "Password must be at least 6 characters"
+    return
+  }
+
+  if (password != confirmPassword) {
+    errorMessage = "Passwords do not match"
+    return
+  }
+
+  successMessage = "Form submitted successfully!"
+}
+
+<Column padding={20} spacing={16}>
+  <Text fontSize={32} fontWeight="bold">Form Validation</Text>
+
+  <Card padding={16} backgroundColor="primaryContainer">
+    <Text fontSize={14}>Demonstrates input validation before form submission.</Text>
+  </Card>
+
+  <Card padding={16}>
+    <Column spacing={12}>
+      <TextField
+        value={email}
+        onValueChange={(value) => email = value}
+        label="Email"
+      />
+
+      <TextField
+        value={password}
+        onValueChange={(value) => password = value}
+        label="Password"
+      />
+
+      <TextField
+        value={confirmPassword}
+        onValueChange={(value) => confirmPassword = value}
+        label="Confirm Password"
+      />
+
+      <Button onClick={() => validateForm()} fillMaxWidth={true}>
+        <Text>Submit</Text>
+      </Button>
+    </Column>
+  </Card>
+
+  @if (errorMessage.isNotEmpty()) {
+    <Card padding={16} backgroundColor="errorContainer">
+      <Text fontSize={16} color="#B00020">{errorMessage}</Text>
+    </Card>
+  }
+
+  @if (successMessage.isNotEmpty()) {
+    <Card padding={16} backgroundColor="primaryContainer">
+      <Text fontSize={16} color="#4CAF50">{successMessage}</Text>
+    </Card>
+  }
+
+  <Card padding={12} backgroundColor="surfaceVariant">
+    <Text fontSize={12} color="#666666">Form validates email format, password length, and password matching.</Text>
+  </Card>
+</Column>

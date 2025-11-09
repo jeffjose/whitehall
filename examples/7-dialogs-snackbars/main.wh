@@ -1,91 +1,77 @@
 /// [app]
-/// name = "Dialogs & Snackbars"
+/// name = "Dialogs"
 /// package = "com.example.dialogs"
 
-// Example 7: Dialogs and Snackbars
-// Tests: AlertDialog, SnackbarHost, dialog state management, coroutine launch in functions
+// Example 7: Dialogs
+// Teaches: Showing and hiding dialog windows
+// Complexity: Single file, ~65 lines
+// Focus: ONLY dialogs - no snackbars or complex state
 
-import androidx.compose.material3.SnackbarHost
-import androidx.compose.material3.SnackbarHostState
-import kotlinx.coroutines.launch
-
-// Dialog and Snackbar demonstration
-var showDialog = false
+var showInfoDialog = false
 var showConfirmDialog = false
-var dialogMessage = "This is a simple dialog"
-var userName = ""
-var snackbarHostState = SnackbarHostState()
+var resultMessage = ""
 
-fun showSnackbar(message: String) {
-  launch {
-    snackbarHostState.showSnackbar(message)
-  }
-}
+<Column padding={20} spacing={16}>
+  <Text fontSize={32} fontWeight="bold">Dialogs Demo</Text>
 
-<Column p={20} spacing={16}>
-  <Text fontSize={28} fontWeight="bold">Dialogs & Snackbars</Text>
+  <Card padding={16} backgroundColor="primaryContainer">
+    <Text fontSize={14}>Dialogs are modal windows that require user interaction.</Text>
+  </Card>
 
   <Row spacing={12}>
-    <Button
-      text="Show Dialog"
-      onClick={() => showDialog = true}
-    />
+    <Button onClick={() => showInfoDialog = true}>
+      <Text>Show Info</Text>
+    </Button>
 
-    <Button
-      text="Show Confirm"
-      onClick={() => showConfirmDialog = true}
-    />
-
-    <Button
-      text="Show Snackbar"
-      onClick={() => showSnackbar("Hello from Snackbar!")}
-    />
+    <Button onClick={() => showConfirmDialog = true}>
+      <Text>Show Confirm</Text>
+    </Button>
   </Row>
 
-  @if (userName.isNotEmpty()) {
-    <Card p={16} backgroundColor="#E3F2FD">
-      <Text>Welcome, {userName}!</Text>
+  @if (resultMessage.isNotEmpty()) {
+    <Card padding={16} backgroundColor="secondaryContainer">
+      <Text fontSize={16}>{resultMessage}</Text>
     </Card>
   }
 
-  // Simple AlertDialog
-  @if (showDialog) {
+  <Card padding={12} backgroundColor="surfaceVariant">
+    <Text fontSize={12} color="#666666">Dialogs block interaction with the rest of the app until dismissed.</Text>
+  </Card>
+
+  @if (showInfoDialog) {
     <AlertDialog
-      onDismissRequest={() => showDialog = false}
+      onDismissRequest={() => showInfoDialog = false}
       title={<Text>Information</Text>}
-      text={<Text>{dialogMessage}</Text>}
+      text={<Text>This is an informational dialog. It just displays a message.</Text>}
       confirmButton={
-        <Button
-          text="OK"
-          onClick={() => showDialog = false}
-        />
+        <Button onClick={() => showInfoDialog = false}>
+          <Text>OK</Text>
+        </Button>
       }
     />
   }
 
-  // Confirmation Dialog with two actions
   @if (showConfirmDialog) {
     <AlertDialog
       onDismissRequest={() => showConfirmDialog = false}
       title={<Text>Confirm Action</Text>}
-      text={<Text>Enter your name:</Text>}
+      text={<Text>Do you want to proceed with this action?</Text>}
       confirmButton={
-        <Button
-          text="Confirm"
-          onClick={() => {
-            showConfirmDialog = false
-            showSnackbar("Action confirmed!")
-          }}
-        />
+        <Button onClick={() => {
+          resultMessage = "Action confirmed!"
+          showConfirmDialog = false
+        }}>
+          <Text>Yes</Text>
+        </Button>
       }
       dismissButton={
-        <Button
-          text="Cancel"
-          onClick={() => showConfirmDialog = false}
-        />
+        <Button onClick={() => {
+          resultMessage = "Action cancelled"
+          showConfirmDialog = false
+        }}>
+          <Text>No</Text>
+        </Button>
       }
     />
   }
-
-  <SnackbarHost hostState={snackbarHostState} />
 </Column>
