@@ -1,0 +1,47 @@
+/// [app]
+/// name = "Text Input"
+/// package = "com.example.textinput"
+
+// Example 3: Text Input & Binding
+// Teaches: TextField, two-way binding, reactive display
+// Complexity: Single file, ~40 lines
+// Focus: ONLY text input - no validation, no forms
+
+var userInput = ""
+var displayText = "Type something..."
+
+<Column padding={20} spacing={16}>
+  <Text fontSize={32} fontWeight="bold">Text Input Demo</Text>
+
+  <Card padding={16} backgroundColor="primaryContainer">
+    <Column spacing={12}>
+      <Text fontSize={16} fontWeight="bold">Type in the field below</Text>
+      
+      <TextField
+        value={userInput}
+        onValueChange={(value) => userInput = value}
+        label="Your text here"
+      />
+    </Column>
+  </Card>
+
+  <Card padding={16}>
+    <Column spacing={8}>
+      <Text fontSize={14} color="#666666">
+        Live Mirror (updates as you type):
+      </Text>
+      <Text fontSize={20} fontWeight="bold">
+        {userInput.isEmpty() ? displayText : userInput}
+      </Text>
+      <Text fontSize={12} color="#666666">
+        Character count: {userInput.length}
+      </Text>
+    </Column>
+  </Card>
+
+  <Card padding={12} backgroundColor="surfaceVariant">
+    <Text fontSize={12} color="#666666">
+      This demonstrates two-way binding with TextField.
+    </Text>
+  </Card>
+</Column>

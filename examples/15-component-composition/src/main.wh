@@ -1,0 +1,39 @@
+/// [app]
+/// name = "Component Composition"
+/// package = "com.example.composition"
+
+// Example 15: Component Composition
+// Teaches: Creating and reusing custom components
+// Complexity: Two files, ~50 lines total
+// Focus: ONLY component reusability - no complex state or logic
+
+import $components.InfoCard
+
+<Column padding={20} spacing={16}>
+  <Text fontSize={32} fontWeight="bold">Component Composition</Text>
+
+  <Card padding={16} backgroundColor="primaryContainer">
+    <Text fontSize={14}>Reusable components help keep code DRY and maintainable.</Text>
+  </Card>
+
+  <Text fontSize={18} fontWeight="bold">Using InfoCard Component:</Text>
+
+  <InfoCard
+    title="Component #1"
+    description="This is a reusable InfoCard component"
+  />
+
+  <InfoCard
+    title="Component #2"
+    description="Same component, different content"
+  />
+
+  <InfoCard
+    title="Component #3"
+    description="Easily customize with props"
+  />
+
+  <Card padding={12} backgroundColor="surfaceVariant">
+    <Text fontSize={12} color="#666666">All three cards above use the same InfoCard component.</Text>
+  </Card>
+</Column>

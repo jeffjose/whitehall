@@ -1,0 +1,11 @@
+// InfoCard: A reusable card component
+
+@prop val title: String
+@prop val description: String
+
+<Card padding={16} backgroundColor="primaryContainer">
+  <Column spacing={8}>
+    <Text fontSize={18} fontWeight="bold">{title}</Text>
+    <Text fontSize={14}>{description}</Text>
+  </Column>
+</Card>
