@@ -1,0 +1,19 @@
+import androidx.compose.material3.Switch
+
+@prop val title: String
+@prop val description: String
+@prop val checked: Boolean
+@prop val onCheckedChange: (Boolean) -> Unit
+
+<Card padding={16}>
+  <Row spacing={16}>
+    <Column modifier={Modifier.weight(1f)} spacing={4}>
+      <Text fontSize={18} fontWeight="bold">{title}</Text>
+      <Text fontSize={14} color="#666666">{description}</Text>
+    </Column>
+    <Switch
+      checked={checked}
+      onCheckedChange={onCheckedChange}
+    />
+  </Row>
+</Card>

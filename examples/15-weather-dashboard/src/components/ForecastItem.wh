@@ -1,0 +1,15 @@
+@prop val day: String
+@prop val high: Int
+@prop val low: Int
+@prop val condition: String
+
+<Card padding={16}>
+  <Column spacing={8}>
+    <Text fontSize={18} fontWeight="bold">{day}</Text>
+    <Text fontSize={14} color="#666666">{condition}</Text>
+    <Row spacing={8}>
+      <Text fontSize={16} color="#F44336">H: {high}°</Text>
+      <Text fontSize={16} color="#2196F3">L: {low}°</Text>
+    </Row>
+  </Column>
+</Card>

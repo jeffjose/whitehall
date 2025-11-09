@@ -1,0 +1,24 @@
+@prop val title: String
+@prop val completed: Boolean
+@prop val onToggle: () -> Unit
+@prop val onDelete: () -> Unit
+
+<Card padding={12}>
+  <Row spacing={12}>
+    <Checkbox
+      checked={completed}
+      onCheckedChange={(checked) => onToggle()}
+    />
+    <Column modifier={Modifier.weight(1f)} spacing={4}>
+      <Text
+        fontSize={16}
+        color={completed ? "#9E9E9E" : "#000000"}
+      >
+        {title}
+      </Text>
+    </Column>
+    <Button onClick={onDelete}>
+      <Text color="#F44336">Delete</Text>
+    </Button>
+  </Row>
+</Card>

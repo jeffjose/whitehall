@@ -1,0 +1,13 @@
+@prop val title: String
+@prop val description: String
+@prop val value: String
+
+<Card padding={16}>
+  <Row spacing={16}>
+    <Column modifier={Modifier.weight(1f)} spacing={4}>
+      <Text fontSize={18} fontWeight="bold">{title}</Text>
+      <Text fontSize={14} color="#666666">{description}</Text>
+    </Column>
+    <Text fontSize={16} color="#4CAF50">{value}</Text>
+  </Row>
+</Card>

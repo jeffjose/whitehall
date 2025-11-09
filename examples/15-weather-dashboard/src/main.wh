@@ -1,0 +1,88 @@
+/// [app]
+/// name = "Weather Dashboard"
+/// package = "com.example.weather"
+
+// Example 15: Weather Dashboard
+// Tests: Complex UI layout, data display, responsive design
+// Demonstrates: Weather cards, forecast list, mock data
+
+import $components.WeatherCard
+import $components.ForecastItem
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.Divider
+import kotlinx.coroutines.delay
+
+var isLoading = true
+var currentCity = "San Francisco"
+var currentTemp = 72
+var currentCondition = "Sunny"
+var currentHumidity = 45
+
+var forecast: List<ForecastDay> = emptyList()
+
+suspend fun loadWeather() {
+  isLoading = true
+  delay(1500)
+
+  forecast = listOf(
+    ForecastDay("Monday", 75, 62, "Partly Cloudy"),
+    ForecastDay("Tuesday", 78, 64, "Sunny"),
+    ForecastDay("Wednesday", 73, 61, "Rainy"),
+    ForecastDay("Thursday", 71, 59, "Cloudy"),
+    ForecastDay("Friday", 76, 63, "Sunny"),
+    ForecastDay("Saturday", 79, 65, "Sunny"),
+    ForecastDay("Sunday", 77, 64, "Partly Cloudy")
+  )
+
+  isLoading = false
+}
+
+onMount {
+  loadWeather()
+}
+
+<Column padding={20} spacing={20}>
+  <Text fontSize={32} fontWeight="bold">Weather</Text>
+
+  @if (isLoading) {
+    <Card padding={40}>
+      <Column spacing={16}>
+        <CircularProgressIndicator />
+        <Text>Loading weather data...</Text>
+      </Column>
+    </Card>
+  } else {
+    <WeatherCard
+      city={currentCity}
+      temperature={currentTemp}
+      condition={currentCondition}
+      humidity={currentHumidity}
+    />
+
+    <Divider />
+
+    <Text fontSize={24} fontWeight="bold">7-Day Forecast</Text>
+
+    <LazyColumn spacing={12}>
+      @for (day in forecast) {
+        <ForecastItem
+          day={day.name}
+          high={day.high}
+          low={day.low}
+          condition={day.condition}
+        />
+      }
+    </LazyColumn>
+
+    <Button onClick={() => loadWeather()} fillMaxWidth={true}>
+      <Text>Refresh</Text>
+    </Button>
+  }
+</Column>
+
+data class ForecastDay(
+  val name: String,
+  val high: Int,
+  val low: Int,
+  val condition: String
+)

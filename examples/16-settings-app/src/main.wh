@@ -1,0 +1,88 @@
+/// [app]
+/// name = "Settings"
+/// package = "com.example.settings"
+
+// Example 16: Settings & Preferences
+// Tests: Toggle switches, settings layout, sections
+// Demonstrates: Settings UI patterns, state management, organized layout
+
+import $components.SettingToggle
+import $components.SettingItem
+import $components.SectionHeader
+
+var notificationsEnabled = true
+var darkModeEnabled = false
+var autoSyncEnabled = true
+var biometricsEnabled = false
+
+var language = "English"
+var fontSize = "Medium"
+var version = "1.0.0"
+
+<Column padding={20} spacing={12}>
+  <Text fontSize={32} fontWeight="bold">Settings</Text>
+
+  <SectionHeader title="General" />
+
+  <SettingToggle
+    title="Notifications"
+    description="Receive push notifications"
+    checked={notificationsEnabled}
+    onCheckedChange={(checked) => notificationsEnabled = checked}
+  />
+
+  <SettingToggle
+    title="Dark Mode"
+    description="Use dark theme"
+    checked={darkModeEnabled}
+    onCheckedChange={(checked) => darkModeEnabled = checked}
+  />
+
+  <SettingToggle
+    title="Auto Sync"
+    description="Automatically sync data"
+    checked={autoSyncEnabled}
+    onCheckedChange={(checked) => autoSyncEnabled = checked}
+  />
+
+  <SectionHeader title="Security" />
+
+  <SettingToggle
+    title="Biometric Login"
+    description="Use fingerprint or face ID"
+    checked={biometricsEnabled}
+    onCheckedChange={(checked) => biometricsEnabled = checked}
+  />
+
+  <SectionHeader title="Preferences" />
+
+  <SettingItem
+    title="Language"
+    description="App display language"
+    value={language}
+  />
+
+  <SettingItem
+    title="Font Size"
+    description="Text display size"
+    value={fontSize}
+  />
+
+  <SectionHeader title="About" />
+
+  <SettingItem
+    title="Version"
+    description="App version number"
+    value={version}
+  />
+
+  <Card padding={16} backgroundColor="primaryContainer">
+    <Column spacing={8}>
+      <Text fontSize={16} fontWeight="bold">Settings Summary</Text>
+      <Text fontSize={14}>Notifications: {notificationsEnabled ? "On" : "Off"}</Text>
+      <Text fontSize={14}>Dark Mode: {darkModeEnabled ? "Enabled" : "Disabled"}</Text>
+      <Text fontSize={14}>Auto Sync: {autoSyncEnabled ? "On" : "Off"}</Text>
+      <Text fontSize={14}>Biometrics: {biometricsEnabled ? "Enabled" : "Disabled"}</Text>
+    </Column>
+  </Card>
+</Column>

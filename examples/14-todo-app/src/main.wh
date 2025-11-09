@@ -1,0 +1,87 @@
+/// [app]
+/// name = "Todo App"
+/// package = "com.example.todoapp"
+
+// Example 14: Todo List with CRUD operations
+// Tests: List management, add/delete, state persistence
+// Demonstrates: Todo list, checkboxes, dynamic list operations
+
+import $components.TodoItem
+import androidx.compose.material3.Checkbox
+
+var todos: List<Todo> = emptyList()
+var newTodoText = ""
+var nextId = 1
+
+fun addTodo() {
+  if (newTodoText.isNotEmpty()) {
+    todos = todos + Todo(nextId, newTodoText, false)
+    nextId = nextId + 1
+    newTodoText = ""
+  }
+}
+
+fun toggleTodo(id: Int) {
+  todos = todos.map {
+    if (it.id == id) {
+      Todo(it.id, it.title, !it.completed)
+    } else {
+      it
+    }
+  }
+}
+
+fun deleteTodo(id: Int) {
+  todos = todos.filter { it.id != id }
+}
+
+fun getCompletedCount(): Int {
+  return todos.count { it.completed }
+}
+
+<Column padding={20} spacing={16}>
+  <Text fontSize={32} fontWeight="bold">My Todos</Text>
+
+  <Card padding={16} backgroundColor="primaryContainer">
+    <Column spacing={8}>
+      <TextField
+        value={newTodoText}
+        onValueChange={(value) => newTodoText = value}
+        label="New Todo"
+      />
+      <Button onClick={() => addTodo()} fillMaxWidth={true}>
+        <Text>Add Todo</Text>
+      </Button>
+    </Column>
+  </Card>
+
+  <Row spacing={8}>
+    <Text fontSize={16}>Total: {todos.size}</Text>
+    <Text fontSize={16} color="#4CAF50">
+      Completed: {getCompletedCount()}
+    </Text>
+  </Row>
+
+  @if (todos.isEmpty()) {
+    <Card padding={24}>
+      <Text fontSize={16}>No todos yet. Add one above!</Text>
+    </Card>
+  } else {
+    <LazyColumn spacing={8}>
+      @for (todo in todos) {
+        <TodoItem
+          title={todo.title}
+          completed={todo.completed}
+          onToggle={() => toggleTodo(todo.id)}
+          onDelete={() => deleteTodo(todo.id)}
+        />
+      }
+    </LazyColumn>
+  }
+</Column>
+
+data class Todo(
+  val id: Int,
+  val title: String,
+  val completed: Boolean
+)

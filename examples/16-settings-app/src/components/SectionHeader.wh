@@ -1,0 +1,5 @@
+@prop val title: String
+
+<Text fontSize={14} fontWeight="bold" color="#666666" padding={8}>
+  {title.toUpperCase()}
+</Text>

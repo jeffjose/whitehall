@@ -1,0 +1,20 @@
+@prop val city: String
+@prop val temperature: Int
+@prop val condition: String
+@prop val humidity: Int
+
+<Card padding={20}>
+  <Column spacing={16}>
+    <Text fontSize={28} fontWeight="bold">{city}</Text>
+
+    <Row spacing={16}>
+      <Text fontSize={64} fontWeight="bold" color="#4CAF50">
+        {temperature}°
+      </Text>
+      <Column spacing={4}>
+        <Text fontSize={20}>{condition}</Text>
+        <Text fontSize={14} color="#666666">Humidity: {humidity}%</Text>
+      </Column>
+    </Row>
+  </Column>
+</Card>
