@@ -1,0 +1,54 @@
+/// [app]
+/// name = "Async Loading"
+/// package = "com.example.asyncloading"
+
+// Example 6: Async Data Loading
+// Teaches: Loading states, suspend functions, async operations
+// Complexity: Single file, ~60 lines
+// Focus: ONLY async loading - no error handling, no complex state
+
+import kotlinx.coroutines.delay
+
+var isLoading = false
+var data = ""
+
+suspend fun loadData() {
+  isLoading = true
+  delay(2000) // Simulate network delay
+  data = "Data loaded successfully!"
+  isLoading = false
+}
+
+<Column padding={20} spacing={16}>
+  <Text fontSize={32} fontWeight="bold">Async Loading</Text>
+
+  <Card padding={16} backgroundColor="primaryContainer">
+    <Text fontSize={14}>Demonstrates loading data asynchronously with loading states.</Text>
+  </Card>
+
+  <Button onClick={() => loadData()} enabled={!isLoading} fillMaxWidth={true}>
+    <Text>{isLoading ? "Loading..." : "Load Data"}</Text>
+  </Button>
+
+  @if (isLoading) {
+    <Card padding={24} backgroundColor="surfaceVariant">
+      <Column spacing={8}>
+        <Text fontSize={18} fontWeight="bold">Loading...</Text>
+        <Text fontSize={14}>Please wait while we fetch the data</Text>
+      </Column>
+    </Card>
+  }
+
+  @if (!isLoading && data.isNotEmpty()) {
+    <Card padding={16} backgroundColor="primaryContainer">
+      <Column spacing={8}>
+        <Text fontSize={18} fontWeight="bold">Result:</Text>
+        <Text fontSize={16}>{data}</Text>
+      </Column>
+    </Card>
+  }
+
+  <Card padding={12} backgroundColor="surfaceVariant">
+    <Text fontSize={12} color="#666666">The loadData() function is a suspend function that simulates async work.</Text>
+  </Card>
+</Column>
