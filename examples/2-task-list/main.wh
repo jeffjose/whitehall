@@ -2,38 +2,68 @@
 /// name = "Task List"
 /// package = "com.example.tasklist"
 
-// Example 2: Task List - Intermediate Syntax
-// Tests: data binding, lists with @for, arrays, data classes, derived state, form validation
+// Example 2: Task List
+// Teaches: Lists, add/remove items, @for loops
+// Complexity: Single file, ~50 lines
+// Focus: ONLY basic list operations - no categories, no priorities
 
-data class Task(
-  val id: Int,
-  val title: String,
-  val completed: Boolean = false
-)
+var tasks = mutableListOf("Buy groceries", "Walk the dog", "Read a book")
+var newTask = ""
 
-var task1 = Task(1, "Learn Whitehall syntax", false)
-var task2 = Task(2, "Build an Android app", false)
-var task3 = Task(3, "Deploy to production", false)
-
-<Column p={20} spacing={16}>
-  <Text fontSize={28} fontWeight="bold">
-    Data Class Test
-  </Text>
-
-  <Text>Task 1: {task1.title}</Text>
-  <Text>Task 2: {task2.title}</Text>
-  <Text>Task 3: {task3.title}</Text>
-
-  <Button
-    text="Mark Task 1 Complete"
-    onClick={() => {
-      task1 = task1.copy(completed = true)
-    }}
-  />
-
-  @if (task1.completed) {
-    <Text color="#4CAF50">Task 1 is completed!</Text>
-  } else {
-    <Text>Task 1 is not completed</Text>
+fun addTask() {
+  if (newTask.isNotEmpty()) {
+    tasks.add(newTask)
+    newTask = ""
   }
+}
+
+fun removeTask(task: String) {
+  tasks.remove(task)
+}
+
+<Column padding={20} spacing={16}>
+  <Text fontSize={32} fontWeight="bold">Task List</Text>
+
+  <Card padding={16} backgroundColor="primaryContainer">
+    <Text fontSize={14}>Add and remove tasks from your list.</Text>
+  </Card>
+
+  <Card padding={16}>
+    <Column spacing={12}>
+      <Text fontSize={18} fontWeight="bold">Add New Task</Text>
+      <Row spacing={8}>
+        <TextField
+          value={newTask}
+          onValueChange={(value) => newTask = value}
+          label="Task name"
+        />
+        <Button onClick={() => addTask()}>
+          <Text>Add</Text>
+        </Button>
+      </Row>
+    </Column>
+  </Card>
+
+  <Text fontSize={18} fontWeight="bold">Your Tasks ({tasks.size})</Text>
+
+  @if (tasks.isEmpty()) {
+    <Card padding={24}>
+      <Text fontSize={16}>No tasks yet. Add one above!</Text>
+    </Card>
+  } else {
+    @for (task in tasks) {
+      <Card padding={16}>
+        <Row spacing={12}>
+          <Text fontSize={16}>{task}</Text>
+          <Button onClick={() => removeTask(task)}>
+            <Text>Remove</Text>
+          </Button>
+        </Row>
+      </Card>
+    }
+  }
+
+  <Card padding={12} backgroundColor="surfaceVariant">
+    <Text fontSize={12} color="#666666">This demonstrates basic list operations with add and remove.</Text>
+  </Card>
 </Column>

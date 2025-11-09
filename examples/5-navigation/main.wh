@@ -2,145 +2,75 @@
 /// name = "Navigation Demo"
 /// package = "com.example.navigation"
 
-// Example 5: Navigation and Routing
-// Tests: Multiple screens, navigation state, screen transitions, route parameters
+// Example 5: Navigation
+// Teaches: Switching between screens with state
+// Complexity: Single file, ~60 lines
+// Focus: ONLY navigation - no complex routing or parameters
 
-data class User(
-  val id: Int,
-  val name: String,
-  val email: String
-)
-
-var currentRoute = "home"
-var selectedUser: User? = null
-
-val users = [
-  User(1, "Alice Smith", "alice@example.com"),
-  User(2, "Bob Jones", "bob@example.com"),
-  User(3, "Carol White", "carol@example.com")
-]
+var currentScreen = "home"
 
 fun navigateToHome() {
-  currentRoute = "home"
-  selectedUser = null
+  currentScreen = "home"
 }
 
-fun navigateToUsers() {
-  currentRoute = "users"
-}
-
-fun navigateToUserDetail(user: User) {
-  currentRoute = "user-detail"
-  selectedUser = user
+fun navigateToProfile() {
+  currentScreen = "profile"
 }
 
 fun navigateToSettings() {
-  currentRoute = "settings"
+  currentScreen = "settings"
 }
 
 <Column>
-  @if (currentRoute == "home") {
-    <Column p={20} spacing={16}>
-      <Text fontSize={28} fontWeight="bold">
-        Home Screen
-      </Text>
+  @if (currentScreen == "home") {
+    <Column padding={20} spacing={16}>
+      <Text fontSize={32} fontWeight="bold">Home Screen</Text>
 
-      <Text>
-        Welcome to the Navigation Demo app!
-      </Text>
+      <Card padding={16} backgroundColor="primaryContainer">
+        <Text fontSize={14}>Welcome! Use the buttons below to navigate.</Text>
+      </Card>
 
-      <Spacer h={16} />
+      <Button onClick={() => navigateToProfile()} fillMaxWidth={true}>
+        <Text>Go to Profile</Text>
+      </Button>
 
-      <Button
-        text="View Users"
-        onClick={navigateToUsers}
-        fillMaxWidth={true}
-      />
-
-      <Button
-        text="Settings"
-        onClick={navigateToSettings}
-        fillMaxWidth={true}
-      />
+      <Button onClick={() => navigateToSettings()} fillMaxWidth={true}>
+        <Text>Go to Settings</Text>
+      </Button>
     </Column>
-  } else if (currentRoute == "users") {
-    <Column p={20} spacing={16}>
-      <Row spacing={8}>
-        <IconButton onClick={navigateToHome}>
-          <Icon imageVector={Icons.Default.ArrowBack} />
-        </IconButton>
-        <Text fontSize={28} fontWeight="bold">
-          Users
-        </Text>
-      </Row>
+  } else if (currentScreen == "profile") {
+    <Column padding={20} spacing={16}>
+      <Text fontSize={32} fontWeight="bold">Profile Screen</Text>
 
-      <Spacer h={8} />
-
-      <LazyColumn>
-        @for (user in users) {
-          <Card p={12}>
-            <Column
-              spacing={4}
-              modifier={Modifier.clickable { navigateToUserDetail(user) }}
-            >
-              <Text fontSize={18} fontWeight="bold">
-                {user.name}
-              </Text>
-              <Text fontSize={14} color="#616161">
-                {user.email}
-              </Text>
-            </Column>
-          </Card>
-          <Spacer h={8} />
-        }
-      </LazyColumn>
-    </Column>
-  } else if (currentRoute == "user-detail") {
-    <Column p={20} spacing={16}>
-      <Row spacing={8}>
-        <IconButton onClick={navigateToUsers}>
-          <Icon imageVector={Icons.Default.ArrowBack} />
-        </IconButton>
-        <Text fontSize={28} fontWeight="bold">
-          User Details
-        </Text>
-      </Row>
-
-      <Spacer h={16} />
-
-      <Card p={16}>
-        <Column spacing={12}>
-          <Text fontSize={24} fontWeight="bold">
-            {selectedUser?.name ?: "No user selected"}
-          </Text>
-          <Text fontSize={16} color="#616161">
-            Email: {selectedUser?.email ?: "N/A"}
-          </Text>
-          <Text fontSize={16} color="#616161">
-            ID: {selectedUser?.id ?: 0}
-          </Text>
+      <Card padding={16}>
+        <Column spacing={8}>
+          <Text fontSize={18} fontWeight="bold">John Doe</Text>
+          <Text fontSize={14}>john.doe@example.com</Text>
         </Column>
       </Card>
+
+      <Button onClick={() => navigateToHome()} fillMaxWidth={true}>
+        <Text>Back to Home</Text>
+      </Button>
     </Column>
-  } else if (currentRoute == "settings") {
-    <Column p={20} spacing={16}>
-      <Row spacing={8}>
-        <IconButton onClick={navigateToHome}>
-          <Icon imageVector={Icons.Default.ArrowBack} />
-        </IconButton>
-        <Text fontSize={28} fontWeight="bold">
-          Settings
-        </Text>
-      </Row>
+  } else if (currentScreen == "settings") {
+    <Column padding={20} spacing={16}>
+      <Text fontSize={32} fontWeight="bold">Settings Screen</Text>
 
-      <Spacer h={16} />
-
-      <Card p={16}>
-        <Column spacing={12}>
-          <Text fontSize={18}>App Version: 1.0.0</Text>
-          <Text fontSize={18}>Build: Debug</Text>
+      <Card padding={16}>
+        <Column spacing={8}>
+          <Text fontSize={16}>App Version: 1.0.0</Text>
+          <Text fontSize={16}>Language: English</Text>
         </Column>
       </Card>
+
+      <Button onClick={() => navigateToHome()} fillMaxWidth={true}>
+        <Text>Back to Home</Text>
+      </Button>
     </Column>
   }
+
+  <Card padding={12} backgroundColor="surfaceVariant">
+    <Text fontSize={12} color="#666666">Current screen: {currentScreen}</Text>
+  </Card>
 </Column>
