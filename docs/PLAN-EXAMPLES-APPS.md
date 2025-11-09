@@ -1,5 +1,44 @@
 # Whitehall Examples Restructure Plan
 
+## Why This Restructure?
+
+### Core Problems with Current State
+
+1. **Learning Path is Unclear**
+   - 19 examples with no clear simple→complex progression
+   - Beginners don't know where to start or what order to follow
+   - Advanced users can't find "advanced" examples (no FFI!)
+
+2. **Massive Redundancy**
+   - 2 separate todo apps teaching the same CRUD pattern
+   - 2 profile examples (display vs edit) that should be one
+   - 2 form validation examples teaching identical concepts
+   - 2 modal/dialog examples that overlap
+   - Users waste time going through repetitive content
+
+3. **Missing Critical Features**
+   - **Zero FFI examples** - This is Whitehall's killer feature for performance!
+   - FFI (Rust/C++) integration is what sets Whitehall apart from other frameworks
+   - Not showing FFI = hiding our best differentiator
+
+4. **Teaching Anti-patterns**
+   - Too many single-file examples that don't show real-world structure
+   - Not enough emphasis on component reusability
+   - ViewModel/Store patterns not clearly demonstrated
+
+5. **Time Investment vs Learning Value**
+   - Going through 19 examples takes hours
+   - Much of that time is redundant (3rd todo example teaches nothing new)
+   - Better to have 14 focused examples that each teach something distinct
+
+### What Success Looks Like
+
+✅ **Clear learning path**: Tier 1 (basics) → Tier 2 (patterns) → Tier 3 (apps) → Tier 4 (advanced FFI)
+✅ **No wasted time**: Every example teaches something new
+✅ **Showcase strengths**: FFI examples demonstrate Whitehall's unique value
+✅ **Real-world patterns**: Multi-file structure, components, stores
+✅ **Efficient learning**: 14 examples cover more ground than current 19
+
 ## Problem Statement
 
 Current state has 19 examples with significant redundancy and overlap. Many examples teach the same concepts repeatedly without clear progression from simple to complex. Critical advanced features (FFI) are missing entirely.
@@ -34,9 +73,10 @@ Current state has 19 examples with significant redundancy and overlap. Many exam
 
 ### Nice-to-have but Not Core Progression
 
-- **Example 8 (animations)** - Not essential for learning core patterns
-- **Example 9 (theming)** - Not essential for learning core patterns
-- **Action:** Delete both, can be covered in docs
+- **Example 8 (animations)** - Important feature but can be integrated into other examples
+- **Example 9 (theming)** - Important feature but can be integrated into other examples
+- **Action:** Don't delete these concepts - integrate animations into weather-dashboard, theming into settings-app
+- **Rationale:** Rather than standalone "animations" example, show animations in context (weather loading, forecast transitions). Rather than standalone "theming", show dark mode toggle in settings app. This teaches the same concepts but in practical context.
 
 ### Missing Critical Concepts
 
@@ -99,10 +139,11 @@ Current state has 19 examples with significant redundancy and overlap. Many exam
 ### **Tier 3: Complete Apps (10-12)**
 *Full applications demonstrating multiple concepts together*
 
-10. **weather-dashboard** - Multi-component app with async data
-    - **Keep:** Example 15
-    - Demonstrates: Multiple components, async loading, list display
+10. **weather-dashboard** - Multi-component app with async data + animations
+    - **Enhance:** Example 15 + integrate animations from Example 8
+    - Demonstrates: Multiple components, async loading, list display, loading animations, transitions
     - File structure: `components/{WeatherCard,ForecastItem}.wh`
+    - Animations: Loading spinner, forecast item fade-in, weather icon animations
 
 11. **notes-app** - Full CRUD with categories and filtering
     - **Keep:** Example 19
@@ -139,12 +180,15 @@ Current state has 19 examples with significant redundancy and overlap. Many exam
 
 ## Detailed Changes
 
-### Examples to Delete (5)
+### Examples to Delete (3)
 - ❌ **Example 4** (form-validation) - Merged into 11
-- ❌ **Example 8** (animations) - Not core to learning
-- ❌ **Example 9** (theming) - Not core to learning
 - ❌ **Example 12** (search-filter) - Covered by 19
 - ❌ **Example 13** (bottom-sheet) - Merged into 7
+
+### Examples to Integrate (2)
+- 🔄 **Example 8** (animations) - Integrate into 10-weather-dashboard
+- 🔄 **Example 9** (theming) - Integrate into 16-settings-app (as dark mode toggle)
+- **Rationale**: Teach same concepts but in practical context rather than isolation
 
 ### Examples to Merge (4 pairs → 4 examples)
 1. **2 + 14 → 2 (todo-list)**
@@ -193,13 +237,31 @@ Current state has 19 examples with significant redundancy and overlap. Many exam
 
 ### Examples to Improve
 - **Example 5/6 (navigation)** - Make it a proper 2-3 screen navigation demo
-- **Example 16 (settings-app)** - Could be merged into another or kept as-is
+- **Example 15 (weather-dashboard)** - Add animations from example 8 (loading states, transitions)
+- **Example 16 (settings-app)** - Add theming/dark mode from example 9
+
+### Why Integrate Instead of Standalone?
+
+**Animations (Example 8):**
+- ❌ **Standalone problem**: Teaches animations in isolation, hard to see practical use
+- ✅ **Integrated benefit**: Shows animations in real app (weather loading), teaches when/why to use them
+- **What we keep**: Same animation concepts (fade, slide, etc.) but in meaningful context
+
+**Theming (Example 9):**
+- ❌ **Standalone problem**: Theme picker without real app context feels artificial
+- ✅ **Integrated benefit**: Dark mode in settings app shows practical theming use case
+- **What we keep**: Same theming concepts (colors, MaterialTheme) but in real settings UI
+
+**Result**: Same learning value, better practical context, fewer redundant examples
 
 ## Implementation Plan
 
 ### Phase 1: Cleanup (Delete redundant)
-1. Delete examples: 4, 8, 9, 12, 13
-2. Commit: "Remove redundant examples"
+1. Delete examples: 4, 12, 13 (fully redundant)
+2. **DON'T delete 8, 9** - instead integrate them:
+   - Animations (8) → Integrate into 10-weather-dashboard (loading animations, transitions)
+   - Theming (9) → Integrate into 16-settings-app (dark mode toggle)
+3. Commit: "Remove redundant examples, integrate animations/theming into existing apps"
 
 ### Phase 2: Merge Examples
 1. Merge 2+14 into improved 2-todo-list
