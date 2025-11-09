@@ -1,5 +1,5 @@
 #!/bin/bash
-# Build all example apps
+# Build numbered example apps only (1-*, 2-*, etc.)
 
 set -e  # Exit on error
 
@@ -8,22 +8,22 @@ PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 
 cd "$PROJECT_ROOT"
 
-echo "🔨 Building all example apps..."
+echo "🔨 Building numbered example apps (1-*, 2-*, etc.)..."
 echo ""
 
 # Array to track results
 declare -a results=()
 
-# Build project examples (directories with whitehall.toml)
-for example_dir in examples/*/; do
-  if [ -f "$example_dir/whitehall.toml" ]; then
+# Build numbered examples only (directories starting with a digit)
+for example_dir in examples/[0-9]*/; do
+  if [ -f "$example_dir/main.wh" ]; then
     example_name=$(basename "$example_dir")
 
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-    echo "📦 Building project: $example_name"
+    echo "📦 Building example: $example_name"
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 
-    if cargo run -- build "$example_dir"; then
+    if cargo run -- build "$example_dir/main.wh"; then
       results+=("✅ $example_name")
       echo ""
     else
@@ -33,25 +33,7 @@ for example_dir in examples/*/; do
   fi
 done
 
-# Build single-file examples (.wh files)
-for example_file in examples/*.wh; do
-  if [ -f "$example_file" ]; then
-    example_name=$(basename "$example_file")
-
-    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-    echo "📄 Building single-file: $example_name"
-    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-
-    if cargo run -- build "$example_file"; then
-      results+=("✅ $example_name")
-      echo ""
-    else
-      results+=("❌ $example_name")
-      echo ""
-    fi
-  fi
-done
-
+echo ""
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo "📊 Build Summary"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
