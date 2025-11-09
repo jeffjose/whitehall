@@ -1646,11 +1646,19 @@ impl ComposeBackend {
                 }
                 // Special handling for Icon
                 else if comp.name == "Icon" {
+                    let has_content_desc = comp.props.iter().any(|p| p.name == "contentDescription");
+
                     // Add all props
                     for prop in &comp.props {
                         let prop_expr = self.get_prop_expr(&prop.value);
                         let transformed = self.transform_prop(&comp.name, &prop.name, prop_expr);
                         params.extend(transformed?);
+                    }
+
+                    // Icon requires contentDescription - add null if not provided
+                    // This prevents "None of the following functions can be called" errors
+                    if !has_content_desc {
+                        params.push("contentDescription = null".to_string());
                     }
                 } else {
                     // Check for padding/margin shortcuts that need to be combined
@@ -2477,9 +2485,11 @@ impl ComposeBackend {
     /// Transform ternary to if-else expression (for values, not modifiers)
     /// Transforms: condition ? value : value
     /// To: if (condition) value else value
-    /// Note: Skips Elvis operator ?:
+    /// Transform ternary operator to if-else expression
+    /// Note: Skips Kotlin operators: ?. (safe navigation) and ?: (elvis)
     fn transform_ternary_to_if_else(&self, expr: &str) -> String {
-        // Find ? and : at the same depth level
+        // Find ? and : at the same depth level for ternary operator
+        // Must distinguish from Kotlin's ?. (safe navigation) and ?: (elvis)
         let mut depth = 0;
         let mut question_pos = None;
         let mut colon_pos = None;
@@ -2490,10 +2500,15 @@ impl ComposeBackend {
                 '(' | '{' | '[' => depth += 1,
                 ')' | '}' | ']' => depth -= 1,
                 '?' if depth == 0 && question_pos.is_none() => {
-                    // Check if this is Elvis operator (?:) - if so, skip it
+                    // Check if this is safe navigation operator (?.) - skip it
+                    if i + 1 < chars.len() && chars[i + 1] == '.' {
+                        continue; // Skip safe navigation operator
+                    }
+                    // Check if this is Elvis operator (?:) - skip it
                     if i + 1 < chars.len() && chars[i + 1] == ':' {
                         continue; // Skip Elvis operator
                     }
+                    // This is a standalone ?, mark as potential ternary operator
                     question_pos = Some(i);
                 },
                 ':' if depth == 0 && question_pos.is_some() && colon_pos.is_none() => {
