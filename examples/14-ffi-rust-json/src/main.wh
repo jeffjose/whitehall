@@ -1,0 +1,85 @@
+/// [app]
+/// name = "Rust FFI JSON"
+/// package = "com.example.ffirustjson"
+
+// Example 14: Rust FFI with serde_json
+// Teaches: Using popular Rust libraries (serde_json) via FFI
+// Complexity: Multi-file with Rust dependencies, ~90 lines
+// Focus: ONLY Rust library integration - demonstrates real-world FFI usage
+
+import $ffi.rust.Json
+
+var jsonInput = """{"name": "Alice", "age": 30}"""
+var personName = "Bob"
+var personAge = 25
+
+<Column padding={20} spacing={16}>
+  <Text fontSize={32} fontWeight="bold">Rust FFI: JSON</Text>
+
+  <Card padding={16} backgroundColor="primaryContainer">
+    <Text fontSize={14}>Using serde_json (popular Rust library) for JSON parsing.</Text>
+  </Card>
+
+  <Card padding={16}>
+    <Column spacing={12}>
+      <Text fontSize={18} fontWeight="bold">Parse JSON</Text>
+      
+      <TextField
+        value={jsonInput}
+        onValueChange={(value) => jsonInput = value}
+        label="JSON Input"
+      />
+
+      <Card padding={12} backgroundColor="secondaryContainer">
+        <Text fontSize={14}>Result: {Json.parse_json(jsonInput)}</Text>
+      </Card>
+
+      <Card padding={12} backgroundColor="tertiaryContainer">
+        <Text fontSize={14}>Name: {Json.get_name_from_json(jsonInput)}</Text>
+      </Card>
+    </Column>
+  </Card>
+
+  <Card padding={16}>
+    <Column spacing={12}>
+      <Text fontSize={18} fontWeight="bold">Create JSON</Text>
+      
+      <TextField
+        value={personName}
+        onValueChange={(value) => personName = value}
+        label="Name"
+      />
+
+      <TextField
+        value={personAge.toString()}
+        onValueChange={(value) => personAge = value.toIntOrNull() ?: 0}
+        label="Age"
+      />
+
+      <Card padding={12} backgroundColor="primaryContainer">
+        <Text fontSize={12} fontFamily="monospace">
+          {Json.create_person_json(personName, personAge)}
+        </Text>
+      </Card>
+    </Column>
+  </Card>
+
+  <Card padding={16}>
+    <Column spacing={12}>
+      <Text fontSize={18} fontWeight="bold">Array Count</Text>
+      
+      <Card padding={12} backgroundColor="secondaryContainer">
+        <Text fontSize={14}>
+          Items in [1,2,3,4,5]: {Json.count_array_items("[1,2,3,4,5]")}
+        </Text>
+      </Card>
+    </Column>
+  </Card>
+
+  <Card padding={12} backgroundColor="surfaceVariant">
+    <Column spacing={4}>
+      <Text fontSize={12} color="#666666">All JSON operations run in Rust using serde_json.</Text>
+      <Text fontSize={12} color="#666666">Demonstrates using external Rust crates via FFI.</Text>
+    </Column>
+  </Card>
+</Column>

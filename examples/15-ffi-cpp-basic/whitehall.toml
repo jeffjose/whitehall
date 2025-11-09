@@ -1,0 +1,16 @@
+[project]
+name = "ffi-cpp-basic"
+version = "0.1.0"
+
+[android]
+min_sdk = 24
+target_sdk = 34
+package = "com.example.fficpp"
+
+[toolchain]
+java = "21"
+gradle = "8.4"
+agp = "8.2.0"
+
+[build]
+output_dir = "build"

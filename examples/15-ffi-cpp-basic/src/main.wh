@@ -1,0 +1,96 @@
+/// [app]
+/// name = "C++ FFI Basic"
+/// package = "com.example.fficpp"
+
+// Example 15: C++ FFI Basics
+// Teaches: Calling C++ code from Whitehall using @ffi annotation
+// Complexity: Multi-file (src/ffi/cpp/), ~85 lines total
+// Focus: ONLY basic FFI - simple C++ string operations
+
+import $ffi.cpp.StringUtils
+
+var inputText = "Hello World"
+var repeatCount = 3
+
+<Column padding={20} spacing={16}>
+  <Text fontSize={32} fontWeight="bold">C++ FFI Basics</Text>
+
+  <Card padding={16} backgroundColor="primaryContainer">
+    <Text fontSize={14}>Calling C++ string utilities from Whitehall with zero JNI boilerplate.</Text>
+  </Card>
+
+  <Card padding={16}>
+    <Column spacing={12}>
+      <Text fontSize={18} fontWeight="bold">Input Text</Text>
+      
+      <TextField
+        value={inputText}
+        onValueChange={(value) => inputText = value}
+        label="Text to process"
+      />
+    </Column>
+  </Card>
+
+  <Card padding={16}>
+    <Column spacing={12}>
+      <Text fontSize={18} fontWeight="bold">String Operations</Text>
+
+      <Card padding={12} backgroundColor="secondaryContainer">
+        <Column spacing={4}>
+          <Text fontSize={12} color="#666666">Uppercase:</Text>
+          <Text fontSize={16}>{StringUtils.to_uppercase(inputText)}</Text>
+        </Column>
+      </Card>
+
+      <Card padding={12} backgroundColor="tertiaryContainer">
+        <Column spacing={4}>
+          <Text fontSize={12} color="#666666">Lowercase:</Text>
+          <Text fontSize={16}>{StringUtils.to_lowercase(inputText)}</Text>
+        </Column>
+      </Card>
+
+      <Card padding={12} backgroundColor="primaryContainer">
+        <Column spacing={4}>
+          <Text fontSize={12} color="#666666">Reversed:</Text>
+          <Text fontSize={16}>{StringUtils.reverse_string(inputText)}</Text>
+        </Column>
+      </Card>
+
+      <Card padding={12} backgroundColor="secondaryContainer">
+        <Column spacing={4}>
+          <Text fontSize={12} color="#666666">Vowel Count:</Text>
+          <Text fontSize={16}>{StringUtils.count_vowels(inputText)} vowels</Text>
+        </Column>
+      </Card>
+
+      <Card padding={12} backgroundColor={StringUtils.is_palindrome(inputText) ? "primaryContainer" : "errorContainer"}>
+        <Text fontSize={16}>
+          {StringUtils.is_palindrome(inputText) ? "✓ Is Palindrome" : "✗ Not Palindrome"}
+        </Text>
+      </Card>
+    </Column>
+  </Card>
+
+  <Card padding={16}>
+    <Column spacing={12}>
+      <Text fontSize={18} fontWeight="bold">Repeat String</Text>
+      
+      <TextField
+        value={repeatCount.toString()}
+        onValueChange={(value) => repeatCount = value.toIntOrNull() ?: 1}
+        label="Repeat count"
+      />
+
+      <Card padding={12} backgroundColor="tertiaryContainer">
+        <Text fontSize={14}>{StringUtils.repeat_string(inputText, repeatCount)}</Text>
+      </Card>
+    </Column>
+  </Card>
+
+  <Card padding={12} backgroundColor="surfaceVariant">
+    <Column spacing={4}>
+      <Text fontSize={12} color="#666666">All string operations run in C++ for performance.</Text>
+      <Text fontSize={12} color="#666666">The @ffi annotation auto-generates JNI bridges.</Text>
+    </Column>
+  </Card>
+</Column>

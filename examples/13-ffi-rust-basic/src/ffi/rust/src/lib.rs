@@ -1,0 +1,51 @@
+// Simple Rust FFI: Math Operations
+// Demonstrates #[ffi] macro for exposing Rust functions to Whitehall
+
+use whitehall_ffi_macro::ffi;
+
+#[ffi]
+pub fn add(a: i32, b: i32) -> i32 {
+    a + b
+}
+
+#[ffi]
+pub fn multiply(a: i32, b: i32) -> i32 {
+    a * b
+}
+
+#[ffi]
+pub fn factorial(n: i32) -> i64 {
+    if n <= 1 {
+        return 1;
+    }
+    let mut result: i64 = 1;
+    for i in 2..=n {
+        result *= i as i64;
+    }
+    result
+}
+
+#[ffi]
+pub fn is_prime(n: i32) -> bool {
+    if n <= 1 {
+        return false;
+    }
+    if n <= 3 {
+        return true;
+    }
+    if n % 2 == 0 || n % 3 == 0 {
+        return false;
+    }
+    
+    let mut i = 5;
+    while i * i <= n {
+        if n % i == 0 || n % (i + 2) == 0 {
+            return false;
+        }
+        i += 6;
+    }
+    true
+}
+
+// Auto-generated JNI bridge
+mod jni_bridge;

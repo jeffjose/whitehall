@@ -1,0 +1,78 @@
+/// [app]
+/// name = "Rust FFI Basic"
+/// package = "com.example.ffirust"
+
+// Example 13: Rust FFI Basics
+// Teaches: Calling Rust code from Whitehall using #[ffi] macro
+// Complexity: Multi-file (src/ffi/rust/), ~80 lines total
+// Focus: ONLY basic FFI - simple function calls to Rust
+
+import $ffi.rust.Math
+
+var num1 = 5
+var num2 = 3
+var primeCheck = 7
+
+<Column padding={20} spacing={16}>
+  <Text fontSize={32} fontWeight="bold">Rust FFI Basics</Text>
+
+  <Card padding={16} backgroundColor="primaryContainer">
+    <Text fontSize={14}>Calling Rust functions from Whitehall with zero JNI boilerplate.</Text>
+  </Card>
+
+  <Card padding={16}>
+    <Column spacing={12}>
+      <Text fontSize={18} fontWeight="bold">Math Operations</Text>
+      
+      <Row spacing={8}>
+        <TextField
+          value={num1.toString()}
+          onValueChange={(value) => num1 = value.toIntOrNull() ?: 0}
+          label="Number 1"
+        />
+        <TextField
+          value={num2.toString()}
+          onValueChange={(value) => num2 = value.toIntOrNull() ?: 0}
+          label="Number 2"
+        />
+      </Row>
+
+      <Card padding={12} backgroundColor="secondaryContainer">
+        <Text fontSize={16}>Add: {num1} + {num2} = {Math.add(num1, num2)}</Text>
+      </Card>
+
+      <Card padding={12} backgroundColor="tertiaryContainer">
+        <Text fontSize={16}>Multiply: {num1} × {num2} = {Math.multiply(num1, num2)}</Text>
+      </Card>
+    </Column>
+  </Card>
+
+  <Card padding={16}>
+    <Column spacing={12}>
+      <Text fontSize={18} fontWeight="bold">Factorial (Rust)</Text>
+      
+      <TextField
+        value={primeCheck.toString()}
+        onValueChange={(value) => primeCheck = value.toIntOrNull() ?: 0}
+        label="Number"
+      />
+
+      <Card padding={12} backgroundColor="primaryContainer">
+        <Text fontSize={16}>Factorial of {primeCheck}: {Math.factorial(primeCheck)}</Text>
+      </Card>
+
+      <Card padding={12} backgroundColor={Math.is_prime(primeCheck) ? "primaryContainer" : "errorContainer"}>
+        <Text fontSize={16}>
+          {primeCheck} is {Math.is_prime(primeCheck) ? "PRIME" : "NOT PRIME"}
+        </Text>
+      </Card>
+    </Column>
+  </Card>
+
+  <Card padding={12} backgroundColor="surfaceVariant">
+    <Column spacing={4}>
+      <Text fontSize={12} color="#666666">All math operations run in Rust for performance.</Text>
+      <Text fontSize={12} color="#666666">The #[ffi] macro auto-generates JNI bridges.</Text>
+    </Column>
+  </Card>
+</Column>

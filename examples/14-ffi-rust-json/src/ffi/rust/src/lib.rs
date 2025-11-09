@@ -1,0 +1,58 @@
+// Rust FFI with serde_json: JSON parsing and manipulation
+// Demonstrates using popular Rust libraries via FFI
+
+use whitehall_ffi_macro::ffi;
+use serde_json::{json, Value};
+
+#[ffi]
+pub fn parse_json(json_str: String) -> String {
+    match serde_json::from_str::<Value>(&json_str) {
+        Ok(value) => format!("Parsed successfully: {}", value),
+        Err(e) => format!("Error: {}", e)
+    }
+}
+
+#[ffi]
+pub fn get_name_from_json(json_str: String) -> String {
+    match serde_json::from_str::<Value>(&json_str) {
+        Ok(value) => {
+            value["name"].as_str().unwrap_or("Unknown").to_string()
+        },
+        Err(_) => "Error parsing".to_string()
+    }
+}
+
+#[ffi]
+pub fn create_person_json(name: String, age: i32) -> String {
+    let person = json!({
+        "name": name,
+        "age": age,
+        "is_adult": age >= 18
+    });
+    person.to_string()
+}
+
+#[ffi]
+pub fn count_array_items(json_str: String) -> i32 {
+    match serde_json::from_str::<Value>(&json_str) {
+        Ok(value) => {
+            if let Some(arr) = value.as_array() {
+                arr.len() as i32
+            } else {
+                0
+            }
+        },
+        Err(_) => -1
+    }
+}
+
+#[ffi]
+pub fn prettify_json(json_str: String) -> String {
+    match serde_json::from_str::<Value>(&json_str) {
+        Ok(value) => serde_json::to_string_pretty(&value).unwrap_or_else(|_| json_str),
+        Err(_) => json_str
+    }
+}
+
+// Auto-generated JNI bridge
+mod jni_bridge;
