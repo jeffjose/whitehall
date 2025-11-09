@@ -77,9 +77,12 @@ fun navigateToSettings() {
       <Spacer h={8} />
 
       <LazyColumn>
-        @for (user in users, key = { it.id }) {
-          <Card p={12} onClick={() => navigateToUserDetail(user)}>
-            <Column spacing={4}>
+        @for (user in users) {
+          <Card p={12}>
+            <Column
+              spacing={4}
+              modifier={Modifier.clickable { navigateToUserDetail(user) }}
+            >
               <Text fontSize={18} fontWeight="bold">
                 {user.name}
               </Text>

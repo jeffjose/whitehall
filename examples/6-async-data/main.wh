@@ -94,7 +94,7 @@ onMount {
     </Card>
   } else if (posts.isNotEmpty()) {
     <LazyColumn>
-      @for (post in posts, key = { it.id }) {
+      @for (post in posts) {
         <Card p={16}>
           <Column spacing={8}>
             <Text fontSize={20} fontWeight="bold">
