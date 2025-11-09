@@ -147,9 +147,11 @@ Build a single example:
 # Single-file examples
 cargo run -- build examples/01-button-counter/main.wh
 
-# FFI examples (project structure)
+# FFI examples (project structure - requires Android NDK)
 cargo run -- build examples/13-ffi-rust-basic
 ```
+
+**Note:** FFI examples (13-15) require Android NDK (~1GB download) for native compilation. The build script will automatically install it on first FFI build. Non-FFI examples (01-12) build without NDK.
 
 ## 📖 Documentation
 

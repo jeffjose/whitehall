@@ -17,26 +17,44 @@ declare -a results=()
 # Build numbered examples only (directories starting with a digit)
 for example_dir in examples/[0-9]*/; do
   example_name=$(basename "$example_dir")
-  main_file=""
-
-  # Check for main.wh in root or src/
-  if [ -f "$example_dir/main.wh" ]; then
-    main_file="$example_dir/main.wh"
-  elif [ -f "$example_dir/src/main.wh" ]; then
-    main_file="$example_dir/src/main.wh"
-  fi
-
-  if [ -n "$main_file" ]; then
+  
+  # Check if it's a project (has whitehall.toml) or a single file
+  if [ -f "$example_dir/whitehall.toml" ]; then
+    # It's a full project (like FFI examples)
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-    echo "📦 Building example: $example_name"
+    echo "📦 Building project example: $example_name"
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-
-    if cargo run -- build "$main_file"; then
+    
+    if cargo run -- build "$example_dir"; then
       results+=("✅ $example_name")
       echo ""
     else
       results+=("❌ $example_name")
       echo ""
+    fi
+  else
+    # It's a single-file example
+    main_file=""
+    
+    # Check for main.wh in root or src/
+    if [ -f "$example_dir/main.wh" ]; then
+      main_file="$example_dir/main.wh"
+    elif [ -f "$example_dir/src/main.wh" ]; then
+      main_file="$example_dir/src/main.wh"
+    fi
+    
+    if [ -n "$main_file" ]; then
+      echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+      echo "📦 Building example: $example_name"
+      echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+      
+      if cargo run -- build "$main_file"; then
+        results+=("✅ $example_name")
+        echo ""
+      else
+        results+=("❌ $example_name")
+        echo ""
+      fi
     fi
   fi
 done
