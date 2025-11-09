@@ -1,0 +1,8 @@
+@prop val value: String
+@prop val onValueChange: (String) -> Unit
+
+<TextField
+  value={value}
+  onValueChange={onValueChange}
+  label="Search items..."
+/>

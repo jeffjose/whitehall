@@ -1,0 +1,72 @@
+import $stores.PostStore
+import $components.PostCard
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.runtime.LaunchedEffect
+
+@prop val store: PostStore
+
+onMount {
+  store.loadPosts()
+}
+
+<Column padding={20} spacing={16}>
+  <Row spacing={8}>
+    <Text fontSize={28} fontWeight="bold">
+      Blog Posts
+    </Text>
+    <Spacer />
+    <IconButton onClick={() => store.refreshPosts()}>
+      <Icon imageVector={Icons.Default.Refresh} contentDescription="Refresh" />
+    </IconButton>
+  </Row>
+
+  @if (store.retryCount > 0) {
+    <Text fontSize={12} color="#9E9E9E">
+      Retry count: {store.retryCount}
+    </Text>
+  }
+
+  <Spacer h={8} />
+
+  @if (store.isLoading) {
+    <Card padding={16}>
+      <Column spacing={12}>
+        <CircularProgressIndicator />
+        <Text>Loading posts...</Text>
+      </Column>
+    </Card>
+  } else if (store.errorMessage != null) {
+    <Card padding={16}>
+      <Column spacing={12}>
+        <Text fontSize={18} fontWeight="bold" color="#F44336">
+          Error Loading Posts
+        </Text>
+        <Text color="#9E9E9E">
+          {store.errorMessage}
+        </Text>
+        <Button
+          text="Retry"
+          onClick={() => store.refreshPosts()}
+        />
+      </Column>
+    </Card>
+  } else if (store.posts.isNotEmpty()) {
+    <LazyColumn>
+      @for (post in store.posts) {
+        <PostCard post={post} />
+        <Spacer h={8} />
+      }
+    </LazyColumn>
+
+    <Text fontSize={12} color="#4CAF50">
+      Loaded {store.posts.size} posts
+    </Text>
+  } else {
+    <Card padding={16}>
+      <Text>No posts loaded yet. Press refresh!</Text>
+    </Card>
+  }
+</Column>

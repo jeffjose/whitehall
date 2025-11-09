@@ -1,0 +1,11 @@
+@prop val categories: List<String>
+@prop val selectedCategory: String
+@prop val onSelectCategory: (String) -> Unit
+
+<Row spacing={8}>
+  @for (category in categories) {
+    <Button onClick={() => onSelectCategory(category)}>
+      <Text>{category}</Text>
+    </Button>
+  }
+</Row>

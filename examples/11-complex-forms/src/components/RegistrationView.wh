@@ -1,0 +1,69 @@
+import $stores.RegistrationForm
+import $components.ValidationTextField
+import androidx.compose.material3.Checkbox
+
+@prop val form: RegistrationForm
+
+<Column padding={20} spacing={16}>
+  <Text fontSize={28} fontWeight="bold">Registration Form</Text>
+
+  <ValidationTextField
+    value={form.email}
+    onValueChange={(value) => form.email = value}
+    label="Email"
+    error={form.emailError}
+    showError={form.showErrors}
+  />
+
+  <ValidationTextField
+    value={form.password}
+    onValueChange={(value) => form.password = value}
+    label="Password"
+    error={form.passwordError}
+    showError={form.showErrors}
+  />
+
+  <ValidationTextField
+    value={form.confirmPassword}
+    onValueChange={(value) => form.confirmPassword = value}
+    label="Confirm Password"
+    error={form.confirmPasswordError}
+    showError={form.showErrors}
+  />
+
+  <ValidationTextField
+    value={form.age}
+    onValueChange={(value) => form.age = value}
+    label="Age"
+    error={form.ageError}
+    showError={form.showErrors}
+  />
+
+  <Row spacing={8}>
+    <Checkbox
+      checked={form.agreeToTerms}
+      onCheckedChange={(checked) => form.agreeToTerms = checked}
+    />
+    <Text>I agree to the terms and conditions</Text>
+  </Row>
+
+  @if (form.showErrors && !form.agreeToTerms) {
+    <Text color="#F44336" fontSize={12}>You must agree to the terms</Text>
+  }
+
+  <Button
+    text="Submit"
+    onClick={() => form.submitForm()}
+    fillMaxWidth={true}
+  />
+
+  <Card padding={16} backgroundColor="surfaceVariant">
+    <Column spacing={8}>
+      <Text fontSize={16} fontWeight="bold">Form Status</Text>
+      <Text fontSize={12}>Email: {form.email.isEmpty() ? "Not entered" : form.email}</Text>
+      <Text fontSize={12}>Password: {form.password.isEmpty() ? "Not entered" : "●●●●●●●●"}</Text>
+      <Text fontSize={12}>Age: {form.age.isEmpty() ? "Not entered" : form.age}</Text>
+      <Text fontSize={12}>Terms: {form.agreeToTerms ? "Accepted" : "Not accepted"}</Text>
+    </Column>
+  </Card>
+</Column>

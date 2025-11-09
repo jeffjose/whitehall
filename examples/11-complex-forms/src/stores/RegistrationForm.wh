@@ -1,0 +1,50 @@
+class RegistrationForm {
+  var email = ""
+  var password = ""
+  var confirmPassword = ""
+  var age = ""
+  var agreeToTerms = false
+  var showErrors = false
+
+  var emailError = ""
+  var passwordError = ""
+  var confirmPasswordError = ""
+  var ageError = ""
+
+  fun validateEmail(value: String): Boolean {
+    return value.contains("@") && value.contains(".")
+  }
+
+  fun validatePassword(value: String): Boolean {
+    return value.length >= 8
+  }
+
+  fun validateAge(value: String): Boolean {
+    val ageInt = value.toIntOrNull()
+    return ageInt != null && ageInt >= 18 && ageInt <= 100
+  }
+
+  fun validateForm(): Boolean {
+    showErrors = true
+
+    emailError = if (!validateEmail(email)) "Invalid email format" else ""
+    passwordError = if (!validatePassword(password)) "Password must be at least 8 characters" else ""
+    confirmPasswordError = if (password != confirmPassword) "Passwords don't match" else ""
+    ageError = if (!validateAge(age)) "Age must be between 18 and 100" else ""
+
+    return emailError.isEmpty() && passwordError.isEmpty() &&
+           confirmPasswordError.isEmpty() && ageError.isEmpty() && agreeToTerms
+  }
+
+  fun submitForm() {
+    if (validateForm()) {
+      // Success
+      email = ""
+      password = ""
+      confirmPassword = ""
+      age = ""
+      agreeToTerms = false
+      showErrors = false
+    }
+  }
+}

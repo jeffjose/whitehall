@@ -1,0 +1,14 @@
+import $stores.Post
+
+@prop val post: Post
+
+<Card p={16}>
+  <Column spacing={8}>
+    <Text fontSize={20} fontWeight="bold">
+      {post.title}
+    </Text>
+    <Text fontSize={14} color="#616161">
+      {post.body}
+    </Text>
+  </Column>
+</Card>

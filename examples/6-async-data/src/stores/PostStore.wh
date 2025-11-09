@@ -1,0 +1,41 @@
+import kotlinx.coroutines.delay
+
+class PostStore {
+  var posts: List<Post> = emptyList()
+  var isLoading = false
+  var errorMessage: String? = null
+  var retryCount = 0
+
+  suspend fun loadPosts() {
+    isLoading = true
+    errorMessage = null
+
+    delay(2000) // Simulate network delay
+
+    try {
+      // Simulate API response
+      posts = listOf(
+        Post(1, "Getting Started", "Learn the basics."),
+        Post(2, "Advanced Topics", "Deep dive into features."),
+        Post(3, "Production", "Best practices.")
+      )
+
+      retryCount = 0
+    } catch (e: Exception) {
+      errorMessage = e.message ?: "Unknown error"
+    }
+
+    isLoading = false
+  }
+
+  suspend fun refreshPosts() {
+    retryCount++
+    loadPosts()
+  }
+}
+
+data class Post(
+  val id: Int,
+  val title: String,
+  val body: String
+)
