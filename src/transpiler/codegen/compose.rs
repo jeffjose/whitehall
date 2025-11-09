@@ -4018,9 +4018,16 @@ impl ComposeBackend {
                     prop.name.chars().next().unwrap().to_uppercase(),
                     &prop.name[1..]
                 );
-                output.push_str(&format!("    fun {}(value: {}) {{\n", method_name, type_str));
-                output.push_str(&format!("        _uiState.update {{ it.copy({} = value) }}\n", prop.name));
-                output.push_str("    }\n\n");
+
+                // Check if user already defined a function with this name
+                let user_defined = class.functions.iter().any(|f| f.name == method_name);
+
+                // Only generate if user hasn't defined it
+                if !user_defined {
+                    output.push_str(&format!("    fun {}(value: {}) {{\n", method_name, type_str));
+                    output.push_str(&format!("        _uiState.update {{ it.copy({} = value) }}\n", prop.name));
+                    output.push_str("    }\n\n");
+                }
             }
         }
 
@@ -4237,13 +4244,25 @@ impl ComposeBackend {
                 state.name.chars().next().unwrap().to_uppercase(),
                 &state.name[1..]
             );
-            output.push_str(&format!("    fun {}(value: {}) {{\n", method_name, type_str));
-            output.push_str(&format!("        _uiState.update {{ it.copy({} = value) }}\n", state.name));
-            output.push_str("    }\n\n");
+
+            // Check if user already defined a function with this name
+            let user_defined = file.functions.iter().any(|f| f.name == method_name);
+
+            // Only generate if user hasn't defined it
+            if !user_defined {
+                output.push_str(&format!("    fun {}(value: {}) {{\n", method_name, type_str));
+                output.push_str(&format!("        _uiState.update {{ it.copy({} = value) }}\n", state.name));
+                output.push_str("    }\n\n");
+            }
         }
 
-        // Generate functions
+        // Generate functions (skip composable functions with markup - those go in wrapper)
         for func in &file.functions {
+            // Skip functions with markup - they're helper composables for the wrapper
+            if func.markup.is_some() {
+                continue;
+            }
+
             output.push_str(&format!("    fun {}({})", func.name, func.params));
             if let Some(return_type) = &func.return_type {
                 output.push_str(&format!(": {}", return_type));
