@@ -1646,19 +1646,11 @@ impl ComposeBackend {
                 }
                 // Special handling for Icon
                 else if comp.name == "Icon" {
-                    let has_content_desc = comp.props.iter().any(|p| p.name == "contentDescription");
-
                     // Add all props
                     for prop in &comp.props {
                         let prop_expr = self.get_prop_expr(&prop.value);
                         let transformed = self.transform_prop(&comp.name, &prop.name, prop_expr);
                         params.extend(transformed?);
-                    }
-
-                    // Icon requires contentDescription - add null if not provided
-                    // This prevents "None of the following functions can be called" errors
-                    if !has_content_desc {
-                        params.push("contentDescription = null".to_string());
                     }
                 } else {
                     // Check for padding/margin shortcuts that need to be combined
