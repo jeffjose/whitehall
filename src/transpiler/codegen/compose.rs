@@ -1896,6 +1896,44 @@ impl ComposeBackend {
         result
     }
 
+    /// Convert Material3 color scheme names in expressions
+    /// e.g., "primaryContainer" -> MaterialTheme.colorScheme.primaryContainer
+    /// Handles expressions like: if (condition) "primary" else "secondary"
+    fn convert_color_scheme_names(&self, value: &str) -> String {
+        // List of Material3 color scheme names
+        let color_schemes = [
+            "primary", "onPrimary", "primaryContainer", "onPrimaryContainer",
+            "secondary", "onSecondary", "secondaryContainer", "onSecondaryContainer",
+            "tertiary", "onTertiary", "tertiaryContainer", "onTertiaryContainer",
+            "error", "onError", "errorContainer", "onErrorContainer",
+            "background", "onBackground",
+            "surface", "onSurface", "surfaceVariant", "onSurfaceVariant",
+            "surfaceTint", "inverseSurface", "inverseOnSurface", "inversePrimary",
+            "outline", "outlineVariant", "scrim",
+        ];
+
+        // Use regex to find quoted strings
+        let re = regex::Regex::new(r#""([^"]*)""#).unwrap();
+
+        re.replace_all(value, |caps: &regex::Captures| {
+            let color_name = &caps[1];
+
+            // Check if this is a color scheme name
+            if color_schemes.contains(&color_name) {
+                format!("MaterialTheme.colorScheme.{}", color_name)
+            } else if color_name.starts_with('#') {
+                // Hex color - convert
+                match convert_hex_to_color(&color_name[1..]) {
+                    Ok(converted) => converted,
+                    Err(_) => caps[0].to_string(), // Keep original if conversion fails
+                }
+            } else {
+                // Not a color scheme name, keep quoted
+                caps[0].to_string()
+            }
+        }).to_string()
+    }
+
     fn collect_imports_recursive(
         &self,
         markup: &Markup,
@@ -3020,8 +3058,8 @@ impl ComposeBackend {
                         format!("MaterialTheme.colorScheme.{}", s)
                     }
                 } else {
-                    // Expression or variable
-                    value.to_string()
+                    // Expression or variable - convert color scheme names within it
+                    self.convert_color_scheme_names(&value)
                 };
                 Ok(vec![format!(
                     "colors = CardDefaults.cardColors(\n                    containerColor = {}\n                )",
