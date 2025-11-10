@@ -68,15 +68,62 @@ pub fn execute(manifest_path: &str) -> Result<()> {
                 }
 
                 // Check Android SDK
-                match toolchain.ensure_android_sdk() {
+                let sdk_root = match toolchain.ensure_android_sdk() {
                     Ok(sdk_root) => {
                         println!("  {} Android SDK installed at {}",
                             "✓".green(), sdk_root.display());
+                        Some(sdk_root)
                     }
                     Err(e) => {
                         println!("  {} Android SDK not available: {}",
                             "✗".red(), e);
                         all_ok = false;
+                        None
+                    }
+                };
+
+                // Check Android Emulator (only if SDK is available)
+                if let Some(ref sdk) = sdk_root {
+                    let emulator_path = sdk.join("emulator/emulator");
+                    if emulator_path.exists() {
+                        println!("  {} Android Emulator installed",
+                            "✓".green());
+                    } else {
+                        println!("  {} Android Emulator not installed",
+                            "✗".red());
+                        println!("    Run 'sdkmanager emulator' to install");
+                        all_ok = false;
+                    }
+
+                    // Check System Image for target SDK
+                    let target_sdk = config.android.target_sdk;
+                    match Toolchain::get_system_image_package(target_sdk) {
+                        Ok(package) => {
+                            // Parse package to get path: system-images;android-34;google_apis_playstore;x86_64
+                            let parts: Vec<&str> = package.split(';').collect();
+                            if parts.len() == 4 {
+                                let image_path = sdk
+                                    .join("system-images")
+                                    .join(parts[1])
+                                    .join(parts[2])
+                                    .join(parts[3]);
+
+                                if image_path.exists() && image_path.join("system.img").exists() {
+                                    println!("  {} System image for Android {} installed",
+                                        "✓".green(), target_sdk);
+                                } else {
+                                    println!("  {} System image for Android {} not installed",
+                                        "✗".red(), target_sdk);
+                                    println!("    Package: {}", package);
+                                    println!("    Run 'whitehall toolchain install' to install");
+                                    all_ok = false;
+                                }
+                            }
+                        }
+                        Err(e) => {
+                            println!("  {} Could not determine system image: {}",
+                                "⚠".yellow(), e);
+                        }
                     }
                 }
                 println!();

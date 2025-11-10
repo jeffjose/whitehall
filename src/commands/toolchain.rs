@@ -1,5 +1,6 @@
 use anyhow::{Context, Result};
 use colored::Colorize;
+use std::path::PathBuf;
 
 use crate::config;
 use crate::toolchain::Toolchain;
@@ -185,43 +186,15 @@ pub fn execute_exec(manifest_path: &str, command: &str, args: &[String]) -> Resu
         toolchain.ensure_system_image(config.android.target_sdk)?;
     }
 
-    // Build PATH with toolchain binaries
-    let mut path_components = Vec::new();
-
-    if let Some(ref java) = java_home {
-        path_components.push(java.join("bin").display().to_string());
-    }
-    if let Some(ref gradle) = gradle_bin {
-        path_components.push(gradle.parent().unwrap().display().to_string());
-    }
-    if let Some(ref android) = android_home {
-        path_components.push(android.join("emulator").display().to_string());
-        path_components.push(android.join("platform-tools").display().to_string());
-        path_components.push(android.join("cmdline-tools/latest/bin").display().to_string());
-    }
-
-    // Add existing PATH
-    if let Ok(existing_path) = std::env::var("PATH") {
-        path_components.push(existing_path);
-    }
-
-    let new_path = path_components.join(":");
-
     // Execute command with toolchain environment
     let mut cmd = std::process::Command::new(command);
     cmd.args(args);
-    cmd.env("PATH", new_path);
-    cmd.env_remove("ANDROID_SDK_ROOT");  // Prevent conflicts with ANDROID_HOME
-
-    if let Some(java) = java_home {
-        cmd.env("JAVA_HOME", java);
-    }
-    if let Some(gradle) = gradle_bin {
-        cmd.env("GRADLE_HOME", gradle.parent().unwrap());
-    }
-    if let Some(android) = android_home {
-        cmd.env("ANDROID_HOME", android);
-    }
+    apply_toolchain_env(
+        &mut cmd,
+        java_home.as_ref(),
+        gradle_bin.as_ref(),
+        android_home.as_ref(),
+    );
 
     let status = cmd.status()
         .with_context(|| format!("Failed to execute command: {}", command))?;
@@ -260,34 +233,20 @@ pub fn execute_shell(manifest_path: &str) -> Result<()> {
     println!();
     println!("Type 'exit' to return to normal shell.\n");
 
-    // Build PATH with toolchain binaries
-    let mut path_components = vec![
-        java_home.join("bin").display().to_string(),
-        gradle_bin.parent().unwrap().display().to_string(),
-        android_home.join("emulator").display().to_string(),
-        android_home.join("platform-tools").display().to_string(),
-        android_home.join("cmdline-tools/latest/bin").display().to_string(),
-    ];
-
-    // Add existing PATH
-    if let Ok(existing_path) = std::env::var("PATH") {
-        path_components.push(existing_path);
-    }
-
-    let new_path = path_components.join(":");
-
     // Determine shell
     let shell = std::env::var("SHELL").unwrap_or_else(|_| "/bin/bash".to_string());
 
     // Launch shell with toolchain environment
-    let status = std::process::Command::new(&shell)
-        .env("JAVA_HOME", java_home)
-        .env("GRADLE_HOME", gradle_bin.parent().unwrap())
-        .env("ANDROID_HOME", &android_home)
-        .env_remove("ANDROID_SDK_ROOT")  // Prevent conflicts with ANDROID_HOME
-        .env("PATH", new_path)
-        .env("PS1", format!("(whitehall:{}) \\w $ ", config.project.name))
-        .status()
+    let mut cmd = std::process::Command::new(&shell);
+    apply_toolchain_env(
+        &mut cmd,
+        Some(&java_home),
+        Some(&gradle_bin),
+        Some(&android_home),
+    );
+    cmd.env("PS1", format!("(whitehall:{}) \\w $ ", config.project.name));
+
+    let status = cmd.status()
         .with_context(|| format!("Failed to launch shell: {}", shell))?;
 
     if !status.success() {
@@ -295,6 +254,57 @@ pub fn execute_shell(manifest_path: &str) -> Result<()> {
     }
 
     Ok(())
+}
+
+/// Build PATH with toolchain binaries
+fn build_toolchain_path(
+    java_home: Option<&PathBuf>,
+    gradle_bin: Option<&PathBuf>,
+    android_home: Option<&PathBuf>,
+) -> String {
+    let mut path_components = Vec::new();
+
+    if let Some(java) = java_home {
+        path_components.push(java.join("bin").display().to_string());
+    }
+    if let Some(gradle) = gradle_bin {
+        path_components.push(gradle.parent().unwrap().display().to_string());
+    }
+    if let Some(android) = android_home {
+        path_components.push(android.join("emulator").display().to_string());
+        path_components.push(android.join("platform-tools").display().to_string());
+        path_components.push(android.join("cmdline-tools/latest/bin").display().to_string());
+    }
+
+    // Add existing PATH
+    if let Ok(existing_path) = std::env::var("PATH") {
+        path_components.push(existing_path);
+    }
+
+    path_components.join(":")
+}
+
+/// Apply toolchain environment variables to a command
+fn apply_toolchain_env(
+    cmd: &mut std::process::Command,
+    java_home: Option<&PathBuf>,
+    gradle_bin: Option<&PathBuf>,
+    android_home: Option<&PathBuf>,
+) {
+    let path = build_toolchain_path(java_home, gradle_bin, android_home);
+    cmd.env("PATH", path);
+
+    if let Some(java) = java_home {
+        cmd.env("JAVA_HOME", java);
+    }
+    if let Some(gradle) = gradle_bin {
+        cmd.env("GRADLE_HOME", gradle.parent().unwrap());
+    }
+    if let Some(android) = android_home {
+        // Set both ANDROID_HOME (modern) and ANDROID_SDK_ROOT (legacy, but still used by emulator)
+        cmd.env("ANDROID_HOME", android);
+        cmd.env("ANDROID_SDK_ROOT", android);
+    }
 }
 
 /// Format bytes as human-readable size

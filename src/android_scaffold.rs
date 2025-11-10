@@ -6,7 +6,7 @@ use crate::config::Config;
 
 /// Generate complete Android project scaffold
 pub fn generate(config: &Config, output_dir: &Path) -> Result<()> {
-    generate_root_gradle(output_dir)?;
+    generate_root_gradle(config, output_dir)?;
     generate_settings_gradle(config, output_dir)?;
     generate_gradle_properties(output_dir)?;
     generate_app_gradle(config, output_dir)?;
@@ -17,13 +17,19 @@ pub fn generate(config: &Config, output_dir: &Path) -> Result<()> {
 }
 
 /// Generate root build.gradle.kts
-fn generate_root_gradle(output_dir: &Path) -> Result<()> {
-    let content = r#"// Top-level build file where you can add configuration options common to all sub-projects/modules.
-plugins {
-    id("com.android.application") version "8.2.0" apply false
-    id("org.jetbrains.kotlin.android") version "1.9.20" apply false
-}
-"#;
+fn generate_root_gradle(config: &Config, output_dir: &Path) -> Result<()> {
+    let content = format!(
+        r#"// Top-level build file where you can add configuration options common to all sub-projects/modules.
+plugins {{
+    id("com.android.application") version "{}" apply false
+    id("org.jetbrains.kotlin.android") version "{}" apply false
+    id("org.jetbrains.kotlin.plugin.compose") version "{}" apply false
+}}
+"#,
+        config.toolchain.agp,
+        config.toolchain.kotlin,
+        config.toolchain.kotlin
+    );
     fs::write(output_dir.join("build.gradle.kts"), content)?;
     Ok(())
 }
@@ -81,6 +87,7 @@ fn generate_app_gradle(config: &Config, output_dir: &Path) -> Result<()> {
         r#"plugins {{
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
+    id("org.jetbrains.kotlin.plugin.compose")
 }}
 
 android {{
@@ -122,33 +129,32 @@ android {{
         compose = true
     }}
 
-    composeOptions {{
-        kotlinCompilerExtensionVersion = "1.5.4"
-    }}
-
     packaging {{
         resources {{
             excludes += "/META-INF/{{AL2.0,LGPL2.1}}"
+        }}
+        jniLibs {{
+            useLegacyPackaging = true
         }}
     }}
 }}
 
 dependencies {{
-    implementation("androidx.core:core-ktx:1.12.0")
-    implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.7.0")
-    implementation("androidx.activity:activity-compose:1.8.2")
+    implementation("androidx.core:core-ktx:1.13.1")
+    implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.8.4")
+    implementation("androidx.activity:activity-compose:1.9.1")
 
-    implementation(platform("androidx.compose:compose-bom:2024.01.00"))
+    implementation(platform("androidx.compose:compose-bom:2024.09.00"))
     implementation("androidx.compose.ui:ui")
     implementation("androidx.compose.ui:ui-graphics")
     implementation("androidx.compose.ui:ui-tooling-preview")
     implementation("androidx.compose.material3:material3")
 
     // Navigation
-    implementation("androidx.navigation:navigation-compose:2.7.6")
+    implementation("androidx.navigation:navigation-compose:2.7.7")
 
     // Coil for AsyncImage
-    implementation("io.coil-kt:coil-compose:2.5.0")
+    implementation("io.coil-kt:coil-compose:2.6.0")
 }}
 "#,
         config.android.package,

@@ -25,6 +25,15 @@ pub const DEFAULT_AGP: &str = "8.2.0";
 /// not the standalone Kotlin compiler
 pub const DEFAULT_KOTLIN: &str = "2.0.0";
 
+/// Default Compose Compiler Extension version
+///
+/// IMPORTANT: This must be compatible with DEFAULT_KOTLIN
+/// Version compatibility:
+/// - Kotlin 1.9.x → Compose Compiler 1.5.4
+/// - Kotlin 2.0.0 → Compose Compiler 2.0.0
+/// See: https://developer.android.com/jetpack/androidx/releases/compose-kotlin
+pub const DEFAULT_COMPOSE_COMPILER: &str = "2.0.0";
+
 /// Default minimum Android SDK version
 pub const DEFAULT_MIN_SDK: u32 = 24;
 

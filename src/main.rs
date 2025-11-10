@@ -90,7 +90,7 @@ enum Commands {
 
 #[derive(Subcommand)]
 enum ToolchainCommands {
-    /// Install toolchains required by the current project
+    /// Install toolchains required by the current project (Java, Gradle, Android SDK, Emulator, System Images)
     Install {
         /// Path to whitehall.toml (defaults to current directory)
         #[arg(default_value = "whitehall.toml")]

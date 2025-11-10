@@ -579,32 +579,60 @@ impl Toolchain {
         // Install using sdkmanager with yes piped for license acceptance
         let sdkmanager = sdk_root.join("cmdline-tools/latest/bin/sdkmanager");
 
-        let status = Command::new("sh")
+        let output = Command::new("sh")
             .arg("-c")
             .arg(format!(
-                "yes 2>/dev/null | {} --sdk_root={} '{}' > /dev/null 2>&1",
+                "yes 2>/dev/null | {} --sdk_root={} '{}'",
                 sdkmanager.display(),
                 sdk_root.display(),
                 package
             ))
             .env("ANDROID_HOME", &sdk_root)
-            .status()
+            .output()
             .with_context(|| format!("Failed to install system image: {}", package))?;
+
+        let status = output.status;
 
         // Signal thread to stop and wait for it
         done.store(true, Ordering::Relaxed);
         let _ = progress_thread.join();
 
-        // Complete the progress bar
+        if !status.success() {
+            // Clear the progress bar before showing error
+            pb.finish_and_clear();
+
+            let stderr = String::from_utf8_lossy(&output.stderr);
+
+            // Extract the actual error message from sdkmanager output
+            let error_msg = stderr
+                .lines()
+                .find(|line| line.contains("error") || line.contains("Error") || line.contains("Warning"))
+                .unwrap_or(&stderr);
+
+            // Check for common error conditions and provide helpful messages
+            use colored::Colorize;
+            if error_msg.contains("No space left on device") {
+                eprintln!("{} No space left on device", "error:".red().bold());
+                eprintln!();
+                eprintln!("The Android system image requires ~2-3GB of free disk space.");
+                eprintln!("Please free up space and try again.");
+                eprintln!();
+                eprintln!("Suggestions:");
+                eprintln!("  - Check disk usage: df -h");
+                eprintln!("  - Clean package caches: yarn cache clean, pnpm store prune, uv cache clean");
+                eprintln!("  - Remove unused Docker images: docker system prune");
+                anyhow::bail!("System image installation failed due to insufficient disk space");
+            } else {
+                eprintln!("{} Failed to install system image: {}", "error:".red().bold(), package);
+                eprintln!();
+                eprintln!("{}", error_msg.trim());
+                anyhow::bail!("System image installation failed");
+            }
+        }
+
+        // Complete the progress bar on success
         pb.set_position(100);
         pb.finish_and_clear();
-
-        if !status.success() {
-            anyhow::bail!(
-                "Failed to install system image {}",
-                package
-            );
-        }
 
         Ok(())
     }

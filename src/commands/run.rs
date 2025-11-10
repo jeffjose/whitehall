@@ -72,10 +72,14 @@ fn execute_single_file(file_path: &str) -> Result<()> {
     install_apk(&toolchain, &result.output_dir)?;
     launch_app(&toolchain, &config.android.package)?;
 
+    println!("{}", format!("    Running on device").green().bold());
+    println!();
+
+    // Stream logcat
+    stream_logcat(&toolchain, &config.android.package)?;
+
     // Restore original directory
     env::set_current_dir(&original_dir)?;
-
-    println!("{}", format!("    Running on device").green().bold());
 
     Ok(())
 }
@@ -146,12 +150,16 @@ fn execute_project(manifest_path: &str) -> Result<()> {
     // 7. Launch app
     launch_app(&toolchain, &config.android.package)?;
 
+    println!("{}", format!("    Running on device").green().bold());
+    println!();
+
+    // 8. Stream logcat filtered to this app
+    stream_logcat(&toolchain, &config.android.package)?;
+
     // Restore original directory
     if project_dir != original_dir {
         env::set_current_dir(&original_dir)?;
     }
-
-    println!("{}", format!("    Running on device").green().bold());
 
     Ok(())
 }
@@ -244,6 +252,83 @@ fn launch_app(toolchain: &Toolchain, package: &str) -> Result<()> {
     if !status.success() {
         anyhow::bail!("App launch failed");
     }
+
+    Ok(())
+}
+
+fn stream_logcat(toolchain: &Toolchain, package: &str) -> Result<()> {
+    use std::io::{BufRead, BufReader};
+
+    println!("{} (press Ctrl+C to stop)", "Streaming logcat".cyan().bold());
+    println!("{}", "─".repeat(80).dimmed());
+
+    // Clear logcat first to only show new logs
+    let _ = toolchain
+        .adb_cmd()?
+        .args(&["logcat", "-c"])
+        .output();
+
+    // Stream logcat with brief format - we'll filter in Rust
+    let mut child = toolchain
+        .adb_cmd()?
+        .args(&["logcat", "-v", "brief"])
+        .stdout(std::process::Stdio::piped())
+        .spawn()
+        .context("Failed to start logcat")?;
+
+    if let Some(stdout) = child.stdout.take() {
+        let reader = BufReader::new(stdout);
+
+        for line in reader.lines() {
+            match line {
+                Ok(line) => {
+                    // Filter: show line if it contains the package name OR mentions the app
+                    let relevant = line.contains(package)
+                        || line.contains("AndroidRuntime")  // Runtime errors/crashes
+                        || (line.contains("ActivityManager") && line.contains(package));
+
+                    if !relevant {
+                        continue;
+                    }
+
+                    // Skip noisy logs that aren't helpful for debugging
+                    if line.contains("AiAiEcho")
+                        || line.contains("PackageUpdatedTask")
+                        || line.contains("ApkAssets")
+                        || line.contains("ziparchive")
+                        || line.contains("nativeloader")
+                        || line.contains("ProximityAuth")
+                        || line.contains("SQLiteLog")
+                        || (line.contains("ActivityThread") && line.contains("REPLACED"))
+                        || line.contains("Finsky")
+                        || line.contains("InputManager-JNI")
+                        || line.contains("CoreBackPreview")
+                    {
+                        continue;
+                    }
+
+                    // Color code based on log level
+                    if line.contains(" E ") || line.contains("ERROR") || line.contains("FATAL") {
+                        println!("{}", line.red());
+                    } else if line.contains(" W ") || line.contains("WARN") {
+                        println!("{}", line.yellow());
+                    } else if line.contains(" I ") || line.contains("INFO") {
+                        println!("{}", line.white());
+                    } else if line.contains(" D ") || line.contains("DEBUG") {
+                        println!("{}", line.dimmed());
+                    } else if line.contains(" V ") || line.contains("VERBOSE") {
+                        println!("{}", line.dimmed());
+                    } else {
+                        println!("{}", line);
+                    }
+                }
+                Err(_) => break,
+            }
+        }
+    }
+
+    // Kill the logcat process when we exit
+    let _ = child.kill();
 
     Ok(())
 }
