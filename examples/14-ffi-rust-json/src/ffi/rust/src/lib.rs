@@ -1,7 +1,7 @@
 // Rust FFI with serde_json: JSON parsing and manipulation
 // Demonstrates using popular Rust libraries via FFI
 
-use whitehall_ffi_macro::ffi;
+use whitehall::ffi;
 use serde_json::{json, Value};
 
 #[ffi]

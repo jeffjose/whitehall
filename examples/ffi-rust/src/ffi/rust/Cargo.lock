@@ -63,7 +63,7 @@ name = "math"
 version = "0.1.0"
 dependencies = [
  "jni",
- "whitehall-ffi-macro",
+ "whitehall",
 ]
 
 [[package]]
@@ -147,7 +147,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "whitehall-ffi-macro"
+name = "whitehall"
 version = "0.1.0"
 
 [[package]]
