@@ -384,15 +384,15 @@ fn build_rust_ffi(config: &Config, ffi_dir: &Path, build_dir: &Path) -> Result<(
     // Generate PascalCase object name for Kotlin
     let object_name = to_pascal_case(&library_name);
 
-    // 2. Generate Kotlin bindings
+    // 2. Generate Kotlin bindings in ffi.rust subpackage
     let kotlin_dir = build_dir.join("generated/kotlin");
     let package_path = config.android.package.replace('.', "/");
-    let kotlin_package_dir = kotlin_dir.join(&package_path).join("ffi");
+    let kotlin_package_dir = kotlin_dir.join(&package_path).join("ffi/rust");
 
     fs::create_dir_all(&kotlin_package_dir)
         .context("Failed to create Kotlin output directory")?;
 
-    let kotlin_package = format!("{}.ffi", config.android.package);
+    let kotlin_package = format!("{}.ffi.rust", config.android.package);
     let kotlin_code = generate_kotlin_object_rust(
         &functions,
         &kotlin_package,

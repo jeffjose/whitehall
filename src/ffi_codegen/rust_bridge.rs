@@ -184,7 +184,7 @@ fn generate_default_return_for_result(base_type: &RustType) -> String {
         RustType::Bool => "            false\n".to_string(),
         RustType::String | RustType::IntArray | RustType::LongArray |
         RustType::FloatArray | RustType::DoubleArray | RustType::BoolArray |
-        RustType::StringArray => "            JObject::null().into_inner()\n".to_string(),
+        RustType::StringArray => "            JObject::null().as_raw()\n".to_string(),
     }
 }
 
@@ -211,7 +211,7 @@ fn generate_param_conversion(output: &mut String, param_name: &str, param_type: 
                 param_name
             ));
             output.push_str(&format!(
-                "        .get_string(JString::from({}))\n",
+                "        .get_string(&JString::from({}))\n",
                 param_name
             ));
             output.push_str("        .expect(\"Couldn't get Java string!\")\n");
@@ -273,7 +273,7 @@ fn generate_return_conversion(output: &mut String, return_type: &RustType) {
         RustType::String => {
             output.push_str("    env.new_string(result)\n");
             output.push_str("        .expect(\"Couldn't create Java string!\")\n");
-            output.push_str("        .into_inner()\n");
+            output.push_str("        .as_raw()\n");
         }
         RustType::IntArray | RustType::LongArray | RustType::FloatArray
         | RustType::DoubleArray | RustType::BoolArray => {

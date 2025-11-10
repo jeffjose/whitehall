@@ -125,6 +125,12 @@ android {{
         jvmTarget = "1.8"
     }}
 
+    sourceSets {{
+        getByName("main") {{
+            kotlin.srcDir("$rootDir/generated/kotlin")
+        }}
+    }}
+
     buildFeatures {{
         compose = true
     }}
