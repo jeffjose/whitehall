@@ -577,13 +577,28 @@ fn build_rust_library(
             );
         }
 
-        cmd.stdout(std::process::Stdio::null());
-        cmd.stderr(std::process::Stdio::null());
+        // Capture output so we can show errors
+        let output = cmd.output()
+            .context(format!("Failed to execute cargo build for {}", target))?;
 
-        let status = cmd.status()
-            .context(format!("Failed to build Rust library for {}", target))?;
+        if !output.status.success() {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            let stdout = String::from_utf8_lossy(&output.stdout);
 
-        if !status.success() {
+            eprintln!();
+            eprintln!("{} Rust build failed for target: {}", "error:".red().bold(), target);
+            eprintln!();
+
+            if !stdout.is_empty() {
+                eprintln!("stdout:");
+                eprintln!("{}", stdout);
+            }
+
+            if !stderr.is_empty() {
+                eprintln!("stderr:");
+                eprintln!("{}", stderr);
+            }
+
             anyhow::bail!("Rust build failed for target: {}", target);
         }
 
