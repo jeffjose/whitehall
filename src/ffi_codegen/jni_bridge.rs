@@ -14,8 +14,9 @@ pub fn generate_jni_bridge(
     output.push_str(" * DO NOT EDIT MANUALLY\n");
     output.push_str(" */\n\n");
 
-    // Include JNI header
+    // Include JNI header and standard library headers
     output.push_str("#include <jni.h>\n");
+    output.push_str("#include <string>\n");
     output.push_str("#include <exception>\n");
     output.push_str("#include <stdexcept>\n\n");
 

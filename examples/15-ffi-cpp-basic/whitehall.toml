@@ -11,6 +11,7 @@ package = "com.example.fficpp"
 java = "21"
 gradle = "8.4"
 agp = "8.2.0"
+kotlin = "2.0.0"
 
 [build]
 output_dir = "build"
