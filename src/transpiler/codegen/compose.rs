@@ -783,6 +783,9 @@ impl ComposeBackend {
             }
         }
 
+        // Convert FFI function calls from snake_case to camelCase (Kotlin convention)
+        output = self.convert_ffi_function_names(output, file);
+
         // Wrap final output in TranspileResult::Single
         Ok(crate::transpiler::TranspileResult::Single(output))
     }
@@ -1831,6 +1834,66 @@ impl ComposeBackend {
         } else {
             path.to_string()
         }
+    }
+
+    /// Convert FFI function calls from snake_case to camelCase (Kotlin convention)
+    /// Finds all FFI imports (starting with $ffi) and converts function calls
+    /// e.g., Math.is_prime() -> Math.isPrime()
+    fn convert_ffi_function_names(&self, mut output: String, file: &WhitehallFile) -> String {
+        // Extract FFI object names from imports
+        let ffi_objects: Vec<String> = file.imports
+            .iter()
+            .filter(|imp| imp.path.starts_with("$ffi"))
+            .filter_map(|imp| {
+                // Extract the last segment as the object name
+                // e.g., "$ffi.rust.Math" -> "Math"
+                imp.path.split('.').last().map(|s| s.to_string())
+            })
+            .collect();
+
+        // For each FFI object, convert snake_case function calls to camelCase
+        for object_name in ffi_objects {
+            // Use regex to find patterns like "ObjectName.function_name("
+            let pattern = format!(r"({}\.)([\w]+)\(", regex::escape(&object_name));
+            let re = regex::Regex::new(&pattern).unwrap();
+
+            output = re.replace_all(&output, |caps: &regex::Captures| {
+                let prefix = &caps[1]; // "ObjectName."
+                let function_name = &caps[2]; // "function_name"
+
+                // Convert snake_case to camelCase
+                let camel_case = self.snake_to_camel(function_name);
+
+                format!("{}{}(", prefix, camel_case)
+            }).to_string();
+        }
+
+        output
+    }
+
+    /// Convert snake_case to camelCase
+    /// e.g., "is_prime" -> "isPrime", "get_user_name" -> "getUserName"
+    fn snake_to_camel(&self, name: &str) -> String {
+        let mut result = String::new();
+        let mut capitalize_next = false;
+
+        for (i, ch) in name.chars().enumerate() {
+            if ch == '_' {
+                capitalize_next = true;
+            } else if capitalize_next {
+                result.push(ch.to_ascii_uppercase());
+                capitalize_next = false;
+            } else {
+                // Keep first character lowercase (camelCase, not PascalCase)
+                if i == 0 {
+                    result.push(ch.to_ascii_lowercase());
+                } else {
+                    result.push(ch);
+                }
+            }
+        }
+
+        result
     }
 
     fn collect_imports_recursive(

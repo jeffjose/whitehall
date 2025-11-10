@@ -61,9 +61,9 @@ var primeCheck = 7
         <Text fontSize={16}>Factorial of {primeCheck}: {Math.factorial(primeCheck)}</Text>
       </Card>
 
-      <Card padding={12} backgroundColor={Math.is_prime(primeCheck) ? "primaryContainer" : "errorContainer"}>
+      <Card padding={12} backgroundColor={if (Math.is_prime(primeCheck)) "primaryContainer" else "errorContainer"}>
         <Text fontSize={16}>
-          {primeCheck} is {Math.is_prime(primeCheck) ? "PRIME" : "NOT PRIME"}
+          {primeCheck} is {if (Math.is_prime(primeCheck)) "PRIME" else "NOT PRIME"}
         </Text>
       </Card>
     </Column>

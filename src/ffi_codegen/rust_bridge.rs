@@ -56,7 +56,7 @@ fn generate_rust_bridge_function(function: &RustFfiFunction, package: &str) -> S
     );
 
     // Build parameter list
-    let mut jni_params = vec!["env: JNIEnv".to_string(), "_class: JClass".to_string()];
+    let mut jni_params = vec!["mut env: JNIEnv".to_string(), "_class: JClass".to_string()];
 
     for (param_name, param_type) in &function.params {
         jni_params.push(format!("{}: {}", param_name, param_type.to_jni_type()));
@@ -211,7 +211,7 @@ fn generate_param_conversion(output: &mut String, param_name: &str, param_type: 
                 param_name
             ));
             output.push_str(&format!(
-                "        .get_string(&JString::from({}))\n",
+                "        .get_string(&unsafe {{ JString::from(JObject::from_raw({})) }})\n",
                 param_name
             ));
             output.push_str("        .expect(\"Couldn't get Java string!\")\n");
