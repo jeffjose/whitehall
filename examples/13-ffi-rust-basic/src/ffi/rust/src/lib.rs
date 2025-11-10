@@ -1,7 +1,7 @@
 // Simple Rust FFI: Math Operations
 // Demonstrates #[ffi] macro for exposing Rust functions to Whitehall
 
-use whitehall_ffi_macro::ffi;
+use whitehall::ffi;
 
 #[ffi]
 pub fn add(a: i32, b: i32) -> i32 {

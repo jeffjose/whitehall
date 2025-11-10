@@ -416,8 +416,80 @@ fn build_rust_ffi(config: &Config, ffi_dir: &Path, build_dir: &Path) -> Result<(
     fs::write(&bridge_file, rust_bridge_code)
         .context(format!("Failed to write Rust JNI bridge: {}", bridge_file.display()))?;
 
-    // 4. Generate build.rs to copy bridge to OUT_DIR during Rust build
+    // 4. Generate local ffi_macro crate (instead of fragile path dependencies)
     let rust_project_dir = ffi_dir.join("rust");
+    let ffi_macro_dir = rust_project_dir.join("ffi_macro");
+    fs::create_dir_all(&ffi_macro_dir.join("src"))
+        .context("Failed to create ffi_macro directory")?;
+
+    // Generate ffi_macro/Cargo.toml
+    let ffi_macro_cargo_toml = r#"[package]
+name = "whitehall"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+proc-macro = true
+
+[dependencies]
+"#;
+    fs::write(ffi_macro_dir.join("Cargo.toml"), ffi_macro_cargo_toml)
+        .context("Failed to write ffi_macro/Cargo.toml")?;
+
+    // Generate ffi_macro/src/lib.rs
+    let ffi_macro_lib = r#"//! Whitehall FFI Macro (auto-generated)
+//!
+//! Provides the #[ffi] attribute for marking functions to be exposed via JNI.
+//! This is a marker attribute that is detected by the Whitehall build system
+//! during code generation. The attribute itself does nothing at runtime.
+
+extern crate proc_macro;
+use proc_macro::TokenStream;
+
+/// Marker attribute for functions to be exposed via FFI/JNI
+///
+/// # Example
+/// ```
+/// #[ffi]
+/// pub fn add(a: i32, b: i32) -> i32 {
+///     a + b
+/// }
+/// ```
+#[proc_macro_attribute]
+pub fn ffi(_attr: TokenStream, item: TokenStream) -> TokenStream {
+    // Pass through unchanged - this is just a marker for whitehall's parser
+    item
+}
+"#;
+    fs::write(ffi_macro_dir.join("src/lib.rs"), ffi_macro_lib)
+        .context("Failed to write ffi_macro/src/lib.rs")?;
+
+    // 5. Update main Cargo.toml to use local ffi_macro
+    let cargo_toml_path = rust_project_dir.join("Cargo.toml");
+    if cargo_toml_path.exists() {
+        let cargo_content = fs::read_to_string(&cargo_toml_path)?;
+
+        // Replace any existing whitehall or whitehall-ffi-macro dependency with local path
+        let updated_cargo = if cargo_content.contains("whitehall-ffi-macro") || cargo_content.contains(r#"whitehall = "#) {
+            // Replace existing dependency line (handle both old and new names)
+            let re1 = regex::Regex::new(r#"whitehall-ffi-macro\s*=\s*\{[^}]+\}"#).unwrap();
+            let re2 = regex::Regex::new(r#"whitehall\s*=\s*\{[^}]+\}"#).unwrap();
+
+            let temp = re1.replace(&cargo_content, r#"whitehall = { path = "./ffi_macro" }"#).to_string();
+            re2.replace(&temp, r#"whitehall = { path = "./ffi_macro" }"#).to_string()
+        } else {
+            // Add dependency if missing
+            cargo_content.replace(
+                "[dependencies]",
+                "[dependencies]\nwhitehall = { path = \"./ffi_macro\" }"
+            )
+        };
+
+        fs::write(&cargo_toml_path, updated_cargo)
+            .context("Failed to update Cargo.toml with local ffi_macro dependency")?;
+    }
+
+    // 6. Generate build.rs to copy bridge to OUT_DIR during Rust build
     let build_rs_path = rust_project_dir.join("build.rs");
 
     // Get absolute path to generated bridge
@@ -454,7 +526,7 @@ fn main() {{
     fs::write(&build_rs_path, build_rs_content)
         .context(format!("Failed to write build.rs: {}", build_rs_path.display()))?;
 
-    // 5. Create minimal stub in src/jni_bridge.rs that includes from OUT_DIR
+    // 7. Create minimal stub in src/jni_bridge.rs that includes from OUT_DIR
     let rust_src_dir = ffi_dir.join("rust/src");
     if !rust_src_dir.exists() {
         anyhow::bail!("Rust src directory not found: {}", rust_src_dir.display());
@@ -471,7 +543,7 @@ include!(concat!(env!("OUT_DIR"), "/jni_bridge.rs"));
     fs::write(&stub_file, stub_content)
         .context(format!("Failed to write jni_bridge.rs stub: {}", stub_file.display()))?;
 
-    // 6. Ensure lib.rs includes the bridge module
+    // 8. Ensure lib.rs includes the bridge module
     let lib_rs = rust_src_dir.join("lib.rs");
     if lib_rs.exists() {
         let content = fs::read_to_string(&lib_rs)?;
@@ -482,7 +554,7 @@ include!(concat!(env!("OUT_DIR"), "/jni_bridge.rs"));
         }
     }
 
-    // 7. Build Rust library using cargo
+    // 9. Build Rust library using cargo
     build_rust_library(
         &library_name,
         &ffi_dir.join("rust"),
