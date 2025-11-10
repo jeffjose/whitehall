@@ -142,16 +142,23 @@ fn get_rust_library_name(config: &Config, ffi_dir: &Path) -> String {
 
 /// Build C++ FFI components
 fn build_cpp_ffi(config: &Config, ffi_dir: &Path, build_dir: &Path) -> Result<()> {
+    use colored::Colorize;
+
     // 1. Discover FFI functions
+    eprintln!("{}", "Discovering FFI functions...".dimmed());
     let functions = discover_cpp_ffi(ffi_dir)
         .context("Failed to discover C++ FFI functions")?;
 
     if functions.is_empty() {
+        eprintln!("{}", "No FFI functions found".yellow());
         return Ok(());
     }
 
+    eprintln!("{} {} FFI function(s)", "Found".green(), functions.len());
+
     // Get library name with precedence: whitehall.toml > CMakeLists.txt > project.name
     let library_name = get_cpp_library_name(config, ffi_dir);
+    eprintln!("{} {}", "Library name:".dimmed(), library_name);
 
     // Generate PascalCase object name for Kotlin
     let object_name = to_pascal_case(&library_name);
@@ -307,22 +314,30 @@ fn build_native_library(
             .arg("-B").arg(&abi_build_dir)
             .arg("-DCMAKE_BUILD_TYPE=Release");
 
-        let status = cmake_cmd.status()
+        let output = cmake_cmd.output()
             .context(format!("Failed to run CMake configure for {}", abi))?;
 
-        if !status.success() {
+        if !output.status.success() {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            let stdout = String::from_utf8_lossy(&output.stdout);
+            eprintln!("{}", stdout);
+            eprintln!("{}", stderr);
             anyhow::bail!("CMake configure failed for ABI: {}", abi);
         }
 
         // Run CMake build
-        let build_status = Command::new(toolchain.ensure_cmake()?)
+        let build_output = Command::new(toolchain.ensure_cmake()?)
             .arg("--build")
             .arg(&abi_build_dir)
             .arg("--config").arg("Release")
-            .status()
+            .output()
             .context(format!("Failed to build for {}", abi))?;
 
-        if !build_status.success() {
+        if !build_output.status.success() {
+            let stderr = String::from_utf8_lossy(&build_output.stderr);
+            let stdout = String::from_utf8_lossy(&build_output.stdout);
+            eprintln!("{}", stdout);
+            eprintln!("{}", stderr);
             anyhow::bail!("CMake build failed for ABI: {}", abi);
         }
 
