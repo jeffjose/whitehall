@@ -40,7 +40,7 @@ pub fn download_with_progress_multi(url: &str, dest_path: &Path, multi: Option<A
     // Get content length for progress bar
     let total_size = response.content_length().unwrap_or(0);
 
-    // Create progress bar
+    // Create progress bar with dim style matching other components
     let pb = if total_size > 0 {
         let pb = if let Some(ref m) = multi {
             m.add(ProgressBar::new(total_size))
@@ -49,7 +49,7 @@ pub fn download_with_progress_multi(url: &str, dest_path: &Path, multi: Option<A
         };
         pb.set_style(
             ProgressStyle::default_bar()
-                .template("{msg:20} [{bar:40}] {bytes:>10}/{total_bytes:>10}")
+                .template(&format!("{{msg:20}} {}{{bar:40.dim}}{} \x1b[2m{{bytes:>10}}/{{total_bytes:>10}}\x1b[0m", "[".dimmed(), "]".dimmed()))
                 .unwrap()
                 .progress_chars("=> "),
         );
@@ -228,16 +228,64 @@ pub fn download_with_retry_and_checksum(
                 return Ok(path);
             },
             Err(e) => {
-                eprintln!("\n{} Download failed (attempt {}/{}): {}",
-                    "error:".red().bold(), attempt, MAX_RETRIES, e);
+                let error_str = e.to_string().to_lowercase();
+
+                // Provide specific error messages for common issues
+                eprintln!("\n{} Download failed (attempt {}/{})", "error:".red().bold(), attempt, MAX_RETRIES);
+                eprintln!();
+
+                if error_str.contains("no space left") || error_str.contains("disk quota") {
+                    eprintln!("Cause: Insufficient disk space");
+                    eprintln!();
+                    eprintln!("Suggestions:");
+                    eprintln!("  - Check disk usage: df -h");
+                    eprintln!("  - Clean package caches: yarn cache clean, pnpm store prune, uv cache clean");
+                    eprintln!("  - Remove unused Docker images: docker system prune");
+                } else if error_str.contains("dns") || error_str.contains("resolve") || error_str.contains("name resolution") {
+                    eprintln!("Cause: DNS resolution failed - cannot resolve hostname");
+                    eprintln!();
+                    eprintln!("Suggestions:");
+                    eprintln!("  - Check internet connection");
+                    eprintln!("  - Verify DNS settings: cat /etc/resolv.conf");
+                    eprintln!("  - Try alternate DNS: sudo systemctl restart systemd-resolved");
+                } else if error_str.contains("connection refused") || error_str.contains("connection reset") {
+                    eprintln!("Cause: Connection refused by server");
+                    eprintln!();
+                    eprintln!("Suggestions:");
+                    eprintln!("  - Check internet connection");
+                    eprintln!("  - Verify firewall settings");
+                    eprintln!("  - Server may be temporarily unavailable");
+                } else if error_str.contains("timeout") || error_str.contains("timed out") {
+                    eprintln!("Cause: Connection timeout - server took too long to respond");
+                    eprintln!();
+                    eprintln!("Suggestions:");
+                    eprintln!("  - Check internet connection speed");
+                    eprintln!("  - Try again later (server may be under load)");
+                } else if error_str.contains("ssl") || error_str.contains("tls") || error_str.contains("certificate") {
+                    eprintln!("Cause: SSL/TLS certificate validation failed");
+                    eprintln!();
+                    eprintln!("Suggestions:");
+                    eprintln!("  - Update CA certificates: sudo update-ca-certificates");
+                    eprintln!("  - Check system time is correct: date");
+                } else if error_str.contains("permission denied") {
+                    eprintln!("Cause: Permission denied");
+                    eprintln!();
+                    eprintln!("Suggestions:");
+                    eprintln!("  - Check write permissions for: {}", dest_path.parent().unwrap_or(dest_path).display());
+                    eprintln!("  - Verify ownership: ls -la {}", dest_path.parent().unwrap_or(dest_path).display());
+                } else {
+                    eprintln!("Error: {}", e);
+                }
 
                 if attempt >= MAX_RETRIES {
-                    eprintln!("\n{} Maximum retry attempts reached.", "error:".red().bold());
+                    eprintln!();
+                    eprintln!("{} Maximum retry attempts reached.", "error:".red().bold());
                     return Err(e);
                 }
 
                 // Ask user if they want to retry
-                print!("\n{} Retry download? [Y/n]: ", "?".yellow().bold());
+                eprintln!();
+                print!("{} Retry download? [Y/n]: ", "?".yellow().bold());
                 io::stdout().flush()?;
 
                 let mut input = String::new();

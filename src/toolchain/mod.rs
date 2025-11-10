@@ -397,30 +397,94 @@ impl Toolchain {
             return Ok(ndk_path);
         }
 
-        println!("Installing Android NDK {} (required for native compilation, ~1GB download)...", ndk_version);
+        // Create styled progress bar matching other components (40 chars wide like java/gradle/emulator)
+        use colored::Colorize;
+        use indicatif::{ProgressBar, ProgressStyle};
+
+        let pb = ProgressBar::new(100);
+        pb.set_style(
+            ProgressStyle::default_bar()
+                .template(&format!("{{msg:20}} {}{{bar:40.dim}}{} \x1b[2mdownloading (~1GB)\x1b[0m", "[".dimmed(), "]".dimmed()))
+                .unwrap()
+                .progress_chars("=> "),
+        );
+        pb.set_message(format!("{}", "android-ndk".dimmed()));
+
+        // Start a thread to slowly increment progress (fake progress since sdkmanager doesn't provide it)
+        use std::sync::atomic::{AtomicBool, Ordering};
+        let pb_clone = pb.clone();
+        let done = Arc::new(AtomicBool::new(false));
+        let done_clone = Arc::clone(&done);
+
+        let progress_thread = std::thread::spawn(move || {
+            let mut i = 0u64;
+            // Slowly increment progress, but stop if download completes
+            while i < 95 && !done_clone.load(Ordering::Relaxed) {
+                pb_clone.set_position(i);
+                std::thread::sleep(std::time::Duration::from_millis(600));
+                i += 1;
+            }
+        });
 
         // Install using sdkmanager
         let sdkmanager = sdk_root.join("cmdline-tools/latest/bin/sdkmanager");
         let package = format!("ndk;{}", ndk_version);
 
-        let output = Command::new(&sdkmanager)
-            .arg(format!("--sdk_root={}", sdk_root.display()))
-            .arg(&package)
+        let output = Command::new("sh")
+            .arg("-c")
+            .arg(format!(
+                "yes 2>/dev/null | {} --sdk_root={} '{}'",
+                sdkmanager.display(),
+                sdk_root.display(),
+                package
+            ))
             .env("ANDROID_HOME", &sdk_root)
-            .stdin(std::process::Stdio::null())
             .output()
             .with_context(|| format!("Failed to install NDK: {}", package))?;
 
-        if !output.status.success() {
+        let status = output.status;
+
+        // Signal thread to stop and wait for it
+        done.store(true, Ordering::Relaxed);
+        let _ = progress_thread.join();
+
+        if !status.success() {
+            // Clear the progress bar before showing error
+            pb.finish_and_clear();
+
             let stderr = String::from_utf8_lossy(&output.stderr);
-            anyhow::bail!(
-                "Failed to install NDK {}:\n{}",
-                package,
-                stderr
-            );
+
+            // Extract the actual error message from sdkmanager output
+            let error_msg = stderr
+                .lines()
+                .find(|line| line.contains("error") || line.contains("Error") || line.contains("Warning"))
+                .unwrap_or(&stderr);
+
+            // Check for common error conditions and provide helpful messages
+            use colored::Colorize;
+            if error_msg.contains("No space left on device") {
+                eprintln!("{} No space left on device", "error:".red().bold());
+                eprintln!();
+                eprintln!("The Android NDK requires ~1GB of free disk space.");
+                eprintln!("Please free up space and try again.");
+                eprintln!();
+                eprintln!("Suggestions:");
+                eprintln!("  - Check disk usage: df -h");
+                eprintln!("  - Clean package caches: yarn cache clean, pnpm store prune, uv cache clean");
+                eprintln!("  - Remove unused Docker images: docker system prune");
+                anyhow::bail!("NDK installation failed due to insufficient disk space");
+            } else {
+                eprintln!("{} Failed to install NDK: {}", "error:".red().bold(), package);
+                eprintln!();
+                eprintln!("{}", error_msg.trim());
+                anyhow::bail!("NDK installation failed");
+            }
         }
 
-        println!("Android NDK installed successfully");
+        // Complete the progress bar on success
+        pb.set_position(100);
+        pb.finish_and_clear();
+
         Ok(ndk_path)
     }
 
