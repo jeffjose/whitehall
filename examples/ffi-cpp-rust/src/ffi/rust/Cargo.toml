@@ -7,6 +7,6 @@ edition = "2021"
 crate-type = ["cdylib"]
 
 [dependencies]
-whitehall = { path = "./ffi_macro" }
+whitehall = { path = "../../../build/generated/ffi_macro" }
 jni = "0.21"
 # Whitehall will auto-generate the local ffi macro during build
