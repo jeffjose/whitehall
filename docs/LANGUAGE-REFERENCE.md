@@ -400,6 +400,16 @@ val sorted = derivedStateOf { items.sortedBy { it.name } }
 ```
 → `"Literal {braces}, interpolate $count"`
 
+**Multi-line strings:**
+```whitehall
+var json = """{"name": "Alice", "age": 30}"""
+var markdown = """
+# Title
+Content here
+"""
+```
+→ Kotlin raw string literal `"""..."""` (preserves newlines, no escaping)
+
 **Imports:**
 ```whitehall
 import $models.User         // → com.example.app.models.User
@@ -442,6 +452,63 @@ fun UserCard(user: User, onClick: () -> Unit) {
 }
 ```
 → Helper functions are placed after the main @Composable wrapper and correctly transpiled
+
+---
+
+### FFI (Foreign Function Interface)
+
+Call native Rust and C++ code with zero JNI boilerplate. Auto-generates bindings and JNI bridges.
+
+**Rust FFI:**
+```whitehall
+// src/ffi/rust/lib.rs
+use whitehall::ffi;
+
+#[ffi]
+pub fn add(a: i32, b: i32) -> i32 {
+    a + b
+}
+```
+
+```whitehall
+// src/main.wh
+import $ffi.rust.Math
+
+<Text>{Math.add(5, 3)}</Text>      // Calls Rust, returns 8
+```
+→ Auto-generates: Kotlin object, JNI bridge, builds for all ABIs
+
+**C++ FFI:**
+```whitehall
+// src/ffi/cpp/string_utils.cpp
+#include <string>
+
+// @ffi
+std::string to_uppercase(const std::string& str) {
+    // ... implementation
+}
+```
+
+```whitehall
+// src/main.wh
+import $ffi.cpp.StringUtils
+
+<Text>{StringUtils.toUppercase("hello")}</Text>   // Calls C++, returns "HELLO"
+```
+
+**Naming:**
+- Snake_case functions → camelCase in Kotlin
+- `is_prime()` → `isPrime()`, `to_uppercase()` → `toUppercase()`
+- Object name from file: `string_utils.cpp` → `StringUtils`
+
+**Supported types:**
+- Primitives: `int`, `long`, `float`, `double`, `bool`
+- Strings: `std::string` / `String`
+- Arrays: `std::vector<T>` / `Vec<T>`
+
+**Package structure:**
+- Rust: `package.ffi.rust.ObjectName`
+- C++: `package.ffi.cpp.ObjectName`
 
 ---
 
