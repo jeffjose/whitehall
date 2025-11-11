@@ -2107,6 +2107,10 @@ impl ComposeBackend {
                             // fontWeight → FontWeight.Bold
                             self.add_import_if_missing(prop_imports, "androidx.compose.ui.text.font.FontWeight");
                         }
+                        ("Text", "fontFamily") => {
+                            // fontFamily → FontFamily.Monospace, etc.
+                            self.add_import_if_missing(prop_imports, "androidx.compose.ui.text.font.FontFamily");
+                        }
                         ("Text", "color") if prop_expr.starts_with('"') => {
                             let s = &prop_expr[1..prop_expr.len()-1];
                             // Check if hex color (needs Color import) or theme color (needs MaterialTheme)
@@ -2973,6 +2977,19 @@ impl ComposeBackend {
                     value
                 };
                 Ok(vec![format!("fontWeight = {}", weight)])
+            }
+            // Text fontFamily string → FontFamily enum
+            ("Text", "fontFamily") => {
+                let family = if value.starts_with('"') && value.ends_with('"') {
+                    // String literal "monospace" → FontFamily.Monospace
+                    // "serif" → FontFamily.Serif, "sansSerif" → FontFamily.SansSerif, etc.
+                    let s = &value[1..value.len()-1];
+                    // Capitalize first letter for Kotlin enum
+                    format!("FontFamily.{}", s.chars().next().unwrap().to_uppercase().collect::<String>() + &s[1..])
+                } else {
+                    value
+                };
+                Ok(vec![format!("fontFamily = {}", family)])
             }
             // Text color string → MaterialTheme.colorScheme or Color(0x...)
             ("Text", "color") => {

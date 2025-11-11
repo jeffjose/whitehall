@@ -851,7 +851,10 @@ impl Parser {
 
     fn parse_value(&mut self) -> Result<String, String> {
         self.skip_whitespace();
-        if self.peek_char() == Some('"') {
+        // Check for triple-quoted string (multi-line string) first
+        if self.check_string_ahead("\"\"\"") {
+            self.parse_multiline_string()
+        } else if self.peek_char() == Some('"') {
             self.parse_string()
         } else if self.peek_char() == Some('[') {
             // Array literal syntax: [1, 2, 3] -> will be converted to listOf() later
@@ -1069,6 +1072,38 @@ impl Parser {
         let value = self.input[start..self.pos].to_string();
         self.expect_char('"')?;
         Ok(format!("\"{}\"", value))
+    }
+
+    /// Parse a multi-line string (triple-quoted string)
+    /// Syntax: """content""" (Kotlin raw string literal)
+    fn parse_multiline_string(&mut self) -> Result<String, String> {
+        // Consume opening """
+        for _ in 0..3 {
+            self.expect_char('"')?;
+        }
+
+        let start = self.pos;
+
+        // Find the closing """
+        loop {
+            if self.check_string_ahead("\"\"\"") {
+                let value = self.input[start..self.pos].to_string();
+
+                // Consume closing """
+                for _ in 0..3 {
+                    self.expect_char('"')?;
+                }
+
+                // Return as Kotlin raw string literal (preserves escape sequences, newlines, etc.)
+                return Ok(format!("\"\"\"{}\"\"\"", value));
+            }
+
+            if self.peek_char().is_none() {
+                return Err(self.error_at_pos("Unclosed multi-line string (expected closing \"\"\")"));
+            }
+
+            self.advance_char();
+        }
     }
 
     fn parse_markup(&mut self) -> Result<Markup, String> {
@@ -1760,6 +1795,11 @@ impl Parser {
     fn peek_ahead(&self, offset: usize) -> Option<char> {
         // Same here - slice at byte position then skip offset characters
         self.input[self.pos..].chars().nth(offset)
+    }
+
+    /// Check if the input at current position starts with the given string
+    fn check_string_ahead(&self, s: &str) -> bool {
+        self.input[self.pos..].starts_with(s)
     }
 
     /// Advance position by one character (handling multi-byte UTF-8)

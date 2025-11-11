@@ -59,6 +59,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8eaf4bc02d17cbdd7ff4c7438cafcdf7fb9a4613313ad11b4f8fefe7d3fa0130"
 
 [[package]]
+name = "json"
+version = "0.1.0"
+dependencies = [
+ "jni",
+ "serde",
+ "serde_json",
+ "whitehall",
+]
+
+[[package]]
 name = "log"
 version = "0.4.28"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -86,16 +96,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a338cc41d27e6cc6dce6cefc13a0729dfbb81c262b1f519331575dd80ef3067f"
 dependencies = [
  "proc-macro2",
-]
-
-[[package]]
-name = "rust_json_ffi"
-version = "0.1.0"
-dependencies = [
- "jni",
- "serde",
- "serde_json",
- "whitehall",
 ]
 
 [[package]]
