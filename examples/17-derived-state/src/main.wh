@@ -1,0 +1,81 @@
+/// [app]
+/// name = "Computed Values"
+/// package = "com.example.computed"
+
+// Example 17: Computed Values
+// Teaches: Derived/computed state that updates reactively
+// Complexity: Single file, ~70 lines
+// Focus: Reactive computations - vals that depend on vars
+
+var firstName = ""
+var lastName = ""
+var age = 18
+var itemCount = 0
+
+// Computed values - automatically update when dependencies change
+val fullName = if (firstName.isEmpty() && lastName.isEmpty()) "" else "$firstName $lastName"
+val ageCategory = if (age < 18) "Minor" else if (age < 65) "Adult" else "Senior"
+val itemLabel = if (itemCount == 0) "No items" else if (itemCount == 1) "1 item" else "$itemCount items"
+
+<Column padding={20} spacing={16}>
+  <Text fontSize={32} fontWeight="bold">Computed Values</Text>
+
+  <Card padding={16} backgroundColor="primaryContainer">
+    <Text fontSize={14}>Computed values automatically update when their dependencies change</Text>
+  </Card>
+
+  <Row spacing={12}>
+    <TextField
+      bind:value={firstName}
+      label="First Name"
+    />
+    <TextField
+      bind:value={lastName}
+      label="Last Name"
+    />
+  </Row>
+
+  <Card padding={16} backgroundColor="secondaryContainer">
+    <Column spacing={8}>
+      <Text fontSize={18} fontWeight="bold">Full Name:</Text>
+      <Text fontSize={16}>{fullName}</Text>
+    </Column>
+  </Card>
+
+  <TextField
+    value={age.toString()}
+    onValueChange={(v) => age = v.toIntOrNull() ?: 18}
+    label="Age"
+  />
+
+  <Card padding={16} backgroundColor="tertiaryContainer">
+    <Column spacing={4}>
+      <Text fontSize={16}>Category: {ageCategory}</Text>
+      <Text fontSize={12} color="#666666">Updates automatically as age changes</Text>
+    </Column>
+  </Card>
+
+  <Text fontSize={18} fontWeight="bold">Item Counter:</Text>
+
+  <Row spacing={8}>
+    <Button onClick={() => itemCount++}>
+      <Text>Add</Text>
+    </Button>
+    <Button onClick={() => itemCount = Math.max(0, itemCount - 1)}>
+      <Text>Remove</Text>
+    </Button>
+  </Row>
+
+  <Card padding={12}>
+    <Text fontSize={16}>{itemLabel}</Text>
+  </Card>
+
+  <Card padding={12} backgroundColor="surfaceVariant">
+    <Column spacing={4}>
+      <Text fontSize={12} fontWeight="bold">How it works:</Text>
+      <Text fontSize={10} color="#666666">• val computed = expression with vars</Text>
+      <Text fontSize={10} color="#666666">• Auto-updates when any var changes</Text>
+      <Text fontSize={10} color="#666666">• Great for derived UI state</Text>
+    </Column>
+  </Card>
+</Column>

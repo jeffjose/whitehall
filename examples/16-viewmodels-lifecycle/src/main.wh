@@ -1,0 +1,75 @@
+/// [app]
+/// name = "Lifecycle Hooks"
+/// package = "com.example.lifecycle"
+
+// Example 16: Lifecycle Hooks
+// Teaches: onMount and onDispose hooks, suspend in lifecycle
+// Complexity: Single file, ~70 lines
+// Focus: Lifecycle hooks - component mount/unmount
+
+import kotlinx.coroutines.delay
+
+var username = ""
+var email = ""
+var isLoading = false
+var mountTime = ""
+var dataLoaded = false
+
+suspend fun loadInitialData() {
+  isLoading = true
+  delay(1000)
+  mountTime = "Mounted at: ${System.currentTimeMillis()}"
+  dataLoaded = true
+  isLoading = false
+}
+
+onMount {
+  launch {
+    loadInitialData()
+  }
+}
+
+onDispose {
+  println("Component disposed - cleanup here")
+}
+
+<Column padding={20} spacing={16}>
+  <Text fontSize={32} fontWeight="bold">Lifecycle Hooks</Text>
+
+  <Card padding={16} backgroundColor="primaryContainer">
+    <Text fontSize={14}>onMount runs when component appears, onDispose when it's removed</Text>
+  </Card>
+
+  @if (isLoading) {
+    <Card padding={24} backgroundColor="surfaceVariant">
+      <Text fontSize={16}>Loading initial data...</Text>
+    </Card>
+  }
+
+  @if (dataLoaded) {
+    <Card padding={16} backgroundColor="secondaryContainer">
+      <Text fontSize={14}>{mountTime}</Text>
+    </Card>
+  }
+
+  <Text fontSize={18} fontWeight="bold">User Profile:</Text>
+
+  <TextField
+    bind:value={username}
+    label="Username"
+  />
+
+  <TextField
+    bind:value={email}
+    label="Email"
+  />
+
+  <Card padding={12} backgroundColor="surfaceVariant">
+    <Column spacing={4}>
+      <Text fontSize={12} fontWeight="bold">Lifecycle Info:</Text>
+      <Text fontSize={10} color="#666666">• onMount: Runs once when component appears</Text>
+      <Text fontSize={10} color="#666666">• onDispose: Cleanup when component removed</Text>
+      <Text fontSize={10} color="#666666">• Use for: API calls, subscriptions, timers</Text>
+    </Column>
+  </Card>
+</Column>

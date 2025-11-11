@@ -1,0 +1,119 @@
+/// [app]
+/// name = "Multiple Async Tasks"
+/// package = "com.example.asyncmulti"
+
+// Example 18: Multiple Async Operations
+// Teaches: Managing multiple async operations, progress tracking
+// Complexity: Single file, ~90 lines
+// Focus: Coordinating multiple async tasks with loading states
+
+import kotlinx.coroutines.delay
+
+var uploadProgress = 0
+var downloadProgress = 0
+var isUploading = false
+var isDownloading = false
+var uploadResult = ""
+var downloadResult = ""
+
+suspend fun simulateUpload() {
+  isUploading = true
+  uploadProgress = 0
+  uploadResult = ""
+
+  for (i in 1..10) {
+    delay(200)
+    uploadProgress = i * 10
+  }
+
+  uploadResult = "Upload complete!"
+  isUploading = false
+}
+
+suspend fun simulateDownload() {
+  isDownloading = true
+  downloadProgress = 0
+  downloadResult = ""
+
+  for (i in 1..10) {
+    delay(250)
+    downloadProgress = i * 10
+  }
+
+  downloadResult = "Download complete!"
+  isDownloading = false
+}
+
+suspend fun runBothTasks() {
+  launch { simulateUpload() }
+  launch { simulateDownload() }
+}
+
+<Column padding={20} spacing={16}>
+  <Text fontSize={32} fontWeight="bold">Multiple Async Tasks</Text>
+
+  <Card padding={16} backgroundColor="primaryContainer">
+    <Text fontSize={14}>Coordinate multiple async operations with independent progress tracking</Text>
+  </Card>
+
+  <Text fontSize={18} fontWeight="bold">Upload Task:</Text>
+
+  <Card padding={16}>
+    <Column spacing={12}>
+      @if (isUploading) {
+        <Text fontSize={16}>Uploading: {uploadProgress}%</Text>
+      }
+
+      @if (uploadResult.isNotEmpty()) {
+        <Text fontSize={14} color="primary">{uploadResult}</Text>
+      }
+
+      <Button
+        onClick={() => simulateUpload()}
+        enabled={!isUploading}
+        fillMaxWidth={true}
+      >
+        <Text>Start Upload</Text>
+      </Button>
+    </Column>
+  </Card>
+
+  <Text fontSize={18} fontWeight="bold">Download Task:</Text>
+
+  <Card padding={16}>
+    <Column spacing={12}>
+      @if (isDownloading) {
+        <Text fontSize={16}>Downloading: {downloadProgress}%</Text>
+      }
+
+      @if (downloadResult.isNotEmpty()) {
+        <Text fontSize={14} color="primary">{downloadResult}</Text>
+      }
+
+      <Button
+        onClick={() => simulateDownload()}
+        enabled={!isDownloading}
+        fillMaxWidth={true}
+      >
+        <Text>Start Download</Text>
+      </Button>
+    </Column>
+  </Card>
+
+  <Button
+    onClick={() => runBothTasks()}
+    enabled={!isUploading && !isDownloading}
+    fillMaxWidth={true}
+  >
+    <Text>Run Both Simultaneously</Text>
+  </Button>
+
+  <Card padding={12} backgroundColor="surfaceVariant">
+    <Column spacing={4}>
+      <Text fontSize={12} fontWeight="bold">Pattern Info:</Text>
+      <Text fontSize={10} color="#666666">• Each task tracks its own state</Text>
+      <Text fontSize={10} color="#666666">• Tasks can run independently or together</Text>
+      <Text fontSize={10} color="#666666">• Progress updates are independent</Text>
+    </Column>
+  </Card>
+</Column>
