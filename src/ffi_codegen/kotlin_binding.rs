@@ -15,9 +15,12 @@ pub fn generate_kotlin_binding(function: &CppFfiFunction) -> String {
         _ => format!(": {}", function.return_type.to_kotlin_type()),
     };
 
+    // Convert snake_case to camelCase for Kotlin convention
+    let kotlin_name = snake_to_camel(&function.name);
+
     format!(
         "    external fun {}({}){}\n",
-        function.name, params, return_type
+        kotlin_name, params, return_type
     )
 }
 

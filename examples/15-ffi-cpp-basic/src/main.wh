@@ -63,9 +63,9 @@ var repeatCount = 3
         </Column>
       </Card>
 
-      <Card padding={12} backgroundColor={StringUtils.is_palindrome(inputText) ? "primaryContainer" : "errorContainer"}>
+      <Card padding={12} backgroundColor={if (StringUtils.is_palindrome(inputText)) "primaryContainer" else "errorContainer"}>
         <Text fontSize={16}>
-          {StringUtils.is_palindrome(inputText) ? "✓ Is Palindrome" : "✗ Not Palindrome"}
+          {if (StringUtils.is_palindrome(inputText)) "✓ Is Palindrome" else "✗ Not Palindrome"}
         </Text>
       </Card>
     </Column>

@@ -161,17 +161,28 @@ fn build_cpp_ffi(config: &Config, ffi_dir: &Path, build_dir: &Path) -> Result<()
     eprintln!("{} {}", "Library name:".dimmed(), library_name);
 
     // Generate PascalCase object name for Kotlin
-    let object_name = to_pascal_case(&library_name);
+    // Derive from the source file name if there's only one .cpp file
+    let object_name = if functions.len() > 0 {
+        // Get the source file name from the first function
+        // All functions in a single .cpp file will have the same source_file
+        let source_file = &functions[0].source_file;
+        let file_stem = source_file.file_stem()
+            .and_then(|s| s.to_str())
+            .unwrap_or(&library_name);
+        to_pascal_case(file_stem)
+    } else {
+        to_pascal_case(&library_name)
+    };
 
-    // 2. Generate Kotlin bindings
+    // 2. Generate Kotlin bindings in ffi.cpp subpackage (matches Rust FFI pattern)
     let kotlin_dir = build_dir.join("generated/kotlin");
     let package_path = config.android.package.replace('.', "/");
-    let kotlin_package_dir = kotlin_dir.join(&package_path).join("ffi");
+    let kotlin_package_dir = kotlin_dir.join(&package_path).join("ffi/cpp");
 
     fs::create_dir_all(&kotlin_package_dir)
         .context("Failed to create Kotlin output directory")?;
 
-    let kotlin_package = format!("{}.ffi", config.android.package);
+    let kotlin_package = format!("{}.ffi.cpp", config.android.package);
     let kotlin_code = generate_kotlin_object(
         &functions,
         &kotlin_package,

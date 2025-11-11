@@ -23,11 +23,29 @@ pub enum CppType {
 
 impl CppType {
     /// Parse C++ type from string
+    /// Handles type modifiers: const, &, *, etc.
     pub fn from_str(type_str: &str) -> Result<Self> {
-        let type_str = type_str.trim();
+        let mut type_str = type_str.trim();
+
+        // Strip 'const' keyword from the beginning
+        if type_str.starts_with("const ") {
+            type_str = type_str[6..].trim();  // Remove "const "
+        }
+
+        // Strip reference (&) and pointer (*) from the end
+        // Repeatedly strip from end to handle cases like "std::string&&" or "int**"
+        loop {
+            if type_str.ends_with('&') || type_str.ends_with('*') {
+                type_str = &type_str[..type_str.len() - 1];
+                type_str = type_str.trim();
+            } else {
+                break;
+            }
+        }
 
         // Check for array types (std::vector<T> or const std::vector<T>&)
-        if type_str.starts_with("std::vector<") || type_str.starts_with("const std::vector<") {
+        // Note: const and & have already been stripped above
+        if type_str.starts_with("std::vector<") {
             // Extract the inner type
             let start = type_str.find('<').unwrap() + 1;
             let end = type_str.rfind('>').unwrap();
