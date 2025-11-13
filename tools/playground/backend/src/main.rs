@@ -101,7 +101,7 @@ fn compile_single_file(code: &str, component_name: &str) -> FileCompileResult {
     match whitehall::transpiler::transpile(code, package, component_name, None) {
         Ok(kotlin_code) => FileCompileResult {
             success: true,
-            output: kotlin_code,
+            output: kotlin_code.primary_content().to_string(),
             errors: vec![],
             warnings: vec![],
             ast: None,
