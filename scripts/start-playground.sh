@@ -40,45 +40,55 @@ cleanup() {
     echo ""
     echo -e "${BLUE}Shutting down...${NC}"
 
-    # Kill background jobs and their children
-    # Kill the saved PIDs (subshells) and their process groups
+    # Kill all descendant processes of the backend and frontend PIDs
+    # This ensures cargo-watch and all its spawned processes are killed
     if [ ! -z "$BACKEND_PID" ]; then
-        kill -TERM -$BACKEND_PID 2>/dev/null || true
+        pkill -TERM -P $BACKEND_PID 2>/dev/null || true
+        kill -TERM $BACKEND_PID 2>/dev/null || true
     fi
     if [ ! -z "$FRONTEND_PID" ]; then
-        kill -TERM -$FRONTEND_PID 2>/dev/null || true
+        pkill -TERM -P $FRONTEND_PID 2>/dev/null || true
+        kill -TERM $FRONTEND_PID 2>/dev/null || true
     fi
+
+    # Also kill any processes using our ports
+    lsof -ti:3000 | xargs -r kill -TERM 2>/dev/null || true
+    lsof -ti:8080 | xargs -r kill -TERM 2>/dev/null || true
 
     # Give processes a moment to clean up
     sleep 0.5
 
     # Force kill if still running
     if [ ! -z "$BACKEND_PID" ]; then
-        kill -9 -$BACKEND_PID 2>/dev/null || true
+        pkill -9 -P $BACKEND_PID 2>/dev/null || true
+        kill -9 $BACKEND_PID 2>/dev/null || true
     fi
     if [ ! -z "$FRONTEND_PID" ]; then
-        kill -9 -$FRONTEND_PID 2>/dev/null || true
+        pkill -9 -P $FRONTEND_PID 2>/dev/null || true
+        kill -9 $FRONTEND_PID 2>/dev/null || true
     fi
+
+    # Force kill any remaining processes on the ports
+    lsof -ti:3000 | xargs -r kill -9 2>/dev/null || true
+    lsof -ti:8080 | xargs -r kill -9 2>/dev/null || true
 
     exit 0
 }
 trap cleanup INT TERM
 
 # Start backend with cargo-watch for auto-reload on file changes
-# Use setsid to create a new process group
 (
     cd "$BACKEND_DIR"
-    setsid cargo watch -x run 2>&1 | while IFS= read -r line; do
+    cargo watch -x run 2>&1 | while IFS= read -r line; do
         echo -e "${GREEN}[BACKEND]${NC} $line"
     done
 ) &
 BACKEND_PID=$!
 
 # Start frontend in background, prefix output with [FRONTEND]
-# Use setsid to create a new process group
 (
     cd "$FRONTEND_DIR"
-    setsid uv run -- python -m http.server 8080 2>&1 | while IFS= read -r line; do
+    uv run -- python -m http.server 8080 2>&1 | while IFS= read -r line; do
         echo -e "${BLUE}[FRONTEND]${NC} $line"
     done
 ) &
