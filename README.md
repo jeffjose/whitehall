@@ -1,8 +1,8 @@
 # Whitehall
 
-> A Kotlin superset for Android development
+> An experimental Kotlin superset for modern Android development
 
-**Status:** ✅ Production-ready transpiler with 48/48 tests passing (100% coverage)
+**Status:** 🧪 Experimental — 48/48 transpiler tests passing
 
 ## What is Whitehall?
 
@@ -69,30 +69,30 @@ whitehall run
 
 ## Features
 
-✅ **Transpiler** - 48/48 tests passing (100% coverage)
+**Transpiler** - 48/48 tests passing
 - Hybrid parsing: transforms Whitehall syntax, passes through pure Kotlin
 - Component markup with reactive state
 - Automatic ViewModel generation
 - Data binding shortcuts
 - Lifecycle hooks
 
-✅ **Pass-Through Architecture** - 10/10 tests passing
+**Pass-Through Architecture** - 10/10 tests passing
 - True Kotlin superset - any Kotlin syntax works
 - Tested with: sealed classes, extension functions, companion objects, DSL builders
 - Context-aware parsing (strings, comments, braces)
 
-✅ **Build System**
+**Build System**
 - `whitehall build` - One-shot transpilation
 - `whitehall watch` - Continuous auto-rebuild
 - `whitehall run` - Build + install + launch
 - `whitehall compile <file>` - Single file testing
 
-✅ **Toolchain Management**
+**Toolchain Management**
 - Automatic download of Java, Gradle, Android SDK
 - Project-scoped toolchains (like `rust-toolchain.toml`)
 - `whitehall toolchain` commands for management
 
-✅ **State Management**
+**State Management**
 - Local state with `var` (auto-reactive)
 - ViewModel auto-generation for complex components
 - `@store` classes for screen-level state
@@ -164,12 +164,14 @@ Transpiles to clean, idiomatic Kotlin/Compose with proper ViewModel, StateFlow, 
 
 | Component | Status |
 |-----------|--------|
-| Transpiler | ✅ 48/48 tests (100%) |
-| Pass-Through | ✅ 10/10 tests (Phases 0-6) |
-| Build System | ✅ Fully implemented |
-| State Management | ✅ Phase 1.1 complete |
-| Toolchain | ✅ Phases 1-5 complete |
-| Web Playground | ✅ Phase 1 complete |
+| Transpiler | 48/48 tests |
+| Pass-Through | 10/10 tests |
+| Build System | Implemented |
+| State Management | Phase 1.1 |
+| Toolchain | Phases 1-5 |
+| Web Playground | Phase 1 |
+
+⚠️ **Note:** Whitehall is experimental software. APIs and syntax may change. Not recommended for production apps yet.
 
 ## Why Whitehall?
 
@@ -191,7 +193,7 @@ Transpiles to clean, idiomatic Kotlin/Compose with proper ViewModel, StateFlow, 
 
 ## Contributing
 
-Whitehall is in active development. See [docs/REF-OVERVIEW.md](docs/REF-OVERVIEW.md) for architecture details.
+Whitehall is an experimental project exploring new ways to write native Android apps. Feedback and contributions welcome! See [docs/REF-OVERVIEW.md](docs/REF-OVERVIEW.md) for architecture details.
 
 ## License
 
