@@ -35,7 +35,9 @@ fun Variables() {
     val boolVal = true
     val listVal = listOf("Apple", "Banana", "Cherry")
 
-    Text(text = "Done")
+    key(Unit) {
+        Text(text = "Done")
+    }
 }
 ```
 

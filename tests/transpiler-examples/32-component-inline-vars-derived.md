@@ -77,7 +77,7 @@ fun PersonForm() {
 
     fun updateName(first: String, last: String) {
         firstName = first
-        lastName = last
+          lastName = last
     }
     fun celebrateBirthday() {
         age++
@@ -86,24 +86,30 @@ fun PersonForm() {
     Column(
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        Text(
-            text = "Name: ${displayName}",
-            fontSize = 24.sp
-        )
+        key(Unit) {
+            Text(
+                text = "Name: ${displayName}",
+                fontSize = 24.sp
+            )
+        }
         Text(
             text = "Age: ${age}",
             fontSize = 18.sp
         )
         if (isAdult) {
-            Text(
-                text = "✓ Adult",
-                color = Color(0xFF4CAF50)
-            )
+            key(Unit) {
+                Text(
+                    text = "✓ Adult",
+                    color = Color(0xFF4CAF50)
+                )
+            }
         } else {
-            Text(
-                text = "Minor",
-                color = Color(0xFFFFA000)
-            )
+            key(Unit) {
+                Text(
+                    text = "Minor",
+                    color = Color(0xFFFFA000)
+                )
+            }
         }
         Row(
             horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -119,8 +125,10 @@ fun PersonForm() {
                 onValueChange = { lastName = it }
             )
         }
-        Button(onClick = { celebrateBirthday() }) {
-            Text("Birthday!")
+        key(Unit) {
+            Button(onClick = { celebrateBirthday() }) {
+                Text("Birthday!")
+            }
         }
     }
 }

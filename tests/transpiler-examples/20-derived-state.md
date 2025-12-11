@@ -91,17 +91,16 @@ fun ProductFilter(
     val filteredProducts by remember {
         derivedStateOf {
             products.filter { product ->
-                product.name.contains(searchQuery, ignoreCase = true) &&
-                product.price >= minPrice &&
-                product.price <= maxPrice
+            product.name.contains(searchQuery, ignoreCase = true) &&
+            product.price >= minPrice &&
+            product.price <= maxPrice
             }
-        }
+            }
     }
-
     val totalPrice by remember {
         derivedStateOf {
             filteredProducts.sumOf { it.price }
-        }
+            }
     }
 
     Column(
@@ -113,7 +112,6 @@ fun ProductFilter(
             onValueChange = { searchQuery = it },
             placeholder = { Text("Search products...") }
         )
-
         Row(
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
@@ -130,22 +128,28 @@ fun ProductFilter(
                 type = "number"
             )
         }
-
-        Text(
-            text = "${filteredProducts.size} products - Total: \$${totalPrice}",
-            fontSize = 16.sp,
-            fontWeight = FontWeight.Bold
-        )
-
+        key(Unit) {
+            Text(
+                text = "${filteredProducts.size} products - Total: \$${totalPrice}",
+                fontSize = 16.sp,
+                fontWeight = FontWeight.Bold
+            )
+        }
         filteredProducts.forEach { product ->
             key(product.id) {
-                Card {
-                    Column(modifier = Modifier.padding(12.dp)) {
-                        Text(text = "${product.name}")
-                        Text(
-                            text = "\$${product.price}",
-                            color = MaterialTheme.colorScheme.secondary
-                        )
+                key(Unit) {
+                    Card {
+                        Column(modifier = Modifier.padding(12.dp)) {
+                            key(Unit) {
+                                Text(text = "${product.name}")
+                            }
+                            key(Unit) {
+                                Text(
+                                    text = "\$${product.price}",
+                                    color = MaterialTheme.colorScheme.secondary
+                                )
+                            }
+                        }
                     }
                 }
             }

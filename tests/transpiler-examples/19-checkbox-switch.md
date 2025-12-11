@@ -76,7 +76,9 @@ fun SettingsForm() {
                 checked = isEnabled,
                 onCheckedChange = { isEnabled = it }
             )
-            Text(text = "Enable feature")
+            key(Unit) {
+                Text(text = "Enable feature")
+            }
         }
         Row(
             horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -85,14 +87,18 @@ fun SettingsForm() {
                 checked = acceptTerms,
                 onCheckedChange = { acceptTerms = it }
             )
-            Text(
-                text = "I accept the terms and conditions"
-            )
+            key(Unit) {
+                Text(
+                    text = "I accept the terms and conditions"
+                )
+            }
         }
         Row(
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            Text(text = "Push notifications")
+            key(Unit) {
+                Text(text = "Push notifications")
+            }
             Switch(
                 checked = notifications,
                 onCheckedChange = { notifications = it }

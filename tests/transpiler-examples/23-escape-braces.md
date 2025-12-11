@@ -41,11 +41,15 @@ fun EscapeBraces() {
         verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         Text(text = "Interpolation: ${value}")
-        Text(text = "Literal braces: {value}")
+        key(Unit) {
+            Text(text = "Literal braces: {value}")
+        }
         Text(
             text = "Mixed: The value is {value} not ${value}"
         )
-        Text(text = "Multiple: {a} {b} ${c}")
+        key(Unit) {
+            Text(text = "Multiple: {a} {b} ${c}")
+        }
     }
 }
 ```
