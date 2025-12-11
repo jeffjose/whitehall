@@ -5,6 +5,7 @@ pub mod run;
 pub mod install;
 pub mod compile;
 pub mod toolchain;
+pub mod emulator;
 pub mod doctor;
 
 use std::path::Path;

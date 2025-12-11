@@ -64,6 +64,11 @@ enum Commands {
         #[command(subcommand)]
         command: ToolchainCommands,
     },
+    /// Manage Android emulators
+    Emulator {
+        #[command(subcommand)]
+        command: EmulatorCommands,
+    },
     /// Execute a command with the project's toolchain environment
     Exec {
         /// Path to whitehall.toml (defaults to current directory)
@@ -126,6 +131,32 @@ enum ToolchainCommands {
     },
 }
 
+#[derive(Subcommand)]
+enum EmulatorCommands {
+    /// List available emulators
+    List {
+        /// Path to whitehall.toml (defaults to current directory)
+        #[arg(default_value = "whitehall.toml")]
+        manifest: String,
+    },
+    /// Start an emulator
+    Start {
+        /// Name of the emulator to start
+        name: String,
+        /// Path to whitehall.toml (defaults to current directory)
+        #[arg(long, default_value = "whitehall.toml")]
+        manifest: String,
+    },
+    /// Create a new emulator
+    Create {
+        /// Name for the new emulator (defaults to 'whitehall')
+        name: Option<String>,
+        /// Path to whitehall.toml (defaults to current directory)
+        #[arg(long, default_value = "whitehall.toml")]
+        manifest: String,
+    },
+}
+
 fn main() {
     let cli = Cli::parse();
 
@@ -164,6 +195,19 @@ fn main() {
                 }
                 ToolchainCommands::Shell { manifest } => {
                     commands::toolchain::execute_shell(&manifest)
+                }
+            }
+        }
+        Commands::Emulator { command } => {
+            match command {
+                EmulatorCommands::List { manifest } => {
+                    commands::emulator::execute_list(&manifest)
+                }
+                EmulatorCommands::Start { name, manifest } => {
+                    commands::emulator::execute_start(&manifest, &name)
+                }
+                EmulatorCommands::Create { name, manifest } => {
+                    commands::emulator::execute_create(&manifest, name.as_deref())
                 }
             }
         }
