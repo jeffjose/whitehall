@@ -37,7 +37,7 @@ pub fn execute(project_name: &str) -> Result<()> {
         .context("Failed to write .gitignore")?;
 
     println!(
-        "     {} binary (application) `{}` package",
+        "     {} android app `{}`",
         "Created".green().bold(),
         project_name
     );
