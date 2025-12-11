@@ -13,10 +13,25 @@ use crate::commands::device;
 use crate::toolchain::Toolchain;
 
 pub fn execute(target: &str, device_query: Option<&str>) -> Result<()> {
+    // Smart argument detection:
+    // If target doesn't exist as a file/dir, but whitehall.toml exists in current dir,
+    // treat target as device_query instead
+    let path = Path::new(target);
+    let is_current_dir = target == "." || target == "./";
+    let target_exists = path.exists() || target.ends_with(".wh") || target.ends_with("whitehall.toml");
+    let has_local_project = Path::new("whitehall.toml").exists();
+
+    let (actual_target, actual_device) = if !is_current_dir && !target_exists && has_local_project {
+        // Target doesn't exist but we have a local project - treat target as device
+        (".", Some(target))
+    } else {
+        (target, device_query)
+    };
+
     // Detect if we're running a project or single file
-    match detect_target(target) {
-        Target::Project(manifest_path) => execute_project(&manifest_path, device_query),
-        Target::SingleFile(file_path) => execute_single_file(&file_path, device_query),
+    match detect_target(actual_target) {
+        Target::Project(manifest_path) => execute_project(&manifest_path, actual_device),
+        Target::SingleFile(file_path) => execute_single_file(&file_path, actual_device),
     }
 }
 
