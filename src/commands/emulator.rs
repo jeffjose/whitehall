@@ -187,11 +187,11 @@ pub fn execute_list(manifest_path: &str) -> Result<()> {
 
         for avd in &avds {
             let (status_str, error_str) = match &avd.status {
-                AvdStatus::Ok => ("ok".green().to_string(), "".to_string()),
-                AvdStatus::Error(e) => ("error".red().to_string(), e.clone()),
+                AvdStatus::Ok => (format!("{}    ", "ok".green()), "".to_string()),
+                AvdStatus::Error(e) => (format!("{}", "error".red()), e.clone()),
             };
             println!(
-                "{}  {:<6}  {:<width$}  {}",
+                "{}  {}  {:<width$}  {}",
                 avd.short_id.yellow(),
                 status_str,
                 avd.name,
