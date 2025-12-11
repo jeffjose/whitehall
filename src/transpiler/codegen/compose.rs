@@ -1,7 +1,7 @@
 /// Compose backend - generates Jetpack Compose code
 
 use crate::transpiler::analyzer::StoreRegistry;
-use crate::transpiler::ast::{ClassDeclaration, ForLoopBlock, Markup, PropValue, WhitehallFile};
+use crate::transpiler::ast::{ClassDeclaration, Component, ForLoopBlock, Markup, PropValue, WhitehallFile};
 use crate::transpiler::optimizer::Optimization;
 
 pub struct ComposeBackend {
@@ -376,6 +376,9 @@ impl ComposeBackend {
 
         // Generate mutable state (var)
         for state in &mutable_state {
+            // Track mutable vars for stability analysis
+            self.mutable_vars.insert(state.name.clone());
+
             output.push_str(&self.indent());
 
             // Transform array literals: [1,2,3] -> mutableListOf(1,2,3)
@@ -969,7 +972,28 @@ impl ComposeBackend {
             }
             Markup::Component(comp) => {
                 let mut output = String::new();
-                let indent_str = "    ".repeat(indent);
+                let base_indent_str = "    ".repeat(indent);
+
+                // Check if this component is stable (doesn't depend on mutable state)
+                // Skip wrapping for container components (Column, Row, Box, etc.)
+                // Also skip wrapping when in ViewModel wrapper (state is external)
+                let is_container = matches!(comp.name.as_str(),
+                    "Column" | "Row" | "Box" | "LazyColumn" | "LazyRow" | "Scaffold" | "Surface"
+                );
+                let should_wrap_stable = !is_container
+                    && !self.in_viewmodel_wrapper
+                    && !self.mutable_vars.is_empty()
+                    && self.is_component_stable(comp);
+
+                // When wrapping with key(Unit), the component itself needs +1 indent
+                let (effective_indent, indent_str) = if should_wrap_stable {
+                    output.push_str(&base_indent_str);
+                    output.push_str("key(Unit) {\n");
+                    (indent + 1, "    ".repeat(indent + 1))
+                } else {
+                    (indent, base_indent_str.clone())
+                };
+
                 output.push_str(&indent_str);
                 output.push_str(&comp.name);
 
@@ -1900,14 +1924,20 @@ impl ComposeBackend {
                     for (i, child) in comp.children.iter().enumerate() {
                         // For Scaffold with layout child, mark first child to add paddingValues to modifier
                         if scaffold_needs_padding && i == 0 {
-                            output.push_str(&self.generate_scaffold_child(child, indent + 1)?);
+                            output.push_str(&self.generate_scaffold_child(child, effective_indent + 1)?);
                         } else {
-                            output.push_str(&self.generate_markup_with_context(child, indent + 1, Some(&comp.name))?);
+                            output.push_str(&self.generate_markup_with_context(child, effective_indent + 1, Some(&comp.name))?);
                         }
                     }
                     output.push_str(&format!("{}}}\n", indent_str));
                 } else {
                     output.push('\n');
+                }
+
+                // Close the key(Unit) wrapper if we opened one
+                if should_wrap_stable {
+                    output.push_str(&base_indent_str);
+                    output.push_str("}\n");
                 }
 
                 Ok(output)
@@ -3580,6 +3610,109 @@ impl ComposeBackend {
                 ""
             }
         }
+    }
+
+    /// Check if an expression references any mutable state variables
+    /// Used to determine if a component is "stable" (doesn't depend on state)
+    fn expr_references_mutable_var(&self, expr: &str) -> bool {
+        for var_name in &self.mutable_vars {
+            // Check for the variable as a word boundary (not substring of another identifier)
+            // Simple heuristic: check if var appears and is preceded/followed by non-alphanumeric
+            let pattern = format!(r"\b{}\b", regex::escape(var_name));
+            if let Ok(re) = regex::Regex::new(&pattern) {
+                if re.is_match(expr) {
+                    return true;
+                }
+            }
+        }
+        false
+    }
+
+    /// Check if a component is "stable" - doesn't depend on any mutable state
+    /// A stable component can be wrapped in key(Unit) to prevent recomposition
+    fn is_component_stable(&self, comp: &Component) -> bool {
+        // Check all prop values for state references
+        for prop in &comp.props {
+            let expr = self.get_prop_expr(&prop.value);
+
+            // String literals are stable UNLESS they contain interpolations ${...} or {...}
+            if expr.starts_with('"') && expr.ends_with('"') {
+                // Check if string contains interpolation that references mutable state
+                // Handle both Kotlin ${...} and Whitehall {...} interpolation syntax
+                let has_interpolation = expr.contains("${") ||
+                    (expr.contains('{') && expr.contains('}') && !expr.contains("{{"));
+                if has_interpolation {
+                    // Extract variable references from ${...} or {...} expressions
+                    let mut found_mutable_ref = false;
+                    // Check for ${...} pattern (Kotlin style)
+                    for cap in regex::Regex::new(r"\$\{([^}]+)\}").unwrap().captures_iter(expr) {
+                        let inner_expr = cap.get(1).map(|m| m.as_str()).unwrap_or("");
+                        if self.expr_references_mutable_var(inner_expr) {
+                            found_mutable_ref = true;
+                            break;
+                        }
+                    }
+                    // Check for {...} pattern (Whitehall style) - simple pattern without lookbehind
+                    // This will match {foo} but also {{foo}} - we handle escaped braces below
+                    if !found_mutable_ref {
+                        for cap in regex::Regex::new(r"\{([^{}]+)\}").unwrap().captures_iter(expr) {
+                            let inner_expr = cap.get(1).map(|m| m.as_str()).unwrap_or("");
+                            // Skip if this is an escaped brace {{...}}
+                            let match_start = cap.get(0).map(|m| m.start()).unwrap_or(0);
+                            if match_start > 0 && &expr[match_start-1..match_start] == "{" {
+                                continue; // Part of {{...}}, skip
+                            }
+                            if self.expr_references_mutable_var(inner_expr) {
+                                found_mutable_ref = true;
+                                break;
+                            }
+                        }
+                    }
+                    if found_mutable_ref {
+                        return false;
+                    }
+                }
+                continue;
+            }
+            if expr.parse::<f64>().is_ok() {
+                continue;
+            }
+            if expr == "true" || expr == "false" {
+                continue;
+            }
+
+            // onClick with just a function name is stable (e.g., onClick={refresh})
+            // but onClick with state reference is not (e.g., onClick={() => count = count + 1})
+            if prop.name == "onClick" {
+                // Simple function reference: just an identifier, no state refs
+                let is_simple_fn_ref = expr.chars().all(|c| c.is_alphanumeric() || c == '_');
+                if is_simple_fn_ref && !self.expr_references_mutable_var(&expr) {
+                    continue;
+                }
+            }
+
+            // Check if expression references any mutable state
+            if self.expr_references_mutable_var(&expr) {
+                return false;
+            }
+        }
+
+        // Also check children recursively
+        for child in &comp.children {
+            if let Markup::Component(child_comp) = child {
+                if !self.is_component_stable(child_comp) {
+                    return false;
+                }
+            }
+            // Interpolations in children reference state
+            if let Markup::Interpolation(expr) = child {
+                if self.expr_references_mutable_var(expr) {
+                    return false;
+                }
+            }
+        }
+
+        true
     }
 
     /// Phase 1.1: Transform expression for ViewModel wrapper context
