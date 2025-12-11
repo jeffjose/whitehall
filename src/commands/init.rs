@@ -1,4 +1,5 @@
 use anyhow::{Context, Result};
+use colored::Colorize;
 use std::fs;
 use std::path::Path;
 
@@ -15,7 +16,6 @@ pub fn execute(project_name: &str) -> Result<()> {
     }
 
     // Create project structure
-    println!("Creating project '{}'...", project_name);
 
     fs::create_dir_all(project_path.join("src"))
         .context("Failed to create project directories")?;
@@ -36,12 +36,11 @@ pub fn execute(project_name: &str) -> Result<()> {
     fs::write(project_path.join(".gitignore"), GITIGNORE_TEMPLATE)
         .context("Failed to write .gitignore")?;
 
-    println!("✓ Created project structure");
-    println!("\nNext steps:");
-    println!("  cd {}", project_name);
-    println!("  whitehall build");
-    println!("\nNote: Required toolchains (Java, Gradle, Android SDK) will be");
-    println!("      automatically downloaded on first build (~600MB)");
+    println!(
+        "     {} binary (application) `{}` package",
+        "Created".green().bold(),
+        project_name
+    );
 
     Ok(())
 }
