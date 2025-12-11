@@ -43,9 +43,7 @@ fun ArrayLiterals() {
   "Two",
   "Three")
 
-    key(Unit) {
-        Text(text = "Done")
-    }
+    Text(text = "Done")
 }
 ```
 

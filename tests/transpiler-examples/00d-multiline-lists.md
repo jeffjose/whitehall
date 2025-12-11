@@ -51,9 +51,7 @@ fun MultilineLists() {
   3
 )
 
-    key(Unit) {
-        Text(text = "Done")
-    }
+    Text(text = "Done")
 }
 ```
 

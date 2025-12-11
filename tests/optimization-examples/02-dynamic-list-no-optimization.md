@@ -51,9 +51,7 @@ fun DynamicList() {
 
     Column {
         items.forEach { item ->
-            key(Unit) {
-                Text(text = item)
-            }
+            Text(text = item)
         }
     }
 }

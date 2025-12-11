@@ -128,30 +128,22 @@ fun ProductFilter(
                 type = "number"
             )
         }
-        key(Unit) {
-            Text(
+        Text(
                 text = "${filteredProducts.size} products - Total: \$${totalPrice}",
                 fontSize = 16.sp,
                 fontWeight = FontWeight.Bold
             )
-        }
         filteredProducts.forEach { product ->
             key(product.id) {
-                key(Unit) {
-                    Card {
+                Card {
                         Column(modifier = Modifier.padding(12.dp)) {
-                            key(Unit) {
-                                Text(text = "${product.name}")
-                            }
-                            key(Unit) {
-                                Text(
-                                    text = "\$${product.price}",
-                                    color = MaterialTheme.colorScheme.secondary
-                                )
-                            }
+                            Text(text = "${product.name}")
+                            Text(
+                                text = "\$${product.price}",
+                                color = MaterialTheme.colorScheme.secondary
+                            )
                         }
                     }
-                }
             }
         }
     }

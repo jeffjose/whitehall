@@ -974,18 +974,18 @@ impl ComposeBackend {
                 let mut output = String::new();
                 let base_indent_str = "    ".repeat(indent);
 
-                // Check if this component is stable (doesn't depend on mutable state)
-                // Skip wrapping for container components (Column, Row, Box, etc.)
-                // Also skip wrapping when in ViewModel wrapper (state is external)
-                let is_container = matches!(comp.name.as_str(),
-                    "Column" | "Row" | "Box" | "LazyColumn" | "LazyRow" | "Scaffold" | "Surface"
-                );
-                let should_wrap_stable = !is_container
-                    && !self.in_viewmodel_wrapper
-                    && !self.mutable_vars.is_empty()
-                    && self.is_component_stable(comp);
+                // Note: key(Unit) wrapping was previously attempted here to prevent
+                // recomposition of stable components, but it doesn't work as expected:
+                // 1. key() is for list item identity, not recomposition prevention
+                // 2. Using the same key (Unit) for multiple components causes confusion
+                // 3. Compose compiler already handles skipping via @Stable inference
+                //
+                // Proper optimization would require:
+                // - @Stable annotations on data classes
+                // - Extracting components to separate @Composable functions
+                // - Using derivedStateOf for computed values
+                let should_wrap_stable = false; // Disabled - key(Unit) doesn't help
 
-                // When wrapping with key(Unit), the component itself needs +1 indent
                 let (effective_indent, indent_str) = if should_wrap_stable {
                     output.push_str(&base_indent_str);
                     output.push_str("key(Unit) {\n");
@@ -3622,6 +3622,8 @@ impl ComposeBackend {
 
     /// Check if an expression references any mutable state variables
     /// Used to determine if a component is "stable" (doesn't depend on state)
+    /// Note: Currently unused - key(Unit) optimization was disabled
+    #[allow(dead_code)]
     fn expr_references_mutable_var(&self, expr: &str) -> bool {
         for var_name in &self.mutable_vars {
             // Check for the variable as a word boundary (not substring of another identifier)
@@ -3638,6 +3640,8 @@ impl ComposeBackend {
 
     /// Check if a component is "stable" - doesn't depend on any mutable state
     /// A stable component can be wrapped in key(Unit) to prevent recomposition
+    /// Note: Currently unused - key(Unit) optimization was disabled
+    #[allow(dead_code)]
     fn is_component_stable(&self, comp: &Component) -> bool {
         // Check all prop values for state references
         for prop in &comp.props {

@@ -86,30 +86,24 @@ fun PersonForm() {
     Column(
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        key(Unit) {
-            Text(
+        Text(
                 text = "Name: ${displayName}",
                 fontSize = 24.sp
             )
-        }
         Text(
             text = "Age: ${age}",
             fontSize = 18.sp
         )
         if (isAdult) {
-            key(Unit) {
-                Text(
+            Text(
                     text = "✓ Adult",
                     color = Color(0xFF4CAF50)
                 )
-            }
         } else {
-            key(Unit) {
-                Text(
+            Text(
                     text = "Minor",
                     color = Color(0xFFFFA000)
                 )
-            }
         }
         Row(
             horizontalArrangement = Arrangement.spacedBy(8.dp)
