@@ -957,7 +957,7 @@ mod tests {
 
     #[test]
     fn test_analyzer_creates_symbol_table() {
-        let ast = WhitehallFile {
+        let mut ast = WhitehallFile {
             props: vec![PropDeclaration {
                 name: "title".to_string(),
                 prop_type: "String".to_string(),
@@ -973,7 +973,7 @@ mod tests {
             ..Default::default()
         };
 
-        let semantic_info = Analyzer::analyze(&ast).unwrap();
+        let semantic_info = Analyzer::analyze(&mut ast).unwrap();
 
         // Should have collected both symbols
         assert!(semantic_info.symbol_table.contains("title"));
@@ -989,8 +989,8 @@ mod tests {
 
     #[test]
     fn test_analyzer_no_optimizations_yet() {
-        let ast = WhitehallFile::default();
-        let semantic_info = Analyzer::analyze(&ast).unwrap();
+        let mut ast = WhitehallFile::default();
+        let semantic_info = Analyzer::analyze(&mut ast).unwrap();
 
         // Phase 0: no optimizations yet
         assert!(semantic_info.optimization_hints.is_empty());
@@ -1002,7 +1002,7 @@ mod tests {
     fn test_tracks_variable_in_interpolation() {
         use crate::transpiler::ast::Markup;
 
-        let ast = WhitehallFile {
+        let mut ast = WhitehallFile {
             state: vec![StateDeclaration {
                 name: "count".to_string(),
                 mutable: false,
@@ -1014,7 +1014,7 @@ mod tests {
             ..Default::default()
         };
 
-        let semantic_info = Analyzer::analyze(&ast).unwrap();
+        let semantic_info = Analyzer::analyze(&mut ast).unwrap();
         let symbol = semantic_info.symbol_table.get("count").unwrap();
 
         // Should have recorded 1 access
@@ -1026,7 +1026,7 @@ mod tests {
     fn test_tracks_variable_in_component_prop() {
         use crate::transpiler::ast::{Component, ComponentProp, Markup, PropValue};
 
-        let ast = WhitehallFile {
+        let mut ast = WhitehallFile {
             state: vec![StateDeclaration {
                 name: "title".to_string(),
                 mutable: false,
@@ -1046,7 +1046,7 @@ mod tests {
             ..Default::default()
         };
 
-        let semantic_info = Analyzer::analyze(&ast).unwrap();
+        let semantic_info = Analyzer::analyze(&mut ast).unwrap();
         let symbol = semantic_info.symbol_table.get("title").unwrap();
 
         assert_eq!(symbol.usage_info.access_count, 1);
@@ -1060,7 +1060,7 @@ mod tests {
     fn test_tracks_for_loop_collection_access() {
         use crate::transpiler::ast::Markup;
 
-        let ast = WhitehallFile {
+        let mut ast = WhitehallFile {
             state: vec![StateDeclaration {
                 name: "items".to_string(),
                 mutable: false,
@@ -1078,7 +1078,7 @@ mod tests {
             ..Default::default()
         };
 
-        let semantic_info = Analyzer::analyze(&ast).unwrap();
+        let semantic_info = Analyzer::analyze(&mut ast).unwrap();
         let symbol = semantic_info.symbol_table.get("items").unwrap();
 
         assert_eq!(symbol.usage_info.access_count, 1);
@@ -1091,7 +1091,7 @@ mod tests {
     fn test_tracks_variable_used_in_loop_body() {
         use crate::transpiler::ast::{Component, ComponentProp, Markup, PropValue};
 
-        let ast = WhitehallFile {
+        let mut ast = WhitehallFile {
             state: vec![
                 StateDeclaration {
                     name: "posts".to_string(),
@@ -1126,7 +1126,7 @@ mod tests {
             ..Default::default()
         };
 
-        let semantic_info = Analyzer::analyze(&ast).unwrap();
+        let semantic_info = Analyzer::analyze(&mut ast).unwrap();
 
         // Check 'posts' collection
         let posts = semantic_info.symbol_table.get("posts").unwrap();
@@ -1148,7 +1148,7 @@ mod tests {
     fn test_tracks_key_expression_usage() {
         use crate::transpiler::ast::Markup;
 
-        let ast = WhitehallFile {
+        let mut ast = WhitehallFile {
             state: vec![StateDeclaration {
                 name: "contacts".to_string(),
                 mutable: false,
@@ -1166,7 +1166,7 @@ mod tests {
             ..Default::default()
         };
 
-        let semantic_info = Analyzer::analyze(&ast).unwrap();
+        let semantic_info = Analyzer::analyze(&mut ast).unwrap();
         let symbol = semantic_info.symbol_table.get("contacts").unwrap();
 
         // Should record collection access + potentially key expression
@@ -1180,7 +1180,7 @@ mod tests {
     fn test_tracks_condition_usage() {
         use crate::transpiler::ast::Markup;
 
-        let ast = WhitehallFile {
+        let mut ast = WhitehallFile {
             state: vec![StateDeclaration {
                 name: "isVisible".to_string(),
                 mutable: true,
@@ -1197,7 +1197,7 @@ mod tests {
             ..Default::default()
         };
 
-        let semantic_info = Analyzer::analyze(&ast).unwrap();
+        let semantic_info = Analyzer::analyze(&mut ast).unwrap();
         let symbol = semantic_info.symbol_table.get("isVisible").unwrap();
 
         assert_eq!(symbol.usage_info.access_count, 1);
@@ -1211,7 +1211,7 @@ mod tests {
     fn test_tracks_complex_expression() {
         use crate::transpiler::ast::{Component, ComponentProp, Markup, PropValue};
 
-        let ast = WhitehallFile {
+        let mut ast = WhitehallFile {
             state: vec![
                 StateDeclaration {
                     name: "count".to_string(),
@@ -1240,7 +1240,7 @@ mod tests {
             ..Default::default()
         };
 
-        let semantic_info = Analyzer::analyze(&ast).unwrap();
+        let semantic_info = Analyzer::analyze(&mut ast).unwrap();
 
         // Both 'count' and 'max' should be tracked
         let count = semantic_info.symbol_table.get("count").unwrap();
@@ -1254,7 +1254,7 @@ mod tests {
     fn test_tracks_multiple_accesses() {
         use crate::transpiler::ast::{Component, ComponentProp, Markup, PropValue};
 
-        let ast = WhitehallFile {
+        let mut ast = WhitehallFile {
             state: vec![StateDeclaration {
                 name: "title".to_string(),
                 mutable: false,
@@ -1286,7 +1286,7 @@ mod tests {
             ..Default::default()
         };
 
-        let semantic_info = Analyzer::analyze(&ast).unwrap();
+        let semantic_info = Analyzer::analyze(&mut ast).unwrap();
         let symbol = semantic_info.symbol_table.get("title").unwrap();
 
         // Should have 3 accesses total
@@ -1297,7 +1297,7 @@ mod tests {
     fn test_tracks_when_condition() {
         use crate::transpiler::ast::{Markup, WhenBlock, WhenBranch};
 
-        let ast = WhitehallFile {
+        let mut ast = WhitehallFile {
             state: vec![StateDeclaration {
                 name: "status".to_string(),
                 mutable: true,
@@ -1320,7 +1320,7 @@ mod tests {
             ..Default::default()
         };
 
-        let semantic_info = Analyzer::analyze(&ast).unwrap();
+        let semantic_info = Analyzer::analyze(&mut ast).unwrap();
         let symbol = semantic_info.symbol_table.get("status").unwrap();
 
         assert_eq!(symbol.usage_info.access_count, 1);
@@ -1342,7 +1342,7 @@ mod tests {
         // - Not a prop
         // - No event handlers
         // Expected confidence: 100 (40 + 30 + 20 + 10)
-        let ast = WhitehallFile {
+        let mut ast = WhitehallFile {
             state: vec![StateDeclaration {
                 name: "items".to_string(),
                 mutable: false, // val
@@ -1365,7 +1365,7 @@ mod tests {
             ..Default::default()
         };
 
-        let semantic_info = Analyzer::analyze(&ast).unwrap();
+        let semantic_info = Analyzer::analyze(&mut ast).unwrap();
 
         assert_eq!(semantic_info.optimization_hints.len(), 1);
         match &semantic_info.optimization_hints[0] {
@@ -1386,7 +1386,7 @@ mod tests {
         // - Not a prop - get 20 points
         // - No event handlers - get 10 points
         // Expected confidence: 60 (0 + 30 + 20 + 10)
-        let ast = WhitehallFile {
+        let mut ast = WhitehallFile {
             state: vec![StateDeclaration {
                 name: "items".to_string(),
                 mutable: true, // var
@@ -1409,7 +1409,7 @@ mod tests {
             ..Default::default()
         };
 
-        let semantic_info = Analyzer::analyze(&ast).unwrap();
+        let semantic_info = Analyzer::analyze(&mut ast).unwrap();
 
         assert_eq!(semantic_info.optimization_hints.len(), 1);
         match &semantic_info.optimization_hints[0] {
@@ -1431,7 +1431,7 @@ mod tests {
         // - No event handlers - get 10 points
         // Expected confidence: 40 (0 + 30 + 0 + 10)
         // Below 50 threshold, so NO hint generated
-        let ast = WhitehallFile {
+        let mut ast = WhitehallFile {
             props: vec![PropDeclaration {
                 name: "items".to_string(),
                 prop_type: "List<String>".to_string(),
@@ -1452,7 +1452,7 @@ mod tests {
             ..Default::default()
         };
 
-        let semantic_info = Analyzer::analyze(&ast).unwrap();
+        let semantic_info = Analyzer::analyze(&mut ast).unwrap();
 
         // Phase 6: Should NOT generate hint (confidence 40 < 50 threshold)
         assert_eq!(semantic_info.optimization_hints.len(), 0);
@@ -1468,7 +1468,7 @@ mod tests {
         // - Not a prop - get 20 points
         // - HAS event handler - lose 10 points
         // Expected confidence: 90 (40 + 30 + 20 + 0)
-        let ast = WhitehallFile {
+        let mut ast = WhitehallFile {
             state: vec![StateDeclaration {
                 name: "items".to_string(),
                 mutable: false,
@@ -1494,7 +1494,7 @@ mod tests {
             ..Default::default()
         };
 
-        let semantic_info = Analyzer::analyze(&ast).unwrap();
+        let semantic_info = Analyzer::analyze(&mut ast).unwrap();
 
         // Should still generate hint but with lower confidence
         assert_eq!(semantic_info.optimization_hints.len(), 1);
@@ -1520,7 +1520,7 @@ mod tests {
         // - HAS event handler - lose 10 points (0)
         // Expected confidence: 20 (0 + 0 + 20 + 0) - BUT mutations not tracked yet
         // So actually: 50 (0 + 30 + 20 + 0)
-        let ast = WhitehallFile {
+        let mut ast = WhitehallFile {
             state: vec![StateDeclaration {
                 name: "items".to_string(),
                 mutable: true, // var
@@ -1546,7 +1546,7 @@ mod tests {
             ..Default::default()
         };
 
-        let semantic_info = Analyzer::analyze(&ast).unwrap();
+        let semantic_info = Analyzer::analyze(&mut ast).unwrap();
 
         // Confidence: 50 (0 + 30 + 20 + 0)
         // Still above threshold of 50, so hint is generated
@@ -1564,7 +1564,7 @@ mod tests {
         use crate::transpiler::ast::{Component, Markup};
 
         // Two separate for loops, both qualify
-        let ast = WhitehallFile {
+        let mut ast = WhitehallFile {
             state: vec![
                 StateDeclaration {
                     name: "items1".to_string(),
@@ -1610,7 +1610,7 @@ mod tests {
             ..Default::default()
         };
 
-        let semantic_info = Analyzer::analyze(&ast).unwrap();
+        let semantic_info = Analyzer::analyze(&mut ast).unwrap();
 
         // Should detect both loops
         assert_eq!(semantic_info.optimization_hints.len(), 2);
@@ -1632,7 +1632,7 @@ mod tests {
         use crate::transpiler::ast::{Component, Markup};
 
         // Nested for loops - both should be detected
-        let ast = WhitehallFile {
+        let mut ast = WhitehallFile {
             state: vec![
                 StateDeclaration {
                     name: "outer".to_string(),
@@ -1670,7 +1670,7 @@ mod tests {
             ..Default::default()
         };
 
-        let semantic_info = Analyzer::analyze(&ast).unwrap();
+        let semantic_info = Analyzer::analyze(&mut ast).unwrap();
 
         // Should detect both outer and inner loops
         assert_eq!(semantic_info.optimization_hints.len(), 2);

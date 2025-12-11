@@ -556,7 +556,7 @@ mod tests {
             "https://github.com/Kitware/CMake/releases/download/v3.28.1/cmake-3.28.1-linux-x86_64.tar.gz"
         );
 
-        let url_mac = get_cmake_download_url("3.28.1", Platform::MacosX64).unwrap();
+        let url_mac = get_cmake_download_url("3.28.1", Platform::MacX64).unwrap();
         assert!(url_mac.contains("macos"));
         assert!(url_mac.contains("universal"));
     }

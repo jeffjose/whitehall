@@ -340,6 +340,7 @@ fn generate_string_array_return(output: &mut String) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::ffi_parser::rust::RustFunctionReturn;
     use std::path::PathBuf;
 
     #[test]

@@ -37,6 +37,7 @@ impl Platform {
     ///
     /// # Example
     /// ```
+    /// use whitehall::toolchain::Platform;
     /// let (os, arch) = Platform::LinuxX64.as_download_strings();
     /// // os = "linux", arch = "x64"
     /// ```

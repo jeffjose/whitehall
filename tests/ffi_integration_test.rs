@@ -75,7 +75,7 @@ int helper(int x) {
     );
 
     assert!(jni_code.contains("#include <jni.h>"));
-    assert!(jni_code.contains("#include \"ffi/cpp/math.cpp\""));
+    // Note: Source files are now compiled together by CMake, using forward declarations instead
     assert!(jni_code.contains("Java_com_example_test_Math_add"));
     assert!(jni_code.contains("Java_com_example_test_Math_multiply"));
     assert!(jni_code.contains("Java_com_example_test_Math_isPositive"));

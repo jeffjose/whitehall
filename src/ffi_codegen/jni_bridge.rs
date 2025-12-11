@@ -438,7 +438,7 @@ mod tests {
         println!("{}", bridge);
 
         assert!(bridge.contains("#include <jni.h>"));
-        assert!(bridge.contains("#include \"math.cpp\""));
+        // Note: Source files are now compiled together by CMake, using forward declarations instead
         assert!(bridge.contains("int add(int, int);"));
         assert!(bridge.contains("Java_com_example_ffi_Math_add"));
         assert!(bridge.contains("jint"));
