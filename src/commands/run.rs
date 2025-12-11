@@ -252,9 +252,31 @@ fn launch_app(toolchain: &Toolchain, package: &str, device_id: &str) -> Result<(
 
 fn stream_logcat(toolchain: &Toolchain, package: &str, device_id: &str) -> Result<()> {
     use std::io::{BufRead, BufReader};
+    use std::sync::atomic::{AtomicBool, Ordering};
+    use std::sync::Arc;
 
-    println!("{} (press Ctrl+C to stop)", "Streaming logcat".cyan().bold());
+    println!("{} (press Ctrl+C to stop app and exit)", "Streaming logcat".cyan().bold());
     println!("{}", "─".repeat(80).dimmed());
+
+    // Set up Ctrl+C handler
+    let running = Arc::new(AtomicBool::new(true));
+    let r = running.clone();
+    let pkg = package.to_string();
+    let dev = device_id.to_string();
+    let tc = toolchain.clone();
+
+    ctrlc::set_handler(move || {
+        r.store(false, Ordering::SeqCst);
+
+        // Force-stop the app on the device
+        println!("\n{}", "Stopping app...".yellow());
+        let _ = tc
+            .adb_cmd()
+            .map(|mut cmd| {
+                cmd.args(["-s", &dev, "shell", "am", "force-stop", &pkg])
+                    .output()
+            });
+    }).expect("Error setting Ctrl-C handler");
 
     // Clear logcat first to only show new logs
     let _ = toolchain
@@ -274,6 +296,11 @@ fn stream_logcat(toolchain: &Toolchain, package: &str, device_id: &str) -> Resul
         let reader = BufReader::new(stdout);
 
         for line in reader.lines() {
+            // Check if we should stop
+            if !running.load(Ordering::SeqCst) {
+                break;
+            }
+
             match line {
                 Ok(line) => {
                     // Filter: show line if it contains the package name OR mentions the app

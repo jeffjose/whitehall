@@ -17,6 +17,7 @@ use std::sync::Arc;
 ///
 /// Manages Java, Gradle, and Android SDK installations in ~/.whitehall/toolchains/
 /// Each project specifies required versions in [toolchain] section of whitehall.toml
+#[derive(Clone)]
 pub struct Toolchain {
     root: PathBuf,
 }
