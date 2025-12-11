@@ -15,28 +15,23 @@
     <header class="bg-gray-800 border-b border-gray-700">
         <div class="container mx-auto px-4 py-3 flex items-center justify-between">
             <div class="flex items-center space-x-4">
-                <h1 class="text-xl font-bold text-white">Whitehall Playground</h1>
-                <select id="examples" class="bg-gray-700 text-white px-3 py-1 rounded text-sm border border-gray-600">
-                    <option value="">Load Example...</option>
+                <h1 id="logo" class="text-xl font-bold text-white cursor-pointer hover:text-blue-400" title="Go to first example">Whitehall Playground</h1>
+                <button id="prev-example-btn" class="px-2 py-1 bg-gray-700 hover:bg-gray-600 rounded-l text-sm border border-gray-600 border-r-0" title="Previous example">&lt;</button>
+                <select id="examples" class="bg-gray-700 text-white px-3 py-1 text-sm border-y border-gray-600">
                     <option value="hello">01. Hello World</option>
-                    <option value="styling">02. Text Styling</option>
-                    <option value="layout">03. Layouts</option>
-                    <option value="padding">04. Padding Shortcuts</option>
-                    <option value="spacer">05. Spacer Shortcuts</option>
-                    <option value="button">06. Buttons & State</option>
-                    <option value="binding">07. Two-Way Binding</option>
-                    <option value="multistate">08. Multiple State</option>
-                    <option value="conditional">09. Conditionals</option>
-                    <option value="list">10. Lists & Loops</option>
-                    <option value="interactive-list">11. Interactive List</option>
-                    <option value="derived">12. Derived State</option>
-                    <option value="todo">13. Todo App</option>
-                    <option value="form">14. Form Validation</option>
-                    <option value="counter-list">15. List Mutations</option>
-                    <option value="shopping">16. Complex Data</option>
-                    <option value="navigation">17. File-Based Routing</option>
-                    <option value="multifile">18. Multi-File Project</option>
+                    <option value="variables">02. Variables</option>
+                    <option value="button">03. Buttons & State</option>
+                    <option value="conditional">04. Conditionals</option>
+                    <option value="list">05. Lists & Loops</option>
+                    <option value="binding">06. Text Input</option>
+                    <option value="derived">07. Derived State</option>
+                    <option value="layout">08. Layouts</option>
+                    <option value="styling">09. Styling</option>
+                    <option value="interactive-list">10. Interactive List</option>
+                    <option value="form">11. Form Validation</option>
+                    <option value="todo">12. Todo App</option>
                 </select>
+                <button id="next-example-btn" class="px-2 py-1 bg-gray-700 hover:bg-gray-600 rounded-r text-sm border border-gray-600 border-l-0" title="Next example">&gt;</button>
             </div>
 
             <div class="flex items-center space-x-2">

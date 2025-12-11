@@ -289,99 +289,36 @@ function toggleOutputSidebar() {
     }
 }
 
-// Example snippets (ordered by increasing complexity)
-// Each example can have multiple files
+// Example snippets - ordered for learning progression
+// Each example builds on concepts from previous ones
 const examples = {
     'hello': {
         name: '01. Hello World',
-        files: {
-            'Main.wh': `// The simplest Whitehall app - just render text!
+        code: `// The simplest Whitehall app - just render text!
 <Text>Hello, Whitehall!</Text>`
-        }
     },
-    'styling': {
-        name: '02. Text Styling',
-        code: `// Style text with fontSize, fontWeight, and color props
+    'variables': {
+        name: '02. Variables',
+        code: `// Variables hold data. Use {curly braces} to display them.
+var name = "World"
+var version = 1
+
+// Interpolation: embed variables in text with {expression}
 <Column padding={16} spacing={8}>
-  <Text fontSize={24} fontWeight="bold">
-    Large Bold Text
-  </Text>
-  <Text fontSize={16} color="#666">
-    Hex colors work (#RGB or #RRGGBB)
-  </Text>
-  <Text fontWeight="bold" color="#2196F3">
-    Combine multiple style props
-  </Text>
-</Column>`
-    },
-    'layout': {
-        name: '03. Layouts',
-        code: `// Column stacks items vertically, Row arranges horizontally
-// Use spacing for gaps, padding for inner spacing
-<Column padding={16} spacing={12}>
-  <Text fontSize={20} fontWeight="bold">Column Layout</Text>
-  <Text>Items stack vertically</Text>
-
-  <Row spacing={8}>
-    <Text>Row items →</Text>
-    <Text color="#F44336">go</Text>
-    <Text color="#4CAF50">horizontal</Text>
-  </Row>
-</Column>`
-    },
-    'padding': {
-        name: '04. Padding Shortcuts',
-        code: `// CSS-like padding shortcuts: p, px, py, pt, pb, pl, pr
-<Column spacing={8}>
-  <Text p={16} color="#2196F3">
-    All sides (p=16)
-  </Text>
-
-  <Text px={20} py={8} color="#4CAF50">
-    Horizontal & Vertical (px=20, py=8)
-  </Text>
-
-  <Card pt={4} pb={12} pl={8} pr={8}>
-    <Text>Individual: top=4 bottom=12 left=8 right=8</Text>
-  </Card>
-
-  <Text fontWeight="bold">
-    Multiple shortcuts combine into single padding()
-  </Text>
-</Column>`
-    },
-    'spacer': {
-        name: '05. Spacer Shortcuts',
-        code: `// Spacer with h (height) and w (width) shortcuts
-<Column>
-  <Text fontSize={20} fontWeight="bold">Spacer Examples</Text>
-
-  <Text>First item</Text>
-  <Spacer h={16} />
-  <Text>16dp vertical space above</Text>
-
-  <Spacer h={32} />
-  <Text>32dp vertical space above</Text>
-
-  <Spacer />
-  <Text>Default 8dp space above</Text>
-
-  <Row>
-    <Text>Left</Text>
-    <Spacer w={24} />
-    <Text>24dp horizontal space</Text>
-  </Row>
+  <Text>Hello, {name}!</Text>
+  <Text>Version: {version}</Text>
+  <Text>Name has {name.length} characters</Text>
 </Column>`
     },
     'button': {
-        name: '06. Buttons & State',
-        code: `// Reactive state: just declare 'var' and modify it!
+        name: '03. Buttons & State',
+        code: `// 'var' creates reactive state - changes automatically update the UI
 var count = 0
 
 <Column padding={16} spacing={12}>
-  <Text fontSize={28} fontWeight="bold">{count}</Text>
+  <Text fontSize={24}>{count}</Text>
 
-  // Button text auto-wraps in Text (no need for <Text> tags)
+  // onClick runs when the button is pressed
   <Button onClick={() => count++}>
     Increment
   </Button>
@@ -395,58 +332,14 @@ var count = 0
   </Button>
 </Column>`
     },
-    'binding': {
-        name: '07. Two-Way Binding',
-        code: `var name = ""
-
-// bind:value creates two-way binding - changes flow both ways!
-<Column padding={16} spacing={12}>
-  <TextField
-    bind:value={name}
-    label="Enter your name"
-  />
-
-  // Interpolate with {expression}
-  <Text fontSize={18}>
-    Hello, {name.isEmpty() ? "stranger" : name}!
-  </Text>
-</Column>`
-    },
-    'multistate': {
-        name: '08. Multiple State',
-        code: `// Manage multiple reactive variables independently
-var likes = 0
-var dislikes = 0
-
-<Column padding={16} spacing={12}>
-  <Text fontSize={20} fontWeight="bold">Feedback</Text>
-
-  // Nest layouts for complex UIs
-  <Row spacing={16}>
-    <Column spacing={4}>
-      <Button onClick={() => likes++}>
-        👍 Like
-      </Button>
-      <Text>{likes} likes</Text>
-    </Column>
-
-    <Column spacing={4}>
-      <Button onClick={() => dislikes++}>
-        👎 Dislike
-      </Button>
-      <Text>{dislikes} dislikes</Text>
-    </Column>
-  </Row>
-</Column>`
-    },
     'conditional': {
-        name: '09. Conditionals',
-        code: `var isLoggedIn = false
+        name: '04. Conditionals',
+        code: `// @if shows or hides content based on a condition
+var isLoggedIn = false
 
-// @if for conditional rendering (like Kotlin 'if' expressions)
 <Column padding={16} spacing={12}>
   @if (isLoggedIn) {
-    <Text fontSize={20}>Welcome back! 👋</Text>
+    <Text fontSize={20}>Welcome back!</Text>
     <Button onClick={() => isLoggedIn = false}>
       Logout
     </Button>
@@ -459,38 +352,130 @@ var dislikes = 0
 </Column>`
     },
     'list': {
-        name: '10. Lists & Loops',
-        code: `var items = ["Apple", "Banana", "Cherry", "Date"]
+        name: '05. Lists & Loops',
+        code: `// Arrays use [square brackets]
+var fruits = ["Apple", "Banana", "Cherry"]
 
-// @for loops over collections
+// @for loops over each item in a collection
 <Column padding={16} spacing={8}>
-  <Text fontSize={20} fontWeight="bold">Fruit List</Text>
+  <Text fontSize={20} fontWeight="bold">Fruits</Text>
 
-  @for (fruit in items) {
-    <Card padding={12} modifier={Modifier.fillMaxWidth()}>
-      <Text>{fruit}</Text>
-    </Card>
+  @for (fruit in fruits) {
+    <Text>• {fruit}</Text>
   }
+
+  <Text color="#888">{fruits.size} items</Text>
+</Column>`
+    },
+    'binding': {
+        name: '06. Text Input',
+        code: `// bind:value creates two-way binding
+// When user types, the variable updates. When variable changes, input updates.
+var name = ""
+
+<Column padding={16} spacing={12}>
+  <TextField
+    bind:value={name}
+    label="Enter your name"
+  />
+
+  <Text>Hello, {name.isEmpty() ? "stranger" : name}!</Text>
+</Column>`
+    },
+    'derived': {
+        name: '07. Derived State',
+        code: `// 'var' = mutable state (can change)
+// 'val' = derived/computed (auto-updates when dependencies change)
+var quantity = 1
+var price = 10
+
+// These recalculate automatically when quantity or price changes
+val subtotal = price * quantity
+val tax = subtotal * 0.1
+val total = subtotal + tax
+
+<Column padding={16} spacing={12}>
+  <Text fontSize={20} fontWeight="bold">Order</Text>
+
+  <Row spacing={8}>
+    <Button onClick={() => if (quantity > 1) quantity--}>-</Button>
+    <Text fontSize={18}>{quantity}</Text>
+    <Button onClick={() => quantity++}>+</Button>
+  </Row>
+
+  <Text>Subtotal: \${subtotal}</Text>
+  <Text>Tax (10%): \${tax}</Text>
+  <Text fontWeight="bold">Total: \${total}</Text>
+</Column>`
+    },
+    'layout': {
+        name: '08. Layouts',
+        code: `// Column stacks children vertically
+// Row arranges children horizontally
+// spacing = gap between items, padding = space inside container
+<Column padding={16} spacing={16}>
+  <Text fontSize={20} fontWeight="bold">Layouts</Text>
+
+  <Text>Column (vertical):</Text>
+  <Column spacing={4}>
+    <Text>First</Text>
+    <Text>Second</Text>
+    <Text>Third</Text>
+  </Column>
+
+  <Text>Row (horizontal):</Text>
+  <Row spacing={8}>
+    <Text>Left</Text>
+    <Text>•</Text>
+    <Text>Right</Text>
+  </Row>
+</Column>`
+    },
+    'styling': {
+        name: '09. Styling',
+        code: `// Style props: fontSize, fontWeight, color
+// Colors: hex (#FF5722) or theme names (primary, error)
+<Column padding={16} spacing={8}>
+  <Text fontSize={24} fontWeight="bold">
+    Large Bold
+  </Text>
+
+  <Text fontSize={14} color="#666666">
+    Small gray text
+  </Text>
+
+  <Text color="#2196F3">
+    Blue text (hex color)
+  </Text>
+
+  <Text color="primary">
+    Theme primary color
+  </Text>
+
+  <Text color="error">
+    Theme error color
+  </Text>
 </Column>`
     },
     'interactive-list': {
-        name: '11. Interactive List',
-        code: `var items = ["Apple", "Banana", "Cherry"]
+        name: '10. Interactive List',
+        code: `// Combine state, loops, and input for dynamic lists
+var items = ["Apple", "Banana"]
 var newItem = ""
 
 <Column padding={16} spacing={8}>
-  <Text fontSize={20} fontWeight="bold">Editable List</Text>
+  <Text fontSize={20} fontWeight="bold">Shopping List</Text>
 
   <Row spacing={8}>
     <TextField
       bind:value={newItem}
-      placeholder="Add item..."
-      modifier={Modifier.weight(1f)}  // Fill available space
+      label="Add item"
+      modifier={Modifier.weight(1f)}
     />
     <Button onClick={() => {
       if (newItem.isNotEmpty()) {
-        items = items + newItem  // Immutable list operations
-        newItem = ""             // Clear input
+        items = items + newItem
+        newItem = ""
       }
     }}>
       Add
@@ -498,62 +483,57 @@ var newItem = ""
   </Row>
 
   @for (item in items) {
-    <Card padding={12} modifier={Modifier.fillMaxWidth()}>
-      <Row spacing={8}>
-        <Text modifier={Modifier.weight(1f)}>{item}</Text>
-        // List subtraction removes items
-        <Button onClick={() => items = items - item}>
-          Delete
-        </Button>
-      </Row>
-    </Card>
+    <Row spacing={8}>
+      <Text modifier={Modifier.weight(1f)}>{item}</Text>
+      <Button onClick={() => items = items - item}>
+        Remove
+      </Button>
+    </Row>
   }
 </Column>`
     },
-    'derived': {
-        name: '12. Derived State',
-        code: `// Use 'var' for mutable state, 'val' for derived/computed values
-var price = 10
-var quantity = 1
+    'form': {
+        name: '11. Form Validation',
+        code: `// Combine derived state with conditionals for validation
+var email = ""
+var password = ""
 
-// Derived values auto-update when dependencies change
-val total = price * quantity
-val discount = if (quantity >= 5) 0.2 else 0.0
-val finalPrice = total * (1 - discount)
+// Validation rules as derived state
+val isValidEmail = email.contains("@")
+val isValidPassword = password.length >= 8
+val canSubmit = isValidEmail && isValidPassword
 
 <Column padding={16} spacing={12}>
-  <Text fontSize={20} fontWeight="bold">Price Calculator</Text>
+  <Text fontSize={20} fontWeight="bold">Login</Text>
 
-  <Text>Price: \${price}</Text>
-  <Text>Quantity: {quantity}</Text>
+  <TextField bind:value={email} label="Email" />
+  @if (email.isNotEmpty() && !isValidEmail) {
+    <Text color="error">Must contain @</Text>
+  }
 
-  <Row spacing={8}>
-    <Button onClick={() => quantity++}>+</Button>
-    <Button onClick={() => if (quantity > 1) quantity--}>-</Button>
-  </Row>
+  <TextField bind:value={password} label="Password" type="password" />
+  @if (password.isNotEmpty() && !isValidPassword) {
+    <Text color="error">Must be 8+ characters</Text>
+  }
 
-  <Text>Subtotal: \${total}</Text>
-  <Text color="#4CAF50">
-    Discount: {discount * 100}%
-  </Text>
-  <Text fontSize={18} fontWeight="bold">
-    Total: \${finalPrice}
-  </Text>
+  <Button enabled={canSubmit} onClick={() => {}}>
+    {canSubmit ? "Login" : "Fill in all fields"}
+  </Button>
 </Column>`
     },
     'todo': {
-        name: '13. Todo App',
-        code: `var todos = ["Buy milk", "Write code"]
+        name: '12. Todo App',
+        code: `// Capstone: combines everything you've learned!
+var todos = ["Learn Whitehall", "Build an app"]
 var newTodo = ""
 
-// Complete todo app in ~30 lines!
 <Column padding={16} spacing={12}>
   <Text fontSize={24} fontWeight="bold">My Todos</Text>
 
   <Row spacing={8}>
     <TextField
       bind:value={newTodo}
-      placeholder="Add a new todo..."
+      label="New todo"
       modifier={Modifier.weight(1f)}
     />
     <Button onClick={() => {
@@ -571,247 +551,14 @@ var newTodo = ""
       <Row spacing={8}>
         <Text modifier={Modifier.weight(1f)}>{todo}</Text>
         <Button onClick={() => todos = todos - todo}>
-          ✓
+          Done
         </Button>
       </Row>
     </Card>
   }
 
-  // Dynamic text based on list size
-  <Text color="#888">
-    {todos.size} items remaining
-  </Text>
+  <Text color="#888">{todos.size} remaining</Text>
 </Column>`
-    },
-    'form': {
-        name: '14. Form Validation',
-        code: `var name = ""
-var email = ""
-var age = ""
-var agreed = false
-
-// Derive validation state from inputs
-val isValidEmail = email.contains("@") && email.contains(".")
-val isValidAge = age.toIntOrNull() != null && age.toInt() >= 18
-val canSubmit = name.isNotEmpty() && isValidEmail && isValidAge && agreed
-
-<Column padding={16} spacing={12}>
-  <Text fontSize={20} fontWeight="bold">Sign Up Form</Text>
-
-  <TextField bind:value={name} label="Name" />
-
-  <TextField bind:value={email} label="Email" />
-  // Show validation errors conditionally
-  @if (email.isNotEmpty() && !isValidEmail) {
-    <Text color="error">Invalid email</Text>
-  }
-
-  <TextField bind:value={age} label="Age" />
-  @if (age.isNotEmpty() && !isValidAge) {
-    <Text color="error">Must be 18+</Text>
-  }
-
-  <Row spacing={8}>
-    <Checkbox bind:checked={agreed} />
-    <Text>I agree to terms</Text>
-  </Row>
-
-  // Button enabled state based on validation
-  <Button enabled={canSubmit} onClick={() => {}}>
-    {canSubmit ? "Submit" : "Complete all fields"}
-  </Button>
-</Column>`
-    },
-    'counter-list': {
-        name: '15. List Mutations',
-        code: `var counters = [0, 0, 0]
-
-// Working with list indices for complex updates
-<Column padding={16} spacing={12}>
-  <Text fontSize={20} fontWeight="bold">Multiple Counters</Text>
-
-  <Button onClick={() => counters = counters + 0}>
-    Add Counter
-  </Button>
-
-  @for (i in counters.indices) {
-    <Card padding={12} modifier={Modifier.fillMaxWidth()}>
-      <Row spacing={12}>
-        <Text fontSize={18} modifier={Modifier.weight(1f)}>
-          Counter {i + 1}: {counters[i]}
-        </Text>
-        // Update specific index immutably
-        <Button onClick={() => {
-          val updated = counters.toMutableList()
-          updated[i] = updated[i] + 1
-          counters = updated
-        }}>
-          +
-        </Button>
-        // Filter by index to remove
-        <Button onClick={() => {
-          counters = counters.filterIndexed { idx, _ -> idx != i }
-        }}>
-          Remove
-        </Button>
-      </Row>
-    </Card>
-  }
-</Column>`
-    },
-    'shopping': {
-        name: '16. Shopping Cart',
-        code: `// Shopping cart with price calculation
-// Using Kotlin maps for item data
-var items = [
-  mapOf("name" to "Laptop", "price" to 999, "qty" to 1),
-  mapOf("name" to "Mouse", "price" to 25, "qty" to 2)
-]
-
-// Kotlin stdlib functions work in Whitehall
-val total = items.sumOf { (it["price"] as Int) * (it["qty"] as Int) }
-
-<Column padding={16} spacing={12}>
-  <Text fontSize={24} fontWeight="bold">Shopping Cart</Text>
-
-  @for (item in items) {
-    <Card padding={12} modifier={Modifier.fillMaxWidth()}>
-      <Column spacing={4}>
-        <Text fontSize={16} fontWeight="bold">
-          {item["name"]}
-        </Text>
-        <Row spacing={8}>
-          <Text>\${item["price"]} x {item["qty"]}</Text>
-          <Text fontWeight="bold">
-            = \${(item["price"] as Int) * (item["qty"] as Int)}
-          </Text>
-        </Row>
-      </Column>
-    </Card>
-  }
-
-  <Card padding={16} modifier={Modifier.fillMaxWidth()}>
-    <Row spacing={8}>
-      <Text fontSize={20} fontWeight="bold" modifier={Modifier.weight(1f)}>
-        Total:
-      </Text>
-      <Text fontSize={20} fontWeight="bold" color="#4CAF50">
-        \${total}
-      </Text>
-    </Row>
-  </Card>
-</Column>`
-    },
-    'navigation': {
-        name: '17. Navigation (Concept)',
-        files: {
-            'App.wh': `// CONCEPTUAL EXAMPLE - Shows navigation patterns
-// Real navigation uses Jetpack Navigation Compose (coming soon)
-
-// Back stack for navigation
-var backStack = ["home"]
-var userId = ""
-
-// Current route from back stack
-val currentRoute = backStack[backStack.size - 1]
-
-// Simple navigation with back stack
-<Column padding={16} spacing={16}>
-  <Text fontSize={20} fontWeight="bold">Navigation Demo</Text>
-  <Text color="#666">Route: /{currentRoute}</Text>
-  <Text color="#666">Stack: {backStack.joinToString(" → ")}</Text>
-
-  // Render current route's screen
-  @if (currentRoute == "home") {
-    <Column spacing={8}>
-      <Text fontSize={18}>Home Screen</Text>
-      <Button onClick={() => backStack = backStack + "profile"}>
-        Go to Profile →
-      </Button>
-      <Button onClick={() => backStack = backStack + "settings"}>
-        Go to Settings →
-      </Button>
-    </Column>
-  } else if (currentRoute == "profile") {
-    <Column spacing={8}>
-      <Text fontSize={18}>Profile Screen</Text>
-      <Button onClick={() => backStack = backStack.dropLast(1)}>
-        ← Back
-      </Button>
-      <Text>User: John Doe</Text>
-      <Button onClick={() => {
-        userId = "123"
-        backStack = backStack + "detail"
-      }}>
-        View Details →
-      </Button>
-    </Column>
-  } else if (currentRoute == "detail") {
-    <Column spacing={8}>
-      <Text fontSize={18}>Detail Screen</Text>
-      <Button onClick={() => backStack = backStack.dropLast(1)}>
-        ← Back
-      </Button>
-      <Text>User ID: {userId}</Text>
-    </Column>
-  } else {
-    <Column spacing={8}>
-      <Text fontSize={18}>Settings Screen</Text>
-      <Button onClick={() => backStack = backStack.dropLast(1)}>
-        ← Back
-      </Button>
-      <Text>Version: 1.0.0</Text>
-    </Column>
-  }
-</Column>`,
-        }
-    },
-    'multifile': {
-        name: '18. Multi-File Project',
-        files: {
-            'Main.wh': `// Multi-file projects organize code across files
-// Each .wh file compiles to a separate Kotlin file
-
-var count = 0
-var name = ""
-
-<Column padding={16} spacing={12}>
-  <Text fontSize={24} fontWeight="bold">Multi-File Demo</Text>
-  <Text color="#666">This is Main.wh</Text>
-
-  <Text>Count: {count}</Text>
-  <Button onClick={() => count++}>
-    Increment
-  </Button>
-
-  <TextField bind:value={name} label="Your name" />
-  <Text>Hello, {name}!</Text>
-
-  <Text color="#888" fontSize={12}>
-    Check the "Output" tab to see all generated files!
-  </Text>
-</Column>`,
-            'Header.wh': `// Header.wh - Reusable header component
-// This compiles to Header.kt
-
-@prop val title: String
-
-<Column padding={16}>
-  <Text fontSize={28} fontWeight="bold">{title}</Text>
-  <Text color="#666">Subtitle goes here</Text>
-</Column>`,
-            'Footer.wh': `// Footer.wh - Reusable footer component
-// This compiles to Footer.kt
-
-<Column padding={16}>
-  <Text color="#888" fontSize={12}>
-    Made with Whitehall
-  </Text>
-  <Text color="#888" fontSize={12}>
-    Version 1.0.0
-  </Text>
-</Column>`
-        }
     }
 };
 
@@ -882,10 +629,10 @@ function getInitialCode() {
             console.error('Invalid URL hash');
         }
     }
-    // Default example
-    files = { 'Main.wh': examples.button.code };
+    // Default example - start with Hello World
+    files = { 'Main.wh': examples.hello.code };
     activeFile = 'Main.wh';
-    return examples.button.code;
+    return examples.hello.code;
 }
 
 // Compile Whitehall code (multi-file support)
@@ -1227,6 +974,9 @@ function loadExample(key) {
 
         // Keep the dropdown showing the selected example
         document.getElementById('examples').value = key;
+
+        // Update nav button states
+        updateNavButtons();
     }
 }
 
@@ -1278,8 +1028,79 @@ document.addEventListener('DOMContentLoaded', () => {
     if (toggleFileSidebarBtn) toggleFileSidebarBtn.addEventListener('click', toggleFileSidebar);
     if (toggleOutputSidebarBtn) toggleOutputSidebarBtn.addEventListener('click', toggleOutputSidebar);
 
-    // Examples dropdown
+    // Examples dropdown and navigation
     document.getElementById('examples').addEventListener('change', (e) => loadExample(e.target.value));
+    document.getElementById('prev-example-btn').addEventListener('click', prevExample);
+    document.getElementById('next-example-btn').addEventListener('click', nextExample);
+
+    // Logo click - go home
+    document.getElementById('logo').addEventListener('click', goHome);
+
+    // Set initial dropdown to hello and update nav buttons
+    document.getElementById('examples').value = 'hello';
+    updateNavButtons();
 
     console.log('All event listeners attached');
 });
+
+// Get ordered list of example keys
+function getExampleKeys() {
+    return Object.keys(examples);
+}
+
+// Update prev/next button states based on current position
+function updateNavButtons() {
+    const keys = getExampleKeys();
+    const dropdown = document.getElementById('examples');
+    const currentIndex = keys.indexOf(dropdown.value);
+    const prevBtn = document.getElementById('prev-example-btn');
+    const nextBtn = document.getElementById('next-example-btn');
+
+    // Disable prev if at first example
+    if (currentIndex <= 0) {
+        prevBtn.disabled = true;
+        prevBtn.classList.add('opacity-50', 'cursor-not-allowed');
+        prevBtn.classList.remove('hover:bg-gray-600');
+    } else {
+        prevBtn.disabled = false;
+        prevBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+        prevBtn.classList.add('hover:bg-gray-600');
+    }
+
+    // Disable next if at last example
+    if (currentIndex >= keys.length - 1) {
+        nextBtn.disabled = true;
+        nextBtn.classList.add('opacity-50', 'cursor-not-allowed');
+        nextBtn.classList.remove('hover:bg-gray-600');
+    } else {
+        nextBtn.disabled = false;
+        nextBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+        nextBtn.classList.add('hover:bg-gray-600');
+    }
+}
+
+// Navigate to previous example
+function prevExample() {
+    const keys = getExampleKeys();
+    const dropdown = document.getElementById('examples');
+    const currentIndex = keys.indexOf(dropdown.value);
+    if (currentIndex > 0) {
+        loadExample(keys[currentIndex - 1]);
+    }
+}
+
+// Navigate to next example
+function nextExample() {
+    const keys = getExampleKeys();
+    const dropdown = document.getElementById('examples');
+    const currentIndex = keys.indexOf(dropdown.value);
+    if (currentIndex < keys.length - 1) {
+        loadExample(keys[currentIndex + 1]);
+    }
+}
+
+// Go to first example (home)
+function goHome() {
+    const keys = getExampleKeys();
+    loadExample(keys[0]);
+}
