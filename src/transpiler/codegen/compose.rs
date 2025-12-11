@@ -1260,10 +1260,20 @@ impl ComposeBackend {
                     // Collect size-related props for modifier
                     let width_prop = comp.props.iter().find(|p| p.name == "width");
                     let height_prop = comp.props.iter().find(|p| p.name == "height");
+                    let fill_max_width = comp.props.iter().find(|p| p.name == "fillMaxWidth");
 
-                    // Build modifier if we have size props
-                    if width_prop.is_some() || height_prop.is_some() {
+                    // Build modifier if we have size/layout props
+                    if width_prop.is_some() || height_prop.is_some() || fill_max_width.is_some() {
                         let mut modifiers = Vec::new();
+
+                        // fillMaxWidth first
+                        if let Some(fw) = fill_max_width {
+                            let value = self.get_prop_expr(&fw.value);
+                            if value.trim() == "true" {
+                                modifiers.push(".fillMaxWidth()".to_string());
+                            }
+                        }
+
                         if let Some(w) = width_prop {
                             let value = self.get_prop_expr(&w.value);
                             modifiers.push(format!(".width({}.dp)", value));
@@ -1276,8 +1286,8 @@ impl ComposeBackend {
                     }
 
                     for prop in &comp.props {
-                        // Skip width/height - handled as modifier above
-                        if prop.name == "width" || prop.name == "height" {
+                        // Skip width/height/fillMaxWidth - handled as modifier above
+                        if prop.name == "width" || prop.name == "height" || prop.name == "fillMaxWidth" {
                             continue;
                         }
 
@@ -2480,6 +2490,11 @@ impl ComposeBackend {
                         let has_content_scale = comp.props.iter().any(|p| p.name == "contentScale" || p.name == "fit");
                         if has_content_scale {
                             self.add_import_if_missing(prop_imports, "androidx.compose.ui.layout.ContentScale");
+                        }
+                        // Check if fillMaxWidth is used
+                        let has_fill_max_width = comp.props.iter().any(|p| p.name == "fillMaxWidth");
+                        if has_fill_max_width {
+                            self.add_import_if_missing(prop_imports, "androidx.compose.foundation.layout.fillMaxWidth");
                         }
                     }
                     "Spacer" => {
