@@ -905,7 +905,10 @@ impl Parser {
                     self.advance_char();
                 }
             }
-            Ok(self.input[start..self.pos].trim().to_string())
+            let value = self.input[start..self.pos].trim();
+            // Strip trailing semicolon if present (Kotlin doesn't need them)
+            let value = value.strip_suffix(';').unwrap_or(value);
+            Ok(value.to_string())
         }
     }
 
