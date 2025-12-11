@@ -2,6 +2,7 @@ pub mod init;
 pub mod build;
 pub mod watch;
 pub mod run;
+pub mod install;
 pub mod compile;
 pub mod toolchain;
 pub mod doctor;

@@ -45,6 +45,13 @@ enum Commands {
         #[arg(default_value = ".")]
         target: String,
     },
+    /// Build and install the app on a connected device (without launching)
+    /// Works with both project directories (whitehall.toml) and single .wh files
+    Install {
+        /// Path to project directory or .wh file (defaults to current directory)
+        #[arg(default_value = ".")]
+        target: String,
+    },
     /// Build, install, and run the app on a connected device
     /// Works with both project directories (whitehall.toml) and single .wh files
     Run {
@@ -134,6 +141,9 @@ fn main() {
         }
         Commands::Watch { target } => {
             commands::watch::execute(&target)
+        }
+        Commands::Install { target } => {
+            commands::install::execute(&target)
         }
         Commands::Run { target } => {
             commands::run::execute(&target)
