@@ -2521,7 +2521,19 @@ impl ComposeBackend {
                             }
                         }
                     }
-                    "AsyncImage" | "Image" => {
+                    "AsyncImage" => {
+                        let import = "coil.compose.AsyncImage".to_string();
+                        if !component_imports.contains(&import) {
+                            component_imports.push(import);
+                        }
+                        // Check if contentScale is used - need ContentScale import
+                        let has_content_scale = comp.props.iter().any(|p| p.name == "contentScale");
+                        if has_content_scale {
+                            self.add_import_if_missing(prop_imports, "androidx.compose.ui.layout.ContentScale");
+                        }
+                    }
+                    "Image" => {
+                        // Image is our web-friendly alias for AsyncImage
                         let import = "coil.compose.AsyncImage".to_string();
                         if !component_imports.contains(&import) {
                             component_imports.push(import);
