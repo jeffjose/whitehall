@@ -1261,33 +1261,68 @@ impl ComposeBackend {
                     let width_prop = comp.props.iter().find(|p| p.name == "width");
                     let height_prop = comp.props.iter().find(|p| p.name == "height");
                     let fill_max_width = comp.props.iter().find(|p| p.name == "fillMaxWidth");
+                    let fill_max_height = comp.props.iter().find(|p| p.name == "fillMaxHeight");
+                    let fill_max_size = comp.props.iter().find(|p| p.name == "fillMaxSize");
 
                     // Build modifier if we have size/layout props
-                    if width_prop.is_some() || height_prop.is_some() || fill_max_width.is_some() {
+                    if width_prop.is_some() || height_prop.is_some() || fill_max_width.is_some() || fill_max_height.is_some() || fill_max_size.is_some() {
                         let mut modifiers = Vec::new();
 
-                        // fillMaxWidth first
-                        if let Some(fw) = fill_max_width {
-                            let value = self.get_prop_expr(&fw.value);
+                        // fillMaxSize first (takes precedence)
+                        if let Some(fs) = fill_max_size {
+                            let value = self.get_prop_expr(&fs.value);
                             if value.trim() == "true" {
-                                modifiers.push(".fillMaxWidth()".to_string());
+                                modifiers.push(".fillMaxSize()".to_string());
+                            }
+                        } else {
+                            // fillMaxWidth
+                            if let Some(fw) = fill_max_width {
+                                let value = self.get_prop_expr(&fw.value);
+                                if value.trim() == "true" {
+                                    modifiers.push(".fillMaxWidth()".to_string());
+                                }
+                            }
+                            // fillMaxHeight
+                            if let Some(fh) = fill_max_height {
+                                let value = self.get_prop_expr(&fh.value);
+                                if value.trim() == "true" {
+                                    modifiers.push(".fillMaxHeight()".to_string());
+                                }
                             }
                         }
 
+                        // Handle width - check for "100%" web-style
                         if let Some(w) = width_prop {
                             let value = self.get_prop_expr(&w.value);
-                            modifiers.push(format!(".width({}.dp)", value));
+                            let trimmed = value.trim().trim_matches('"');
+                            if trimmed == "100%" {
+                                // Only add if not already added via fillMaxWidth/fillMaxSize
+                                if !modifiers.iter().any(|m| m.contains("fillMaxWidth") || m.contains("fillMaxSize")) {
+                                    modifiers.push(".fillMaxWidth()".to_string());
+                                }
+                            } else {
+                                modifiers.push(format!(".width({}.dp)", trimmed));
+                            }
                         }
+                        // Handle height - check for "100%" web-style
                         if let Some(h) = height_prop {
                             let value = self.get_prop_expr(&h.value);
-                            modifiers.push(format!(".height({}.dp)", value));
+                            let trimmed = value.trim().trim_matches('"');
+                            if trimmed == "100%" {
+                                // Only add if not already added via fillMaxHeight/fillMaxSize
+                                if !modifiers.iter().any(|m| m.contains("fillMaxHeight") || m.contains("fillMaxSize")) {
+                                    modifiers.push(".fillMaxHeight()".to_string());
+                                }
+                            } else {
+                                modifiers.push(format!(".height({}.dp)", trimmed));
+                            }
                         }
                         params.push(format!("modifier = Modifier{}", modifiers.join("")));
                     }
 
                     for prop in &comp.props {
-                        // Skip width/height/fillMaxWidth - handled as modifier above
-                        if prop.name == "width" || prop.name == "height" || prop.name == "fillMaxWidth" {
+                        // Skip size/layout props - handled as modifier above
+                        if prop.name == "width" || prop.name == "height" || prop.name == "fillMaxWidth" || prop.name == "fillMaxHeight" || prop.name == "fillMaxSize" {
                             continue;
                         }
 
@@ -2491,10 +2526,42 @@ impl ComposeBackend {
                         if has_content_scale {
                             self.add_import_if_missing(prop_imports, "androidx.compose.ui.layout.ContentScale");
                         }
-                        // Check if fillMaxWidth is used
-                        let has_fill_max_width = comp.props.iter().any(|p| p.name == "fillMaxWidth");
-                        if has_fill_max_width {
-                            self.add_import_if_missing(prop_imports, "androidx.compose.foundation.layout.fillMaxWidth");
+                        // Check if any size/layout props are used - need Modifier and dp imports
+                        let has_size_props = comp.props.iter().any(|p|
+                            matches!(p.name.as_str(), "width" | "height" | "fillMaxWidth" | "fillMaxHeight" | "fillMaxSize")
+                        );
+                        if has_size_props {
+                            self.add_import_if_missing(prop_imports, "androidx.compose.ui.Modifier");
+                            self.add_import_if_missing(prop_imports, "androidx.compose.ui.unit.dp");
+                        }
+                        // Check size/layout props for specific imports
+                        for prop in &comp.props {
+                            let value = self.get_prop_expr(&prop.value);
+                            let is_100_percent = value.trim().trim_matches('"') == "100%";
+
+                            match prop.name.as_str() {
+                                "fillMaxWidth" => {
+                                    self.add_import_if_missing(prop_imports, "androidx.compose.foundation.layout.fillMaxWidth");
+                                }
+                                "fillMaxHeight" => {
+                                    self.add_import_if_missing(prop_imports, "androidx.compose.foundation.layout.fillMaxHeight");
+                                }
+                                "fillMaxSize" => {
+                                    self.add_import_if_missing(prop_imports, "androidx.compose.foundation.layout.fillMaxSize");
+                                }
+                                "width" if is_100_percent => {
+                                    self.add_import_if_missing(prop_imports, "androidx.compose.foundation.layout.fillMaxWidth");
+                                }
+                                "height" if is_100_percent => {
+                                    self.add_import_if_missing(prop_imports, "androidx.compose.foundation.layout.fillMaxHeight");
+                                }
+                                "width" | "height" => {
+                                    // Fixed pixel values need width/height imports
+                                    self.add_import_if_missing(prop_imports, "androidx.compose.foundation.layout.width");
+                                    self.add_import_if_missing(prop_imports, "androidx.compose.foundation.layout.height");
+                                }
+                                _ => {}
+                            }
                         }
                     }
                     "Spacer" => {
