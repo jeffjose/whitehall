@@ -1255,6 +1255,87 @@ impl ComposeBackend {
                         }
                     }
                 }
+                // Special handling for Image component (alias for AsyncImage with web-friendly props)
+                else if comp.name == "Image" {
+                    // Collect size-related props for modifier
+                    let width_prop = comp.props.iter().find(|p| p.name == "width");
+                    let height_prop = comp.props.iter().find(|p| p.name == "height");
+
+                    // Build modifier if we have size props
+                    if width_prop.is_some() || height_prop.is_some() {
+                        let mut modifiers = Vec::new();
+                        if let Some(w) = width_prop {
+                            let value = self.get_prop_expr(&w.value);
+                            modifiers.push(format!(".width({}.dp)", value));
+                        }
+                        if let Some(h) = height_prop {
+                            let value = self.get_prop_expr(&h.value);
+                            modifiers.push(format!(".height({}.dp)", value));
+                        }
+                        params.push(format!("modifier = Modifier{}", modifiers.join("")));
+                    }
+
+                    for prop in &comp.props {
+                        // Skip width/height - handled as modifier above
+                        if prop.name == "width" || prop.name == "height" {
+                            continue;
+                        }
+
+                        let prop_expr = self.get_prop_expr(&prop.value);
+
+                        match prop.name.as_str() {
+                            // Web-style aliases
+                            "src" => params.push(format!("model = {}", prop_expr)),
+                            "alt" => params.push(format!("contentDescription = {}", prop_expr)),
+                            "fit" => {
+                                // Map web-style fit values to ContentScale
+                                let content_scale = match prop_expr.trim().trim_matches('"') {
+                                    "cover" => "ContentScale.Crop",
+                                    "contain" => "ContentScale.Fit",
+                                    "fill" => "ContentScale.FillBounds",
+                                    "none" => "ContentScale.None",
+                                    "scale-down" => "ContentScale.Inside",
+                                    // Pass through Compose-style values
+                                    other => {
+                                        if other.starts_with("ContentScale.") {
+                                            other
+                                        } else {
+                                            // Capitalize first letter for Compose enum
+                                            &format!("ContentScale.{}", other.chars().next().unwrap().to_uppercase().collect::<String>() + &other[1..])
+                                        }
+                                    }
+                                };
+                                params.push(format!("contentScale = {}", content_scale));
+                            }
+                            // Compose-style props (pass through)
+                            "model" => params.push(format!("model = {}", prop_expr)),
+                            "contentDescription" => params.push(format!("contentDescription = {}", prop_expr)),
+                            "contentScale" => {
+                                // Handle both string values and ContentScale.X
+                                let content_scale = match prop_expr.trim().trim_matches('"') {
+                                    "Crop" | "crop" => "ContentScale.Crop",
+                                    "Fit" | "fit" => "ContentScale.Fit",
+                                    "FillBounds" | "fillBounds" => "ContentScale.FillBounds",
+                                    "None" | "none" => "ContentScale.None",
+                                    "Inside" | "inside" => "ContentScale.Inside",
+                                    other if other.starts_with("ContentScale.") => other,
+                                    other => &format!("ContentScale.{}", other),
+                                };
+                                params.push(format!("contentScale = {}", content_scale));
+                            }
+                            // Other props pass through
+                            _ => {
+                                let transformed = self.transform_prop("AsyncImage", &prop.name, prop_expr);
+                                params.extend(transformed?);
+                            }
+                        }
+                    }
+
+                    // Change component name to AsyncImage for output
+                    output.clear();
+                    output.push_str(&indent_str);
+                    output.push_str("AsyncImage");
+                }
                 // Special handling for Text, Card, and Button with modifier props
                 else if comp.name == "Text" || comp.name == "Card" || comp.name == "Button" {
                     // Collect modifier-related props (including shortcuts)
@@ -2390,10 +2471,15 @@ impl ComposeBackend {
                             }
                         }
                     }
-                    "AsyncImage" => {
+                    "AsyncImage" | "Image" => {
                         let import = "coil.compose.AsyncImage".to_string();
                         if !component_imports.contains(&import) {
                             component_imports.push(import);
+                        }
+                        // Check if contentScale/fit is used - need ContentScale import
+                        let has_content_scale = comp.props.iter().any(|p| p.name == "contentScale" || p.name == "fit");
+                        if has_content_scale {
+                            self.add_import_if_missing(prop_imports, "androidx.compose.ui.layout.ContentScale");
                         }
                     }
                     "Spacer" => {

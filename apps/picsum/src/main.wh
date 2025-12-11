@@ -1,16 +1,5 @@
-var message = "Hello, Whitehall!"
-
-fun handleClick() {
-  message = "Button clicked!"
-}
+var imageUrl = "https://picsum.photos/300/200"
 
 <Column padding={16} spacing={8}>
-  <Text fontSize={24} fontWeight="bold">
-    {message}
-  </Text>
-
-  <Button
-    text="Click Me"
-    onClick={handleClick}
-  />
+  <Image src={imageUrl} alt="Random photo" fit="cover" />
 </Column>
