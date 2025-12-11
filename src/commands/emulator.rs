@@ -116,19 +116,30 @@ pub fn execute_list(manifest_path: &str) -> Result<()> {
         println!("Create one with:");
         println!("  whitehall emulator create");
     } else {
-        println!("{}", "Available emulators:".green().bold());
+        // Calculate column widths
+        let max_name_len = avds.iter().map(|a| a.name.len()).max().unwrap_or(0);
+
+        // Print header
+        println!(
+            "{:<8}  {:<width$}  {}",
+            "ID".dimmed(),
+            "NAME".dimmed(),
+            "PATH".dimmed(),
+            width = max_name_len
+        );
+
         for avd in &avds {
             let path_str = avd.path.as_ref()
                 .map(|p| p.display().to_string())
                 .unwrap_or_else(|| "?".to_string());
-            println!("  {}  {}  {}",
+            println!(
+                "{}  {:<width$}  {}",
                 avd.short_id.yellow(),
                 avd.name,
-                path_str.dimmed()
+                path_str.dimmed(),
+                width = max_name_len
             );
         }
-        println!();
-        println!("Start with: {} (partial ID or name)", "whitehall emulator start <id>".dimmed());
     }
 
     Ok(())
