@@ -3085,18 +3085,26 @@ impl ComposeBackend {
                 // Return empty vec - text will be handled as child in generate_markup
                 Ok(vec![])
             }
-            // Button onClick needs braces
+            // Button onClick needs braces.
+            // Note: We don't wrap with remember because:
+            // 1. Local functions capture stable MutableState objects, not values
+            // 2. Compose compiler handles lambda stability for @Composable inline functions
+            // 3. The "flash" issue (if any) is not caused by lambda recreation
             ("Button", "onClick") | ("IconButton", "onClick") => {
                 // Note: transform_lambda_arrow has already run at this point
                 // So () => expr has been converted to { expr }
                 // We need to detect if expr is already a complete function call
 
+                let format_onclick = |expr: &str| {
+                    format!("onClick = {{ {} }}", expr)
+                };
+
                 if !value.starts_with('{') {
                     // Bare function name: increment
-                    // Add (), transform, wrap
+                    // Add (), transform
                     let with_parens = format!("{}()", value);
                     let transformed = self.transform_viewmodel_expression(&with_parens);
-                    Ok(vec![format!("onClick = {{ {} }}", transformed)])
+                    Ok(vec![format_onclick(&transformed)])
                 } else {
                     // Has braces - strip them and check inner content
                     let inner = value.trim_start_matches('{').trim_end_matches('}').trim();
@@ -3113,22 +3121,22 @@ impl ComposeBackend {
                         // Multi-line or statement block: preserve as-is
                         // Just transform viewmodel references
                         let transformed = self.transform_viewmodel_expression(inner);
-                        Ok(vec![format!("onClick = {{ {} }}", transformed)])
+                        Ok(vec![format_onclick(&transformed)])
                     } else {
                         // Single-line expression - check if it's complete
                         let is_complete_expr = inner.contains('(') || inner.ends_with(')');
 
                         if is_complete_expr {
                             // Already complete: { clearItems() } or { navigate(Routes.Home) }
-                            // Just transform and re-wrap
+                            // Just transform
                             let transformed = self.transform_viewmodel_expression(inner);
-                            Ok(vec![format!("onClick = {{ {} }}", transformed)])
+                            Ok(vec![format_onclick(&transformed)])
                         } else {
                             // Bare function with braces: {increment}
-                            // Add (), transform, re-wrap
+                            // Add (), transform
                             let with_parens = format!("{}()", inner);
                             let transformed = self.transform_viewmodel_expression(&with_parens);
-                            Ok(vec![format!("onClick = {{ {} }}", transformed)])
+                            Ok(vec![format_onclick(&transformed)])
                         }
                     }
                 }
@@ -3681,14 +3689,12 @@ impl ComposeBackend {
                 continue;
             }
 
-            // onClick with just a function name is stable (e.g., onClick={refresh})
-            // but onClick with state reference is not (e.g., onClick={() => count = count + 1})
+            // onClick handlers make components unstable for recomposition
+            // because lambdas are recreated on each recomposition.
+            // Components with onClick should NOT be wrapped in key(Unit)
+            // because key(Unit) doesn't prevent recomposition for unstable params.
             if prop.name == "onClick" {
-                // Simple function reference: just an identifier, no state refs
-                let is_simple_fn_ref = expr.chars().all(|c| c.is_alphanumeric() || c == '_');
-                if is_simple_fn_ref && !self.expr_references_mutable_var(&expr) {
-                    continue;
-                }
+                return false;
             }
 
             // Check if expression references any mutable state

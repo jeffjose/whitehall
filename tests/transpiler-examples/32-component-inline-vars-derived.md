@@ -125,10 +125,8 @@ fun PersonForm() {
                 onValueChange = { lastName = it }
             )
         }
-        key(Unit) {
-            Button(onClick = { celebrateBirthday() }) {
-                Text("Birthday!")
-            }
+        Button(onClick = { celebrateBirthday() }) {
+            Text("Birthday!")
         }
     }
 }

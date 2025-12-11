@@ -68,10 +68,8 @@ fun LoginForm() {
             onValueChange = { password = it },
             visualTransformation = PasswordVisualTransformation()
         )
-        key(Unit) {
-            Button(onClick = { handleLogin() }) {
-                Text("Login")
-            }
+        Button(onClick = { handleLogin() }) {
+            Text("Login")
         }
     }
 }
