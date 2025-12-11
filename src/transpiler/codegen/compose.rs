@@ -2459,6 +2459,11 @@ impl ComposeBackend {
                         if !component_imports.contains(&import) {
                             component_imports.push(import);
                         }
+                        // Button with text prop generates Text() inside, so need Text import
+                        let has_text_prop = comp.props.iter().any(|p| p.name == "text");
+                        if has_text_prop {
+                            self.add_import_if_missing(component_imports, "androidx.compose.material3.Text");
+                        }
                     }
                     "Switch" => {
                         let import = "androidx.compose.material3.Switch".to_string();
