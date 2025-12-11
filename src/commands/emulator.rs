@@ -298,3 +298,40 @@ pub fn execute_create(manifest_path: &str, name: Option<&str>) -> Result<()> {
 
     Ok(())
 }
+
+/// Delete an AVD
+pub fn execute_delete(manifest_path: &str, query: &str) -> Result<()> {
+    let config = config::load_config(manifest_path)?;
+    let toolchain = Toolchain::new()?;
+
+    let android_home = toolchain.root().join("android");
+    let avdmanager = android_home.join("cmdline-tools/latest/bin/avdmanager");
+
+    if !avdmanager.exists() {
+        anyhow::bail!("avdmanager not found. Run 'whitehall toolchain install' first.");
+    }
+
+    // Find the AVD
+    let avds = get_avds(&toolchain, &config)?;
+    let avd = find_avd(&avds, query)?;
+
+    // Set JAVA_HOME for avdmanager
+    let java_home = toolchain.ensure_java(&config.toolchain.java)?;
+
+    let output = std::process::Command::new(&avdmanager)
+        .env("ANDROID_HOME", &android_home)
+        .env("ANDROID_SDK_ROOT", &android_home)
+        .env("JAVA_HOME", &java_home)
+        .args(["delete", "avd", "--name", &avd.name])
+        .output()
+        .context("Failed to delete AVD")?;
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        anyhow::bail!("Failed to delete emulator '{}': {}", avd.name, stderr.trim());
+    }
+
+    println!("  {} {}", "Deleted".green().bold(), avd.name);
+
+    Ok(())
+}

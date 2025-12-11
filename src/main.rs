@@ -137,6 +137,7 @@ enum ToolchainCommands {
 #[derive(Subcommand)]
 enum EmulatorCommands {
     /// List available emulators
+    #[command(visible_alias = "ls")]
     List {
         /// Path to whitehall.toml (defaults to current directory)
         #[arg(default_value = "whitehall.toml")]
@@ -154,6 +155,15 @@ enum EmulatorCommands {
     Create {
         /// Name for the new emulator (defaults to 'whitehall')
         name: Option<String>,
+        /// Path to whitehall.toml (defaults to current directory)
+        #[arg(long, default_value = "whitehall.toml")]
+        manifest: String,
+    },
+    /// Delete an emulator
+    #[command(visible_aliases = ["remove", "rm"])]
+    Delete {
+        /// ID or name of the emulator to delete
+        name: String,
         /// Path to whitehall.toml (defaults to current directory)
         #[arg(long, default_value = "whitehall.toml")]
         manifest: String,
@@ -214,6 +224,9 @@ fn main() {
                 }
                 Some(EmulatorCommands::Create { name, manifest }) => {
                     commands::emulator::execute_create(&manifest, name.as_deref())
+                }
+                Some(EmulatorCommands::Delete { name, manifest }) => {
+                    commands::emulator::execute_delete(&manifest, &name)
                 }
             }
         }
