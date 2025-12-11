@@ -1,19 +1,25 @@
 use anyhow::{Context, Result};
 use colored::Colorize;
-use std::path::PathBuf;
+use std::collections::HashMap;
 
 use crate::config;
 use crate::toolchain::Toolchain;
 
-/// AVD info with short ID
+/// AVD info with short ID and status
 struct AvdInfo {
     name: String,
     short_id: String,
-    path: Option<PathBuf>,
+    status: AvdStatus,
 }
 
-/// Get list of AVDs with their info
-fn get_avds(toolchain: &Toolchain) -> Result<Vec<AvdInfo>> {
+#[derive(Clone)]
+enum AvdStatus {
+    Ok,
+    Error(String),
+}
+
+/// Get list of AVDs with their info and status
+fn get_avds(toolchain: &Toolchain, config: &crate::config::Config) -> Result<Vec<AvdInfo>> {
     let android_home = toolchain.root().join("android");
     let emulator_bin = android_home.join("emulator/emulator");
 
@@ -21,6 +27,7 @@ fn get_avds(toolchain: &Toolchain) -> Result<Vec<AvdInfo>> {
         return Ok(vec![]);
     }
 
+    // Get list of AVD names from emulator
     let output = std::process::Command::new(&emulator_bin)
         .env("ANDROID_HOME", &android_home)
         .env("ANDROID_SDK_ROOT", &android_home)
@@ -29,22 +36,71 @@ fn get_avds(toolchain: &Toolchain) -> Result<Vec<AvdInfo>> {
         .context("Failed to run emulator -list-avds")?;
 
     let stdout = String::from_utf8_lossy(&output.stdout);
-    let avds: Vec<AvdInfo> = stdout
-        .lines()
-        .filter(|l| !l.is_empty())
+    let avd_names: Vec<&str> = stdout.lines().filter(|l| !l.is_empty()).collect();
+
+    // Get detailed status from avdmanager
+    let errors = get_avd_errors(toolchain, config)?;
+
+    let avds: Vec<AvdInfo> = avd_names
+        .iter()
         .map(|name| {
             let short_id = generate_short_id(name);
-            // AVDs are typically in ~/.android/avd/<name>.avd
-            let path = dirs::home_dir().map(|h| h.join(".android/avd").join(format!("{}.avd", name)));
+            let status = errors.get(*name)
+                .map(|e| AvdStatus::Error(e.clone()))
+                .unwrap_or(AvdStatus::Ok);
             AvdInfo {
                 name: name.to_string(),
                 short_id,
-                path,
+                status,
             }
         })
         .collect();
 
     Ok(avds)
+}
+
+/// Parse avdmanager output to get error messages for broken AVDs
+fn get_avd_errors(toolchain: &Toolchain, config: &crate::config::Config) -> Result<HashMap<String, String>> {
+    let android_home = toolchain.root().join("android");
+    let avdmanager = android_home.join("cmdline-tools/latest/bin/avdmanager");
+
+    if !avdmanager.exists() {
+        return Ok(HashMap::new());
+    }
+
+    let java_home = toolchain.root().join(format!("java/{}", config.toolchain.java));
+    let java_home = if cfg!(target_os = "macos") {
+        java_home.join("Contents/Home")
+    } else {
+        java_home
+    };
+
+    let output = std::process::Command::new(&avdmanager)
+        .env("ANDROID_HOME", &android_home)
+        .env("ANDROID_SDK_ROOT", &android_home)
+        .env("JAVA_HOME", &java_home)
+        .args(["list", "avd"])
+        .output()
+        .context("Failed to run avdmanager list avd")?;
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let mut errors = HashMap::new();
+
+    // Parse output - look for Name: and Error: pairs
+    let mut current_name: Option<String> = None;
+    for line in stdout.lines() {
+        let line = line.trim();
+        if line.starts_with("Name:") {
+            current_name = Some(line.trim_start_matches("Name:").trim().to_string());
+        } else if line.starts_with("Error:") {
+            if let Some(name) = current_name.take() {
+                let error = line.trim_start_matches("Error:").trim().to_string();
+                errors.insert(name, error);
+            }
+        }
+    }
+
+    Ok(errors)
 }
 
 /// Generate a short ID from AVD name (first 8 chars of hash)
@@ -102,13 +158,13 @@ fn find_avd<'a>(avds: &'a [AvdInfo], query: &str) -> Result<&'a AvdInfo> {
 
 /// List available AVDs
 pub fn execute_list(manifest_path: &str) -> Result<()> {
-    let _config = config::load_config(manifest_path)?;
+    let config = config::load_config(manifest_path)?;
     let toolchain = Toolchain::new()?;
 
     // Ensure emulator is installed
     toolchain.ensure_android_sdk_with_emulator()?;
 
-    let avds = get_avds(&toolchain)?;
+    let avds = get_avds(&toolchain, &config)?;
 
     if avds.is_empty() {
         println!("{}", "No emulators found.".yellow());
@@ -121,22 +177,25 @@ pub fn execute_list(manifest_path: &str) -> Result<()> {
 
         // Print header
         println!(
-            "{:<8}  {:<width$}  {}",
+            "{:<8}  {:<6}  {:<width$}  {}",
             "ID".dimmed(),
+            "STATUS".dimmed(),
             "NAME".dimmed(),
-            "PATH".dimmed(),
+            "ERROR".dimmed(),
             width = max_name_len
         );
 
         for avd in &avds {
-            let path_str = avd.path.as_ref()
-                .map(|p| p.display().to_string())
-                .unwrap_or_else(|| "?".to_string());
+            let (status_str, error_str) = match &avd.status {
+                AvdStatus::Ok => ("ok".green().to_string(), "".to_string()),
+                AvdStatus::Error(e) => ("error".red().to_string(), e.clone()),
+            };
             println!(
-                "{}  {:<width$}  {}",
+                "{}  {:<6}  {:<width$}  {}",
                 avd.short_id.yellow(),
+                status_str,
                 avd.name,
-                path_str.dimmed(),
+                error_str.dimmed(),
                 width = max_name_len
             );
         }
@@ -162,7 +221,7 @@ pub fn execute_start(manifest_path: &str, query: &str) -> Result<()> {
     }
 
     // Find the AVD
-    let avds = get_avds(&toolchain)?;
+    let avds = get_avds(&toolchain, &config)?;
     let avd = find_avd(&avds, query)?;
 
     println!("{} emulator '{}' ({})", "Starting".green().bold(), avd.name, avd.short_id.yellow());
