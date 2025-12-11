@@ -67,7 +67,10 @@ enum Commands {
     /// Manage Android emulators
     Emulator {
         #[command(subcommand)]
-        command: EmulatorCommands,
+        command: Option<EmulatorCommands>,
+        /// Path to whitehall.toml (defaults to current directory)
+        #[arg(long, default_value = "whitehall.toml")]
+        manifest: String,
     },
     /// Execute a command with the project's toolchain environment
     Exec {
@@ -198,15 +201,18 @@ fn main() {
                 }
             }
         }
-        Commands::Emulator { command } => {
+        Commands::Emulator { command, manifest } => {
             match command {
-                EmulatorCommands::List { manifest } => {
+                None => {
                     commands::emulator::execute_list(&manifest)
                 }
-                EmulatorCommands::Start { name, manifest } => {
+                Some(EmulatorCommands::List { manifest }) => {
+                    commands::emulator::execute_list(&manifest)
+                }
+                Some(EmulatorCommands::Start { name, manifest }) => {
                     commands::emulator::execute_start(&manifest, &name)
                 }
-                EmulatorCommands::Create { name, manifest } => {
+                Some(EmulatorCommands::Create { name, manifest }) => {
                     commands::emulator::execute_create(&manifest, name.as_deref())
                 }
             }
