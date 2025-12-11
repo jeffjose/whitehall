@@ -1,22 +1,24 @@
 use anyhow::{Context, Result};
 use colored::Colorize;
+use std::path::PathBuf;
 
 use crate::config;
 use crate::toolchain::Toolchain;
 
-/// List available AVDs
-pub fn execute_list(manifest_path: &str) -> Result<()> {
-    let _config = config::load_config(manifest_path)?;
-    let toolchain = Toolchain::new()?;
+/// AVD info with short ID
+struct AvdInfo {
+    name: String,
+    short_id: String,
+    path: Option<PathBuf>,
+}
 
-    // Ensure emulator is installed
-    toolchain.ensure_android_sdk_with_emulator()?;
-
+/// Get list of AVDs with their info
+fn get_avds(toolchain: &Toolchain) -> Result<Vec<AvdInfo>> {
     let android_home = toolchain.root().join("android");
     let emulator_bin = android_home.join("emulator/emulator");
 
     if !emulator_bin.exists() {
-        anyhow::bail!("Emulator not installed. Run 'whitehall toolchain install' first.");
+        return Ok(vec![]);
     }
 
     let output = std::process::Command::new(&emulator_bin)
@@ -27,7 +29,86 @@ pub fn execute_list(manifest_path: &str) -> Result<()> {
         .context("Failed to run emulator -list-avds")?;
 
     let stdout = String::from_utf8_lossy(&output.stdout);
-    let avds: Vec<&str> = stdout.lines().filter(|l| !l.is_empty()).collect();
+    let avds: Vec<AvdInfo> = stdout
+        .lines()
+        .filter(|l| !l.is_empty())
+        .map(|name| {
+            let short_id = generate_short_id(name);
+            // AVDs are typically in ~/.android/avd/<name>.avd
+            let path = dirs::home_dir().map(|h| h.join(".android/avd").join(format!("{}.avd", name)));
+            AvdInfo {
+                name: name.to_string(),
+                short_id,
+                path,
+            }
+        })
+        .collect();
+
+    Ok(avds)
+}
+
+/// Generate a short ID from AVD name (first 8 chars of hash)
+fn generate_short_id(name: &str) -> String {
+    use std::collections::hash_map::DefaultHasher;
+    use std::hash::{Hash, Hasher};
+
+    let mut hasher = DefaultHasher::new();
+    name.hash(&mut hasher);
+    format!("{:08x}", hasher.finish() as u32)
+}
+
+/// Find AVD by partial match (short_id prefix or name substring)
+fn find_avd<'a>(avds: &'a [AvdInfo], query: &str) -> Result<&'a AvdInfo> {
+    let query_lower = query.to_lowercase();
+
+    // First try exact short_id prefix match
+    let matches: Vec<_> = avds
+        .iter()
+        .filter(|avd| avd.short_id.starts_with(&query_lower))
+        .collect();
+
+    if matches.len() == 1 {
+        return Ok(matches[0]);
+    }
+
+    if matches.len() > 1 {
+        anyhow::bail!(
+            "Ambiguous ID '{}'. Matches:\n{}",
+            query,
+            matches.iter().map(|a| format!("  {} {}", a.short_id, a.name)).collect::<Vec<_>>().join("\n")
+        );
+    }
+
+    // Try name substring match (case-insensitive)
+    let name_matches: Vec<_> = avds
+        .iter()
+        .filter(|avd| avd.name.to_lowercase().contains(&query_lower))
+        .collect();
+
+    if name_matches.len() == 1 {
+        return Ok(name_matches[0]);
+    }
+
+    if name_matches.len() > 1 {
+        anyhow::bail!(
+            "Ambiguous name '{}'. Matches:\n{}",
+            query,
+            name_matches.iter().map(|a| format!("  {} {}", a.short_id, a.name)).collect::<Vec<_>>().join("\n")
+        );
+    }
+
+    anyhow::bail!("No emulator found matching '{}'", query);
+}
+
+/// List available AVDs
+pub fn execute_list(manifest_path: &str) -> Result<()> {
+    let _config = config::load_config(manifest_path)?;
+    let toolchain = Toolchain::new()?;
+
+    // Ensure emulator is installed
+    toolchain.ensure_android_sdk_with_emulator()?;
+
+    let avds = get_avds(&toolchain)?;
 
     if avds.is_empty() {
         println!("{}", "No emulators found.".yellow());
@@ -36,16 +117,25 @@ pub fn execute_list(manifest_path: &str) -> Result<()> {
         println!("  whitehall emulator create");
     } else {
         println!("{}", "Available emulators:".green().bold());
-        for avd in avds {
-            println!("  {}", avd);
+        for avd in &avds {
+            let path_str = avd.path.as_ref()
+                .map(|p| p.display().to_string())
+                .unwrap_or_else(|| "?".to_string());
+            println!("  {}  {}  {}",
+                avd.short_id.yellow(),
+                avd.name,
+                path_str.dimmed()
+            );
         }
+        println!();
+        println!("Start with: {} (partial ID or name)", "whitehall emulator start <id>".dimmed());
     }
 
     Ok(())
 }
 
-/// Start an emulator by name
-pub fn execute_start(manifest_path: &str, name: &str) -> Result<()> {
+/// Start an emulator by name or ID
+pub fn execute_start(manifest_path: &str, query: &str) -> Result<()> {
     let config = config::load_config(manifest_path)?;
     let toolchain = Toolchain::new()?;
 
@@ -60,15 +150,19 @@ pub fn execute_start(manifest_path: &str, name: &str) -> Result<()> {
         anyhow::bail!("Emulator not installed. Run 'whitehall toolchain install' first.");
     }
 
-    println!("{} emulator '{}'", "Starting".green().bold(), name);
+    // Find the AVD
+    let avds = get_avds(&toolchain)?;
+    let avd = find_avd(&avds, query)?;
+
+    println!("{} emulator '{}' ({})", "Starting".green().bold(), avd.name, avd.short_id.yellow());
 
     // Run emulator in background
     let child = std::process::Command::new(&emulator_bin)
         .env("ANDROID_HOME", &android_home)
         .env("ANDROID_SDK_ROOT", &android_home)
-        .args(["-avd", name])
+        .args(["-avd", &avd.name])
         .spawn()
-        .context(format!("Failed to start emulator '{}'", name))?;
+        .context(format!("Failed to start emulator '{}'", avd.name))?;
 
     // Detach - don't wait for it
     std::mem::forget(child);
@@ -123,11 +217,14 @@ pub fn execute_create(manifest_path: &str, name: Option<&str>) -> Result<()> {
         anyhow::bail!("Failed to create emulator '{}'", avd_name);
     }
 
+    // Get the short ID for the new AVD
+    let short_id = generate_short_id(avd_name);
+
     println!();
-    println!("{} Created emulator '{}'", "✓".green().bold(), avd_name);
+    println!("{} Created emulator '{}' ({})", "✓".green().bold(), avd_name, short_id.yellow());
     println!();
     println!("Start it with:");
-    println!("  whitehall emulator start {}", avd_name);
+    println!("  whitehall emulator start {}", short_id);
 
     Ok(())
 }
