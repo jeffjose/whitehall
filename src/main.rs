@@ -76,6 +76,9 @@ enum Commands {
         #[arg(long, default_value = "whitehall.toml")]
         manifest: String,
     },
+    /// List connected devices
+    #[command(visible_alias = "devices")]
+    Device,
     /// Execute a command with the project's toolchain environment
     Exec {
         /// Path to whitehall.toml (defaults to current directory)
@@ -233,6 +236,9 @@ fn main() {
                     commands::emulator::execute_delete(&manifest, &name)
                 }
             }
+        }
+        Commands::Device => {
+            commands::device::execute_list()
         }
         Commands::Exec { manifest, command } => {
             if command.is_empty() {

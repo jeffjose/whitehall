@@ -1,0 +1,11 @@
+[project]
+name = "hello"
+version = "0.1.0"
+
+[android]
+min_sdk = 24
+target_sdk = 34
+package = "com.example.hello"
+
+[build]
+optimize_level = "default"

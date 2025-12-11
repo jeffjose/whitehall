@@ -1,0 +1,12 @@
+# Whitehall build artifacts
+.whitehall/
+build/
+android/
+
+# Generated files
+*.apk
+*.aab
+
+# OS files
+.DS_Store
+Thumbs.db
