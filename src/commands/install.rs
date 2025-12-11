@@ -9,18 +9,19 @@ use crate::build_pipeline;
 use crate::config;
 use crate::single_file;
 use crate::commands::{detect_target, Target};
+use crate::commands::device;
 use crate::toolchain::Toolchain;
 
-pub fn execute(target: &str) -> Result<()> {
+pub fn execute(target: &str, device_query: Option<&str>) -> Result<()> {
     // Detect if we're running a project or single file
     match detect_target(target) {
-        Target::Project(manifest_path) => execute_project(&manifest_path),
-        Target::SingleFile(file_path) => execute_single_file(&file_path),
+        Target::Project(manifest_path) => execute_project(&manifest_path, device_query),
+        Target::SingleFile(file_path) => execute_single_file(&file_path, device_query),
     }
 }
 
 /// Install a single .wh file
-fn execute_single_file(file_path: &str) -> Result<()> {
+fn execute_single_file(file_path: &str, device_query: Option<&str>) -> Result<()> {
     // Parse frontmatter
     let file_path_obj = Path::new(file_path);
     let content = fs::read_to_string(file_path_obj)
@@ -66,15 +67,19 @@ fn execute_single_file(file_path: &str) -> Result<()> {
     // Ensure all toolchains are ready (download in parallel if needed)
     toolchain.ensure_all_for_build(&config.toolchain.java, &config.toolchain.gradle)?;
 
-    // Check device, build APK, and install
-    check_device_connected(&toolchain)?;
+    // Resolve device
+    let device_id = device::resolve_device(&toolchain, device_query)?;
+    println!("   {} {}", "Device".cyan(), device_id);
+
+    // Build APK and install
     build_with_gradle(&toolchain, &config, &result.output_dir)?;
-    install_apk(&toolchain, &result.output_dir)?;
+    install_apk(&toolchain, &result.output_dir, &device_id)?;
 
     println!(
-        "  {} `{}` on device",
+        "  {} `{}` on {}",
         "Installed".green().bold(),
-        single_config.app.name
+        single_config.app.name,
+        device_id
     );
 
     // Restore original directory
@@ -84,7 +89,7 @@ fn execute_single_file(file_path: &str) -> Result<()> {
 }
 
 /// Install a project (existing behavior)
-fn execute_project(manifest_path: &str) -> Result<()> {
+fn execute_project(manifest_path: &str, device_query: Option<&str>) -> Result<()> {
     // 1. Determine project directory from manifest path (same as build command)
     let manifest_path = Path::new(manifest_path);
     let original_dir = env::current_dir()?;
@@ -137,15 +142,19 @@ fn execute_project(manifest_path: &str) -> Result<()> {
     // Ensure all toolchains are ready (download in parallel if needed)
     toolchain.ensure_all_for_build(&config.toolchain.java, &config.toolchain.gradle)?;
 
-    // Check device, build APK, and install
-    check_device_connected(&toolchain)?;
+    // Resolve device
+    let device_id = device::resolve_device(&toolchain, device_query)?;
+    println!("   {} {}", "Device".cyan(), device_id);
+
+    // Build APK and install
     build_with_gradle(&toolchain, &config, &result.output_dir)?;
-    install_apk(&toolchain, &result.output_dir)?;
+    install_apk(&toolchain, &result.output_dir, &device_id)?;
 
     println!(
-        "  {} `{}` on device",
+        "  {} `{}` on {}",
         "Installed".green().bold(),
-        config.project.name
+        config.project.name,
+        device_id
     );
 
     // Restore original directory
@@ -153,32 +162,6 @@ fn execute_project(manifest_path: &str) -> Result<()> {
         env::set_current_dir(&original_dir)?;
     }
 
-    Ok(())
-}
-
-fn check_device_connected(toolchain: &Toolchain) -> Result<()> {
-    let output = toolchain
-        .adb_cmd()?
-        .args(["devices"])
-        .output()
-        .context("Failed to run 'adb devices'")?;
-
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    let device_count = stdout
-        .lines()
-        .skip(1) // Skip header
-        .filter(|line| line.contains("device") && !line.contains("offline"))
-        .count();
-
-    if device_count == 0 {
-        anyhow::bail!(
-            "No devices connected. Please:\n  \
-            1. Connect a device via USB with USB debugging enabled, or\n  \
-            2. Start an emulator"
-        );
-    }
-
-    println!("   Found {} device(s)", device_count);
     Ok(())
 }
 
@@ -212,7 +195,7 @@ fn build_with_gradle(toolchain: &Toolchain, config: &crate::config::Config, outp
     Ok(())
 }
 
-fn install_apk(toolchain: &Toolchain, output_dir: &Path) -> Result<()> {
+fn install_apk(toolchain: &Toolchain, output_dir: &Path, device_id: &str) -> Result<()> {
     let apk_path = output_dir.join("app/build/outputs/apk/debug/app-debug.apk");
 
     if !apk_path.exists() {
@@ -221,7 +204,7 @@ fn install_apk(toolchain: &Toolchain, output_dir: &Path) -> Result<()> {
 
     let status = toolchain
         .adb_cmd()?
-        .args(["install", "-r", apk_path.to_str().unwrap()])
+        .args(["-s", device_id, "install", "-r", apk_path.to_str().unwrap()])
         .status()
         .context("Failed to install APK")?;
 

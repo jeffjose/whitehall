@@ -9,18 +9,19 @@ use crate::build_pipeline;
 use crate::config;
 use crate::single_file;
 use crate::commands::{detect_target, Target};
+use crate::commands::device;
 use crate::toolchain::Toolchain;
 
-pub fn execute(target: &str) -> Result<()> {
+pub fn execute(target: &str, device_query: Option<&str>) -> Result<()> {
     // Detect if we're running a project or single file
     match detect_target(target) {
-        Target::Project(manifest_path) => execute_project(&manifest_path),
-        Target::SingleFile(file_path) => execute_single_file(&file_path),
+        Target::Project(manifest_path) => execute_project(&manifest_path, device_query),
+        Target::SingleFile(file_path) => execute_single_file(&file_path, device_query),
     }
 }
 
 /// Run a single .wh file
-fn execute_single_file(file_path: &str) -> Result<()> {
+fn execute_single_file(file_path: &str, device_query: Option<&str>) -> Result<()> {
     // Parse frontmatter
     let file_path_obj = Path::new(file_path);
     let content = fs::read_to_string(file_path_obj)
@@ -66,17 +67,20 @@ fn execute_single_file(file_path: &str) -> Result<()> {
     // Ensure all toolchains are ready (download in parallel if needed)
     toolchain.ensure_all_for_build(&config.toolchain.java, &config.toolchain.gradle)?;
 
-    // Continue with device check, gradle, install, and launch
-    check_device_connected(&toolchain)?;
-    build_with_gradle(&toolchain, &config, &result.output_dir)?;
-    install_apk(&toolchain, &result.output_dir)?;
-    launch_app(&toolchain, &config.android.package)?;
+    // Resolve device
+    let device_id = device::resolve_device(&toolchain, device_query)?;
+    println!("   {} {}", "Device".cyan(), device_id);
 
-    println!("{}", format!("    Running on device").green().bold());
+    // Continue with gradle, install, and launch
+    build_with_gradle(&toolchain, &config, &result.output_dir)?;
+    install_apk(&toolchain, &result.output_dir, &device_id)?;
+    launch_app(&toolchain, &config.android.package, &device_id)?;
+
+    println!("  {} on {}", "Running".green().bold(), device_id);
     println!();
 
     // Stream logcat
-    stream_logcat(&toolchain, &config.android.package)?;
+    stream_logcat(&toolchain, &config.android.package, &device_id)?;
 
     // Restore original directory
     env::set_current_dir(&original_dir)?;
@@ -85,7 +89,7 @@ fn execute_single_file(file_path: &str) -> Result<()> {
 }
 
 /// Run a project (existing behavior)
-fn execute_project(manifest_path: &str) -> Result<()> {
+fn execute_project(manifest_path: &str, device_query: Option<&str>) -> Result<()> {
     // 1. Determine project directory from manifest path (same as build command)
     let manifest_path = Path::new(manifest_path);
     let original_dir = env::current_dir()?;
@@ -138,55 +142,30 @@ fn execute_project(manifest_path: &str) -> Result<()> {
     // 3.5. Ensure all toolchains are ready (download in parallel if needed)
     toolchain.ensure_all_for_build(&config.toolchain.java, &config.toolchain.gradle)?;
 
-    // 4. Check if device/emulator is connected
-    check_device_connected(&toolchain)?;
+    // 4. Resolve device
+    let device_id = device::resolve_device(&toolchain, device_query)?;
+    println!("   {} {}", "Device".cyan(), device_id);
 
     // 5. Build APK with Gradle
     build_with_gradle(&toolchain, &config, &result.output_dir)?;
 
     // 6. Install on device
-    install_apk(&toolchain, &result.output_dir)?;
+    install_apk(&toolchain, &result.output_dir, &device_id)?;
 
     // 7. Launch app
-    launch_app(&toolchain, &config.android.package)?;
+    launch_app(&toolchain, &config.android.package, &device_id)?;
 
-    println!("{}", format!("    Running on device").green().bold());
+    println!("  {} on {}", "Running".green().bold(), device_id);
     println!();
 
     // 8. Stream logcat filtered to this app
-    stream_logcat(&toolchain, &config.android.package)?;
+    stream_logcat(&toolchain, &config.android.package, &device_id)?;
 
     // Restore original directory
     if project_dir != original_dir {
         env::set_current_dir(&original_dir)?;
     }
 
-    Ok(())
-}
-
-fn check_device_connected(toolchain: &Toolchain) -> Result<()> {
-    let output = toolchain
-        .adb_cmd()?
-        .args(&["devices"])
-        .output()
-        .context("Failed to run 'adb devices'")?;
-
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    let device_count = stdout
-        .lines()
-        .skip(1) // Skip header
-        .filter(|line| line.contains("device") && !line.contains("offline"))
-        .count();
-
-    if device_count == 0 {
-        anyhow::bail!(
-            "No devices connected. Please:\n  \
-            1. Connect a device via USB with USB debugging enabled, or\n  \
-            2. Start an emulator"
-        );
-    }
-
-    println!("   Found {} device(s)", device_count);
     Ok(())
 }
 
@@ -220,7 +199,7 @@ fn build_with_gradle(toolchain: &Toolchain, config: &crate::config::Config, outp
     Ok(())
 }
 
-fn install_apk(toolchain: &Toolchain, output_dir: &Path) -> Result<()> {
+fn install_apk(toolchain: &Toolchain, output_dir: &Path, device_id: &str) -> Result<()> {
     let apk_path = output_dir.join("app/build/outputs/apk/debug/app-debug.apk");
 
     if !apk_path.exists() {
@@ -229,7 +208,7 @@ fn install_apk(toolchain: &Toolchain, output_dir: &Path) -> Result<()> {
 
     let status = toolchain
         .adb_cmd()?
-        .args(&["install", "-r", apk_path.to_str().unwrap()])
+        .args(["-s", device_id, "install", "-r", apk_path.to_str().unwrap()])
         .status()
         .context("Failed to install APK")?;
 
@@ -240,12 +219,12 @@ fn install_apk(toolchain: &Toolchain, output_dir: &Path) -> Result<()> {
     Ok(())
 }
 
-fn launch_app(toolchain: &Toolchain, package: &str) -> Result<()> {
+fn launch_app(toolchain: &Toolchain, package: &str, device_id: &str) -> Result<()> {
     let activity = format!("{}/.MainActivity", package);
 
     let status = toolchain
         .adb_cmd()?
-        .args(&["shell", "am", "start", "-n", &activity])
+        .args(["-s", device_id, "shell", "am", "start", "-n", &activity])
         .status()
         .context("Failed to launch app")?;
 
@@ -256,7 +235,7 @@ fn launch_app(toolchain: &Toolchain, package: &str) -> Result<()> {
     Ok(())
 }
 
-fn stream_logcat(toolchain: &Toolchain, package: &str) -> Result<()> {
+fn stream_logcat(toolchain: &Toolchain, package: &str, device_id: &str) -> Result<()> {
     use std::io::{BufRead, BufReader};
 
     println!("{} (press Ctrl+C to stop)", "Streaming logcat".cyan().bold());
@@ -265,13 +244,13 @@ fn stream_logcat(toolchain: &Toolchain, package: &str) -> Result<()> {
     // Clear logcat first to only show new logs
     let _ = toolchain
         .adb_cmd()?
-        .args(&["logcat", "-c"])
+        .args(["-s", device_id, "logcat", "-c"])
         .output();
 
     // Stream logcat with brief format - we'll filter in Rust
     let mut child = toolchain
         .adb_cmd()?
-        .args(&["logcat", "-v", "brief"])
+        .args(["-s", device_id, "logcat", "-v", "brief"])
         .stdout(std::process::Stdio::piped())
         .spawn()
         .context("Failed to start logcat")?;

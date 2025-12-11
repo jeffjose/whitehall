@@ -51,6 +51,8 @@ enum Commands {
         /// Path to project directory or .wh file (defaults to current directory)
         #[arg(default_value = ".")]
         target: String,
+        /// Device ID (partial match supported) - auto-selects if only one device connected
+        device: Option<String>,
     },
     /// Build, install, and run the app on a connected device
     /// Works with both project directories (whitehall.toml) and single .wh files
@@ -58,6 +60,8 @@ enum Commands {
         /// Path to project directory or .wh file (defaults to current directory)
         #[arg(default_value = ".")]
         target: String,
+        /// Device ID (partial match supported) - auto-selects if only one device connected
+        device: Option<String>,
     },
     /// Manage toolchains (Java, Gradle, Android SDK)
     Toolchain {
@@ -186,11 +190,11 @@ fn main() {
         Commands::Watch { target } => {
             commands::watch::execute(&target)
         }
-        Commands::Install { target } => {
-            commands::install::execute(&target)
+        Commands::Install { target, device } => {
+            commands::install::execute(&target, device.as_deref())
         }
-        Commands::Run { target } => {
-            commands::run::execute(&target)
+        Commands::Run { target, device } => {
+            commands::run::execute(&target, device.as_deref())
         }
         Commands::Toolchain { command } => {
             match command {
