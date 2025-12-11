@@ -260,7 +260,7 @@ pub fn execute_create(manifest_path: &str, name: Option<&str>) -> Result<()> {
 
     let avd_name = name.unwrap_or("whitehall");
     let target_sdk = config.android.target_sdk;
-    let system_image = format!("system-images;android-{};google_apis;x86_64", target_sdk);
+    let system_image = format!("system-images;android-{};google_apis_playstore;x86_64", target_sdk);
 
     println!("{} emulator '{}'", "Creating".green().bold(), avd_name);
     println!("  Target SDK: {}", target_sdk);
