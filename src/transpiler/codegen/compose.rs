@@ -5058,6 +5058,11 @@ impl ComposeBackend {
         // Add ViewModel import
         imports.push("androidx.lifecycle.viewmodel.compose.viewModel".to_string());
 
+        // For screens, add NavController import
+        if self.component_type.as_deref() == Some("screen") {
+            imports.push("androidx.navigation.NavController".to_string());
+        }
+
         // Sort imports alphabetically (standard Kotlin convention)
         imports.sort();
         imports.dedup(); // Remove duplicates after sorting
@@ -5070,22 +5075,25 @@ impl ComposeBackend {
         output.push('\n');
 
         // Component function signature
-        let props_list = if file.props.is_empty() {
-            String::new()
-        } else {
-            file.props
-                .iter()
-                .map(|p| {
-                    let default = p
-                        .default_value
-                        .as_ref()
-                        .map(|d| format!(" = {}", d))
-                        .unwrap_or_default();
-                    format!("{}: {}{}", p.name, p.prop_type, default)
-                })
-                .collect::<Vec<_>>()
-                .join(", ")
-        };
+        let is_screen = self.component_type.as_deref() == Some("screen");
+        let mut params = Vec::new();
+
+        // For screens, add navController parameter first
+        if is_screen {
+            params.push("navController: NavController".to_string());
+        }
+
+        // Add props
+        for p in &file.props {
+            let default = p
+                .default_value
+                .as_ref()
+                .map(|d| format!(" = {}", d))
+                .unwrap_or_default();
+            params.push(format!("{}: {}{}", p.name, p.prop_type, default));
+        }
+
+        let props_list = params.join(", ");
 
         output.push_str("@Composable\n");
         output.push_str(&format!("fun {}({}) {{\n", self.component_name, props_list));

@@ -49,11 +49,12 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.navigation.NavController
 import com.example.app.lib.api.ApiClient
 import com.example.app.models.User
 
 @Composable
-fun ProfileScreen() {
+fun ProfileScreen(navController: NavController) {
     val viewModel = viewModel<ProfileScreenViewModel>()
     val uiState by viewModel.uiState.collectAsState()
 

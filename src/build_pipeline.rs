@@ -258,8 +258,14 @@ fn generate_main_activity(
     // Check if there's a main.wh file
     let main_file = files.iter().find(|f| f.file_type == FileType::Main);
 
-    let main_content = if let Some(main_file) = main_file {
-        // Use transpiled main.wh content as the App composable
+    // Priority: Routes > main.wh > default
+    // When routes exist, always use NavHost (main.wh becomes app shell/layout - future feature)
+    let main_content = if !discovered_routes.is_empty() {
+        // Generate MainActivity with NavHost for routing
+        // Note: main.wh is ignored when routes exist (future: use as layout wrapper)
+        generate_navhost_main_activity(config, &discovered_routes)
+    } else if let Some(main_file) = main_file {
+        // No routes - use transpiled main.wh content as the App composable
         let source = fs::read_to_string(&main_file.path)?;
         let result = transpiler::transpile_with_registry(&source, &config.android.package, "App", None, Some(global_store_registry))
             .map_err(|e| anyhow::anyhow!(e))?;
@@ -291,16 +297,14 @@ fn generate_main_activity(
 
         // Get primary content (main.wh should generate single file or wrapper component)
         result.primary_content().to_string()
-    } else if !discovered_routes.is_empty() {
-        // Generate MainActivity with NavHost for routing
-        generate_navhost_main_activity(config, &discovered_routes)
     } else {
         // Generate default MainActivity with basic content
         generate_default_main_activity(config)
     };
 
-    // If we transpiled main.wh, we need to wrap it in MainActivity
-    let activity_content = if main_file.is_some() {
+    // If we transpiled main.wh (and no routes), we need to wrap it in MainActivity
+    // When routes exist, main_content is already a complete MainActivity
+    let activity_content = if main_file.is_some() && discovered_routes.is_empty() {
         // Extract imports and code from transpiled main content
         let lines: Vec<&str> = main_content.lines().collect();
         let mut app_imports = Vec::new();
