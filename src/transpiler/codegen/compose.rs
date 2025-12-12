@@ -4803,6 +4803,19 @@ impl ComposeBackend {
             vm_imports.push("kotlinx.serialization.Serializable".to_string());
         }
 
+        // Check if fetch() is used in lifecycle hooks or functions
+        let uses_fetch_in_vm = file.lifecycle_hooks.iter().any(|h| h.body.contains("fetch("))
+            || file.functions.iter().any(|f| f.body.contains("fetch("));
+        if uses_fetch_in_vm {
+            vm_imports.push("io.ktor.client.HttpClient".to_string());
+            vm_imports.push("io.ktor.client.call.body".to_string());
+            vm_imports.push("io.ktor.client.engine.okhttp.OkHttp".to_string());
+            vm_imports.push("io.ktor.client.plugins.contentnegotiation.ContentNegotiation".to_string());
+            vm_imports.push("io.ktor.client.request.get".to_string());
+            vm_imports.push("io.ktor.serialization.kotlinx.json.json".to_string());
+            vm_imports.push("kotlinx.serialization.json.Json".to_string());
+        }
+
         // Add any user imports from the file
         for import in &file.imports {
             let import_path = self.resolve_import(&import.path);
@@ -4830,6 +4843,11 @@ impl ComposeBackend {
 
         if !file.kotlin_blocks.is_empty() {
             output.push('\n');
+        }
+
+        // Generate HttpClient singleton if fetch() is used
+        if uses_fetch_in_vm {
+            output.push_str(&self.generate_http_client());
         }
 
         // Class declaration with optional SavedStateHandle constructor
@@ -4971,7 +4989,12 @@ impl ComposeBackend {
                             if line.trim().is_empty() {
                                 continue;
                             }
-                            output.push_str(&format!("            {}\n", line.trim()));
+                            // Transform fetch() calls to Ktor HttpClient calls
+                            let mut transformed_line = line.trim().to_string();
+                            if transformed_line.contains("fetch(") {
+                                transformed_line = self.transform_fetch_call(&transformed_line);
+                            }
+                            output.push_str(&format!("            {}\n", transformed_line));
                         }
                         output.push_str("        }\n");
                     }
