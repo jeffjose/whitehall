@@ -323,6 +323,44 @@ Warning: height="300" has no unit, assuming "300dp". Consider using {300} or "30
 - Use `"100%"` for fill-parent behavior
 - Use `"16sp"` for text sizes (scale-independent pixels)
 
+### Fetch API
+
+The `fetch()` function provides a web-like syntax for HTTP requests, transforming to Ktor HttpClient calls.
+
+**Syntax:**
+
+```whitehall
+val data: List<Photo> = fetch("https://api.example.com/photos")
+```
+
+**Generated Kotlin:**
+
+```kotlin
+// HttpClient singleton (generated once per file)
+private val httpClient = HttpClient(OkHttp) {
+    install(ContentNegotiation) {
+        json(Json { ignoreUnknownKeys = true })
+    }
+}
+
+// In component/function:
+val data: List<Photo> = httpClient.get("https://api.example.com/photos").body()
+```
+
+**Features:**
+- `fetch(url)` transforms to `httpClient.get(url).body()`
+- HttpClient singleton generated at file level when fetch() is detected
+- Uses Ktor with OkHttp engine for Android
+- Kotlinx.serialization for JSON parsing
+- Type inference from variable annotation
+
+**Dependencies (auto-added):**
+- `io.ktor:ktor-client-core`
+- `io.ktor:ktor-client-okhttp`
+- `io.ktor:ktor-client-content-negotiation`
+- `io.ktor:ktor-serialization-kotlinx-json`
+- `org.jetbrains.kotlinx:kotlinx-serialization-json`
+
 ### Import Management
 
 **Process:**
