@@ -292,6 +292,48 @@ match (component, prop_name) {
 - **String resources with args:** `R.string.greeting(name)` → `stringResource(R.string.greeting, name)`
 - **Escape braces:** `\{literal\}` → `{literal}` (not interpolated)
 
+### Control Flow Syntax
+
+Whitehall uses `@` prefix for control flow constructs within markup:
+
+**If/Else:**
+```whitehall
+@if (condition) {
+  <Text>True branch</Text>
+} @else @if (otherCondition) {
+  <Text>Else if branch</Text>
+} @else {
+  <Text>Else branch</Text>
+}
+```
+
+Generates:
+```kotlin
+if (condition) {
+    Text(text = "True branch")
+} else if (otherCondition) {
+    Text(text = "Else if branch")
+} else {
+    Text(text = "Else branch")
+}
+```
+
+**For Loop:**
+```whitehall
+@for (item in items, key = { it.id }) {
+  <Text>{item.name}</Text>
+}
+```
+
+**When (Pattern Matching):**
+```whitehall
+@when (status) {
+  "loading" => <LoadingSpinner />
+  "error" => <ErrorView />
+  else => <ContentView />
+}
+```
+
 ### Dimension Syntax
 
 Dimensions (width, height, padding, spacing, etc.) support multiple formats:

@@ -1391,11 +1391,26 @@ impl Parser {
         let mut else_branch = None;
 
         // Parse else if / else
+        // Support both `else` and `@else` for consistency with @if/@for syntax
         loop {
             self.skip_whitespace();
-            if self.consume_word("else") {
+            // Accept both "else" and "@else" for better DX
+            let has_else = if self.peek_char() == Some('@') {
+                self.advance_char(); // consume @
+                self.consume_word("else")
+            } else {
+                self.consume_word("else")
+            };
+            if has_else {
                 self.skip_whitespace();
-                if self.consume_word("if") {
+                // Accept both "if" and "@if" after else
+                let has_if = if self.peek_char() == Some('@') {
+                    self.advance_char(); // consume @
+                    self.consume_word("if")
+                } else {
+                    self.consume_word("if")
+                };
+                if has_if {
                     // else if
                     self.skip_whitespace();
                     self.expect_char('(')?;

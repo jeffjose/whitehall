@@ -12,9 +12,9 @@ Tests @if/@else conditional rendering.
 <Column>
   @if (isLoading) {
     <LoadingSpinner />
-  } else if (error != null) {
+  } @else @if (error != null) {
     <ErrorView message={error} />
-  } else {
+  } @else {
     <Text>{data ?: "No data"}</Text>
   }
 </Column>
