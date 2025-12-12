@@ -413,6 +413,16 @@ val data: List<Photo> = httpClient.get("https://api.example.com/photos").body()
 5. **Alphabetical sorting**: Standard Kotlin convention
 6. **Deduplication**: Track imports in HashSet, check before adding
 
+**Auto-detected imports:**
+
+| Usage | Import Added |
+|-------|--------------|
+| `@Serializable` | `kotlinx.serialization.Serializable` |
+| `fetch()` | Ktor imports (HttpClient, body, OkHttp, etc.) |
+| `Dispatchers.IO` | `kotlinx.coroutines.Dispatchers` |
+| `.launch {}` | `kotlinx.coroutines.launch` |
+| `rememberCoroutineScope()` | `androidx.compose.runtime.rememberCoroutineScope` |
+
 ---
 
 ## Store Registry & ViewModel Generation
