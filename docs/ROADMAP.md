@@ -728,9 +728,48 @@ class AuthStoreViewModel @Inject constructor() : ViewModel() {
 - [ ] Store composition (one store depends on another)
 - [ ] DevTools integration (inspect state, time-travel debugging)
 - [ ] Persistence middleware (save/restore from preferences)
-- [ ] TypeScript-style import paths: `@/stores/auth`
+- [ ] Explicit imports for framework magic (see below)
 
 **Priority:** ✅ Core implementation complete. Advanced features as needed.
+
+---
+
+#### Explicit Imports for Framework Magic (Future)
+
+Currently, Whitehall uses `$` prefix to denote framework-provided features that are "magically" available without explicit imports:
+
+| Magic | Description |
+|-------|-------------|
+| `$routes` | Type-safe route references (`$routes.login`, `$routes.post.detail`) |
+| `$screen` | Current screen context (`$screen.params.id`) |
+| `$scope` | Coroutine scope management |
+| `$ffi` | Foreign function interface |
+| `$fetch` | HTTP client for API requests |
+
+**Future Plan:** Make these features explicit through imports from a top-level `whitehall` package:
+
+```whitehall
+// Future syntax (not yet implemented)
+import whitehall/fetch
+import whitehall/routes
+import whitehall/screen
+
+// Then use without $ prefix
+val data = fetch("https://api.example.com/data")
+navigate(routes.login)
+val id = screen.params.id
+```
+
+**Benefits:**
+- Clear provenance of features (where does this come from?)
+- No naming collisions with user code
+- Better IDE support and autocomplete
+- Easier to understand for newcomers
+- Follows established patterns (ES modules, Rust use statements)
+
+**Current Status:** The `$` prefix convention works well and clearly marks framework magic. Explicit imports are a future enhancement for improved DX when the framework matures.
+
+**Priority:** Low - Current `$` convention is working well. Revisit when adding more framework features.
 
 ---
 
