@@ -83,18 +83,18 @@ fn execute_single_file(file_path: &str, device_query: Option<&str>) -> Result<()
     toolchain.ensure_all_for_build(&config.toolchain.java, &config.toolchain.gradle)?;
 
     // Resolve device
-    let device_id = device::resolve_device(&toolchain, device_query)?;
-    println!("   {} {}", "Device".cyan(), device_id);
+    let device = device::resolve_device(&toolchain, device_query)?;
+    println!("    {} {}", "Device".cyan(), device.display_name());
 
     // Build APK and install
     build_with_gradle(&toolchain, &config, &result.output_dir)?;
-    install_apk(&toolchain, &result.output_dir, &device_id)?;
+    install_apk(&toolchain, &result.output_dir, &device.id)?;
 
     println!(
         "  {} `{}` on {}",
         "Installed".green().bold(),
         single_config.app.name,
-        device_id
+        device.short_name()
     );
 
     // Restore original directory
@@ -158,18 +158,18 @@ fn execute_project(manifest_path: &str, device_query: Option<&str>) -> Result<()
     toolchain.ensure_all_for_build(&config.toolchain.java, &config.toolchain.gradle)?;
 
     // Resolve device
-    let device_id = device::resolve_device(&toolchain, device_query)?;
-    println!("   {} {}", "Device".cyan(), device_id);
+    let device = device::resolve_device(&toolchain, device_query)?;
+    println!("    {} {}", "Device".cyan(), device.display_name());
 
     // Build APK and install
     build_with_gradle(&toolchain, &config, &result.output_dir)?;
-    install_apk(&toolchain, &result.output_dir, &device_id)?;
+    install_apk(&toolchain, &result.output_dir, &device.id)?;
 
     println!(
         "  {} `{}` on {}",
         "Installed".green().bold(),
         config.project.name,
-        device_id
+        device.short_name()
     );
 
     // Restore original directory

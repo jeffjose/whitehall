@@ -83,19 +83,19 @@ fn execute_single_file(file_path: &str, device_query: Option<&str>) -> Result<()
     toolchain.ensure_all_for_build(&config.toolchain.java, &config.toolchain.gradle)?;
 
     // Resolve device
-    let device_id = device::resolve_device(&toolchain, device_query)?;
-    println!("   {} {}", "Device".cyan(), device_id);
+    let device = device::resolve_device(&toolchain, device_query)?;
+    println!("    {} {}", "Device".cyan(), device.display_name());
 
     // Continue with gradle, install, and launch
     build_with_gradle(&toolchain, &config, &result.output_dir)?;
-    install_apk(&toolchain, &result.output_dir, &device_id)?;
-    launch_app(&toolchain, &config.android.package, &device_id)?;
+    install_apk(&toolchain, &result.output_dir, &device.id)?;
+    launch_app(&toolchain, &config.android.package, &device.id)?;
 
-    println!("  {} on {}", "Running".green().bold(), device_id);
+    println!("  {} on {}", "Running".green().bold(), device.short_name());
     println!();
 
     // Stream logcat
-    stream_logcat(&toolchain, &config.android.package, &device_id)?;
+    stream_logcat(&toolchain, &config.android.package, &device.id)?;
 
     // Restore original directory
     env::set_current_dir(&original_dir)?;
@@ -158,23 +158,23 @@ fn execute_project(manifest_path: &str, device_query: Option<&str>) -> Result<()
     toolchain.ensure_all_for_build(&config.toolchain.java, &config.toolchain.gradle)?;
 
     // 4. Resolve device
-    let device_id = device::resolve_device(&toolchain, device_query)?;
-    println!("   {} {}", "Device".cyan(), device_id);
+    let device = device::resolve_device(&toolchain, device_query)?;
+    println!("    {} {}", "Device".cyan(), device.display_name());
 
     // 5. Build APK with Gradle
     build_with_gradle(&toolchain, &config, &result.output_dir)?;
 
     // 6. Install on device
-    install_apk(&toolchain, &result.output_dir, &device_id)?;
+    install_apk(&toolchain, &result.output_dir, &device.id)?;
 
     // 7. Launch app
-    launch_app(&toolchain, &config.android.package, &device_id)?;
+    launch_app(&toolchain, &config.android.package, &device.id)?;
 
-    println!("  {} on {}", "Running".green().bold(), device_id);
+    println!("  {} on {}", "Running".green().bold(), device.short_name());
     println!();
 
     // 8. Stream logcat filtered to this app
-    stream_logcat(&toolchain, &config.android.package, &device_id)?;
+    stream_logcat(&toolchain, &config.android.package, &device.id)?;
 
     // Restore original directory
     if project_dir != original_dir {

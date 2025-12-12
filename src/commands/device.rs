@@ -133,7 +133,7 @@ pub fn find_device<'a>(devices: &'a [DeviceInfo], query: &str) -> Result<&'a Dev
 }
 
 /// Resolve device - either find by query or auto-select if only one
-pub fn resolve_device(toolchain: &Toolchain, query: Option<&str>) -> Result<String> {
+pub fn resolve_device(toolchain: &Toolchain, query: Option<&str>) -> Result<DeviceInfo> {
     let devices = get_devices(toolchain)?;
 
     if devices.is_empty() {
@@ -147,11 +147,11 @@ pub fn resolve_device(toolchain: &Toolchain, query: Option<&str>) -> Result<Stri
     match query {
         Some(q) => {
             let device = find_device(&devices, q)?;
-            Ok(device.id.clone())
+            Ok(device.clone())
         }
         None => {
             if devices.len() == 1 {
-                Ok(devices[0].id.clone())
+                Ok(devices[0].clone())
             } else {
                 anyhow::bail!(
                     "Multiple devices connected. Specify one:\n{}",
@@ -159,6 +159,23 @@ pub fn resolve_device(toolchain: &Toolchain, query: Option<&str>) -> Result<Stri
                 );
             }
         }
+    }
+}
+
+impl DeviceInfo {
+    /// Format device for display: "Model · ID" or just "ID" if no model
+    pub fn display_name(&self) -> String {
+        match &self.model {
+            Some(model) => format!("{} · {}", model.replace('_', " "), self.id),
+            None => self.id.clone(),
+        }
+    }
+
+    /// Short display name (just model or ID)
+    pub fn short_name(&self) -> String {
+        self.model.as_ref()
+            .map(|m| m.replace('_', " "))
+            .unwrap_or_else(|| self.id.clone())
     }
 }
 
