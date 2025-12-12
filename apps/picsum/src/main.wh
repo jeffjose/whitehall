@@ -10,11 +10,11 @@ var photos: List<Photo> = []
 var loading: Boolean = true
 
 onMount {
-  photos = fetch("https://picsum.photos/v2/list")
+  photos = $fetch("https://picsum.photos/v2/list")
   loading = false
 }
 
-<Column>
+<Column spacing={8} padding={16}>
 @if (loading) {
   <Text>Loading...</Text>
 } @else {

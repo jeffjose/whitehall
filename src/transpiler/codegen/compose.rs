@@ -17,7 +17,7 @@ pub struct ComposeBackend {
     uses_hilt_viewmodel: bool, // Phase 2: Track if any Hilt stores are used (for imports)
     uses_dispatchers: bool, // Phase 2: Track if dispatcher syntax is used (io/cpu/main)
     uses_experimental_material3: bool, // Track if experimental Material3 APIs are used (DropdownMenu, etc.)
-    uses_fetch: bool, // Track if fetch() API is used (for Ktor imports)
+    uses_fetch: bool, // Track if $fetch() API is used (for Ktor imports)
     // Phase 1.1: ViewModel wrapper context
     in_viewmodel_wrapper: bool, // Are we generating markup inside a ViewModel wrapper?
     mutable_vars: std::collections::HashSet<String>, // Mutable vars (need uiState prefix)
@@ -84,7 +84,7 @@ impl ComposeBackend {
             uses_hilt_viewmodel: false, // Phase 2: Track Hilt store usage for imports
             uses_dispatchers: false, // Phase 2: Track dispatcher syntax usage
             uses_experimental_material3: false, // Track experimental Material3 API usage
-            uses_fetch: false, // Track fetch() API usage
+            uses_fetch: false, // Track $fetch() API usage
             in_viewmodel_wrapper: false, // Phase 1.1: Not in ViewModel wrapper by default
             mutable_vars: std::collections::HashSet::new(), // Phase 1.1: Track mutable vars
             derived_props: std::collections::HashSet::new(), // Phase 1.1: Track derived properties
@@ -198,7 +198,7 @@ impl ComposeBackend {
         // Pre-pass: Detect dispatcher usage (io/cpu/main)
         self.detect_dispatcher_usage(file);
 
-        // Pre-pass: Detect fetch() API usage
+        // Pre-pass: Detect $fetch() API usage
         self.detect_fetch_usage(file);
 
         // Otherwise, generate standard Composable component
@@ -287,7 +287,7 @@ impl ComposeBackend {
             imports.push("androidx.compose.material3.ExperimentalMaterial3Api".to_string());
         }
 
-        // Add Ktor imports for fetch() API usage
+        // Add Ktor imports for $fetch() API usage
         if self.uses_fetch {
             imports.push("io.ktor.client.HttpClient".to_string());
             imports.push("io.ktor.client.call.body".to_string());
@@ -311,7 +311,7 @@ impl ComposeBackend {
 
         output.push('\n');
 
-        // Generate HttpClient singleton if fetch() is used
+        // Generate HttpClient singleton if $fetch() is used
         if self.uses_fetch {
             output.push_str(&self.generate_http_client());
         }
@@ -559,8 +559,8 @@ impl ComposeBackend {
                         // Transform $screen.params.{name} → {name}
                         transformed_line = transformed_line.replace("$screen.params.", "");
 
-                        // Transform fetch() calls to Ktor HttpClient calls
-                        if transformed_line.contains("fetch(") {
+                        // Transform $fetch() calls to Ktor HttpClient calls
+                        if transformed_line.contains("$fetch(") {
                             transformed_line = self.transform_fetch_call(&transformed_line);
                         }
 
@@ -633,8 +633,8 @@ impl ComposeBackend {
                     }
 
                     let mut transformed_line = line.trim_start().replace("$screen.params.", "");
-                    // Transform fetch() calls to Ktor HttpClient calls
-                    if transformed_line.contains("fetch(") {
+                    // Transform $fetch() calls to Ktor HttpClient calls
+                    if transformed_line.contains("$fetch(") {
                         transformed_line = self.transform_fetch_call(&transformed_line);
                     }
                     if transformed_line.trim().starts_with("launch ") || transformed_line.trim().starts_with("launch{") {
@@ -691,8 +691,8 @@ impl ComposeBackend {
                         }
 
                         let mut transformed_line = line.trim_start().replace("$screen.params.", "");
-                        // Transform fetch() calls to Ktor HttpClient calls
-                        if transformed_line.contains("fetch(") {
+                        // Transform $fetch() calls to Ktor HttpClient calls
+                        if transformed_line.contains("$fetch(") {
                             transformed_line = self.transform_fetch_call(&transformed_line);
                         }
                         if transformed_line.trim().starts_with("launch ") || transformed_line.trim().starts_with("launch{") {
@@ -757,8 +757,8 @@ impl ComposeBackend {
                         // Transform $screen.params.{name} → {name}
                         transformed_line = transformed_line.replace("$screen.params.", "");
 
-                        // Transform fetch() calls to Ktor HttpClient calls
-                        if transformed_line.contains("fetch(") {
+                        // Transform $fetch() calls to Ktor HttpClient calls
+                        if transformed_line.contains("$fetch(") {
                             transformed_line = self.transform_fetch_call(&transformed_line);
                         }
 
@@ -3733,43 +3733,43 @@ impl ComposeBackend {
         (trimmed.to_string(), false)
     }
 
-    /// Detect if a file uses the fetch() API by scanning state and lifecycle hooks
+    /// Detect if a file uses the $fetch() API by scanning state and lifecycle hooks
     fn detect_fetch_usage(&mut self, file: &WhitehallFile) {
         // Check state initial values
         for state in &file.state {
-            if state.initial_value.contains("fetch(") {
+            if state.initial_value.contains("$fetch(") {
                 self.uses_fetch = true;
                 return;
             }
         }
         // Check lifecycle hooks
         for hook in &file.lifecycle_hooks {
-            if hook.body.contains("fetch(") {
+            if hook.body.contains("$fetch(") {
                 self.uses_fetch = true;
                 return;
             }
         }
         // Check functions
         for func in &file.functions {
-            if func.body.contains("fetch(") {
+            if func.body.contains("$fetch(") {
                 self.uses_fetch = true;
                 return;
             }
         }
     }
 
-    /// Transform fetch() calls to Ktor HttpClient calls
-    /// Input: photos = fetch("https://api.example.com/data")
+    /// Transform $fetch() calls to Ktor HttpClient calls
+    /// Input: photos = $fetch("https://api.example.com/data")
     /// Output: photos = httpClient.get("https://api.example.com/data").body()
     fn transform_fetch_call(&self, line: &str) -> String {
-        // Simple regex-like replacement for fetch("url") -> httpClient.get("url").body()
-        // Handle: fetch("url") or fetch("url")
+        // Simple regex-like replacement for $fetch("url") -> httpClient.get("url").body()
+        // Handle: $fetch("url")
         let mut result = line.to_string();
 
-        // Find fetch( and replace with httpClient.get(
-        if let Some(start) = result.find("fetch(") {
+        // Find $fetch( and replace with httpClient.get(
+        if let Some(start) = result.find("$fetch(") {
             // Find the matching closing paren
-            let after_fetch = &result[start + 6..]; // after "fetch("
+            let after_fetch = &result[start + 7..]; // after "$fetch("
             let mut depth = 1;
             let mut end_pos = 0;
 
@@ -3799,7 +3799,7 @@ impl ComposeBackend {
         result
     }
 
-    /// Generate HttpClient singleton for fetch() API
+    /// Generate HttpClient singleton for $fetch() API
     fn generate_http_client(&self) -> String {
         r#"private val httpClient = HttpClient(OkHttp) {
     install(ContentNegotiation) {
@@ -4803,9 +4803,9 @@ impl ComposeBackend {
             vm_imports.push("kotlinx.serialization.Serializable".to_string());
         }
 
-        // Check if fetch() is used in lifecycle hooks or functions
-        let uses_fetch_in_vm = file.lifecycle_hooks.iter().any(|h| h.body.contains("fetch("))
-            || file.functions.iter().any(|f| f.body.contains("fetch("));
+        // Check if $fetch() is used in lifecycle hooks or functions
+        let uses_fetch_in_vm = file.lifecycle_hooks.iter().any(|h| h.body.contains("$fetch("))
+            || file.functions.iter().any(|f| f.body.contains("$fetch("));
         if uses_fetch_in_vm {
             vm_imports.push("io.ktor.client.HttpClient".to_string());
             vm_imports.push("io.ktor.client.call.body".to_string());
@@ -4845,7 +4845,7 @@ impl ComposeBackend {
             output.push('\n');
         }
 
-        // Generate HttpClient singleton if fetch() is used
+        // Generate HttpClient singleton if $fetch() is used
         if uses_fetch_in_vm {
             output.push_str(&self.generate_http_client());
         }
@@ -4989,9 +4989,9 @@ impl ComposeBackend {
                             if line.trim().is_empty() {
                                 continue;
                             }
-                            // Transform fetch() calls to Ktor HttpClient calls
+                            // Transform $fetch() calls to Ktor HttpClient calls
                             let mut transformed_line = line.trim().to_string();
-                            if transformed_line.contains("fetch(") {
+                            if transformed_line.contains("$fetch(") {
                                 transformed_line = self.transform_fetch_call(&transformed_line);
                             }
                             output.push_str(&format!("            {}\n", transformed_line));

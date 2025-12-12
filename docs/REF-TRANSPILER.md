@@ -367,12 +367,12 @@ Warning: height="300" has no unit, assuming "300dp". Consider using {300} or "30
 
 ### Fetch API
 
-The `fetch()` function provides a web-like syntax for HTTP requests, transforming to Ktor HttpClient calls.
+The `$fetch()` function provides a web-like syntax for HTTP requests, transforming to Ktor HttpClient calls. The `$` prefix indicates this is Whitehall framework magic (like `$routes`, `$screen`, `$scope`).
 
 **Syntax:**
 
 ```whitehall
-val data: List<Photo> = fetch("https://api.example.com/photos")
+val data: List<Photo> = $fetch("https://api.example.com/photos")
 ```
 
 **Generated Kotlin:**
@@ -390,8 +390,8 @@ val data: List<Photo> = httpClient.get("https://api.example.com/photos").body()
 ```
 
 **Features:**
-- `fetch(url)` transforms to `httpClient.get(url).body()`
-- HttpClient singleton generated at file level when fetch() is detected
+- `$fetch(url)` transforms to `httpClient.get(url).body()`
+- HttpClient singleton generated at file level when $fetch() is detected
 - Uses Ktor with OkHttp engine for Android
 - Kotlinx.serialization for JSON parsing
 - Type inference from variable annotation
@@ -418,7 +418,7 @@ val data: List<Photo> = httpClient.get("https://api.example.com/photos").body()
 | Usage | Import Added |
 |-------|--------------|
 | `@Serializable` | `kotlinx.serialization.Serializable` |
-| `fetch()` | Ktor imports (HttpClient, body, OkHttp, etc.) |
+| `$fetch()` | Ktor imports (HttpClient, body, OkHttp, etc.) |
 | `Dispatchers.IO` | `kotlinx.coroutines.Dispatchers` |
 | `.launch {}` | `kotlinx.coroutines.launch` |
 | `rememberCoroutineScope()` | `androidx.compose.runtime.rememberCoroutineScope` |

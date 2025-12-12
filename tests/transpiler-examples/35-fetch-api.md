@@ -1,12 +1,12 @@
 # Fetch API for HTTP Requests
 
-Tests the fetch() API which transforms to Ktor HttpClient calls.
+Tests the $fetch() API which transforms to Ktor HttpClient calls.
 
 ## Input
 
 ```whitehall
 fun loadData(): String {
-  return fetch("https://api.example.com/data")
+  return $fetch("https://api.example.com/data")
 }
 
 <Text>Click to load</Text>
@@ -52,8 +52,8 @@ package: com.example.app.components
 
 ## Notes
 
-The fetch() API provides a web-like syntax for HTTP requests:
-- `fetch(url)` transforms to `httpClient.get(url).body()`
+The $fetch() API provides a web-like syntax for HTTP requests:
+- `$fetch(url)` transforms to `httpClient.get(url).body()`
 - HttpClient singleton is generated at file level
 - Uses Ktor with OkHttp engine for Android
 - Kotlinx.serialization for JSON parsing
