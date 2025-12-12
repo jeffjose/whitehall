@@ -3,9 +3,12 @@ name = "picsum"
 version = "0.1.0"
 
 [android]
+package = "com.example.picsum"
 min_sdk = 24
 target_sdk = 34
-package = "com.example.picsum"
+compile_sdk = 34
 
-[build]
-optimize_level = "default"
+[toolchain]
+java = "21"
+gradle = "8.7"
+agp = "8.5.1"
