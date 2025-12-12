@@ -145,6 +145,13 @@ android {{
     }}
 }}
 
+composeCompiler {{
+    // Enable strong skipping mode to automatically memoize lambdas
+    // This prevents unnecessary recomposition when lambdas capture unstable types
+    // (e.g., onClick handlers that reference local functions)
+    enableStrongSkippingMode = true
+}}
+
 dependencies {{
     implementation("androidx.core:core-ktx:1.13.1")
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.8.4")

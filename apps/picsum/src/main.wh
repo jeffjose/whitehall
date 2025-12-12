@@ -6,5 +6,5 @@ fun refresh() {
 
 <Column padding={16} spacing={8}>
   <Image src={"https://picsum.photos/seed/${seed}/300/200"} alt="Random photo" width="100%"/>
-  <Button text="New Image" onClick={refresh} />
+  <Button text="New Image 3" onClick={refresh} />
 </Column>

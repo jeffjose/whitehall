@@ -11,34 +11,33 @@ pub const DEFAULT_JAVA: &str = "21";
 
 /// Default Gradle version
 ///
-/// Latest stable Gradle release
-pub const DEFAULT_GRADLE: &str = "8.4";
+/// Latest stable Gradle release compatible with AGP 8.7
+pub const DEFAULT_GRADLE: &str = "8.10";
 
 /// Default Android Gradle Plugin (AGP) version
 ///
-/// Latest stable AGP release
-pub const DEFAULT_AGP: &str = "8.2.0";
+/// AGP 8.7.0 (October 2024) - supports API level 35
+pub const DEFAULT_AGP: &str = "8.7.0";
 
 /// Default Kotlin version
 ///
-/// Note: This is the Kotlin Gradle plugin version used by AGP,
-/// not the standalone Kotlin compiler
-pub const DEFAULT_KOTLIN: &str = "2.0.0";
+/// Kotlin 2.1.0 has strong skipping mode enabled by default,
+/// which prevents unnecessary recomposition of lambdas
+pub const DEFAULT_KOTLIN: &str = "2.1.0";
 
 /// Default Compose Compiler Extension version
 ///
 /// IMPORTANT: This must be compatible with DEFAULT_KOTLIN
-/// Version compatibility:
-/// - Kotlin 1.9.x → Compose Compiler 1.5.4
-/// - Kotlin 2.0.0 → Compose Compiler 2.0.0
-/// See: https://developer.android.com/jetpack/androidx/releases/compose-kotlin
-pub const DEFAULT_COMPOSE_COMPILER: &str = "2.0.0";
+/// With Kotlin 2.0+, the Compose compiler is bundled with Kotlin
+/// via the org.jetbrains.kotlin.plugin.compose plugin
+pub const DEFAULT_COMPOSE_COMPILER: &str = "2.1.0";
 
 /// Default minimum Android SDK version
 pub const DEFAULT_MIN_SDK: u32 = 24;
 
 /// Default target Android SDK version
-pub const DEFAULT_TARGET_SDK: u32 = 34;
+/// API 35 (Android 15) - latest stable
+pub const DEFAULT_TARGET_SDK: u32 = 35;
 
 /// Default build tools version
 pub const DEFAULT_BUILD_TOOLS: &str = "34.0.0";

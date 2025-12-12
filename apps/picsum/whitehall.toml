@@ -5,10 +5,11 @@ version = "0.1.0"
 [android]
 package = "com.example.picsum"
 min_sdk = 24
-target_sdk = 34
-compile_sdk = 34
+target_sdk = 35
+compile_sdk = 35
 
 [toolchain]
 java = "21"
-gradle = "8.7"
-agp = "8.5.1"
+gradle = "8.10"
+agp = "8.7.0"
+kotlin = "2.1.0"
