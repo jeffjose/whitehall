@@ -292,6 +292,37 @@ match (component, prop_name) {
 - **String resources with args:** `R.string.greeting(name)` → `stringResource(R.string.greeting, name)`
 - **Escape braces:** `\{literal\}` → `{literal}` (not interpolated)
 
+### Dimension Syntax
+
+Dimensions (width, height, padding, spacing, etc.) support multiple formats:
+
+| Syntax | Example | Generated Kotlin | Notes |
+|--------|---------|------------------|-------|
+| Number in braces | `height={300}` | `height(300.dp)` | Recommended for numeric values |
+| String with unit | `height="300dp"` | `height(300.dp)` | Explicit unit specification |
+| String with sp | `fontSize="16sp"` | `fontSize = 16.sp` | Scale-independent pixels (text) |
+| Percentage | `width="100%"` | `fillMaxWidth()` | For fill-parent behavior |
+| Variable | `height={mySize}` | `height(mySize)` | Variable assumed to have units |
+
+**Lenient Parsing:**
+
+For better developer experience, string numbers without units are accepted with a warning:
+
+```whitehall
+<!-- Works but shows warning -->
+<Image height="300" />
+```
+
+```
+Warning: height="300" has no unit, assuming "300dp". Consider using {300} or "300dp" for clarity.
+```
+
+**Best Practices:**
+- Use `{300}` (number in braces) for simple numeric dimensions — defaults to dp
+- Use `"300dp"` when you want to be explicit about units
+- Use `"100%"` for fill-parent behavior
+- Use `"16sp"` for text sizes (scale-independent pixels)
+
 ### Import Management
 
 **Process:**

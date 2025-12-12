@@ -1315,30 +1315,30 @@ impl ComposeBackend {
                             }
                         }
 
-                        // Handle width - check for "100%" web-style
+                        // Handle width using parse_dimension
                         if let Some(w) = width_prop {
                             let value = self.get_prop_expr(&w.value);
-                            let trimmed = value.trim().trim_matches('"');
-                            if trimmed == "100%" {
+                            let (dim_expr, is_percent) = self.parse_dimension(value, "width", "Image");
+                            if is_percent {
                                 // Only add if not already added via fillMaxWidth/fillMaxSize
                                 if !modifiers.iter().any(|m| m.contains("fillMaxWidth") || m.contains("fillMaxSize")) {
                                     modifiers.push(".fillMaxWidth()".to_string());
                                 }
-                            } else {
-                                modifiers.push(format!(".width({}.dp)", trimmed));
+                            } else if !dim_expr.is_empty() {
+                                modifiers.push(format!(".width({})", dim_expr));
                             }
                         }
-                        // Handle height - check for "100%" web-style
+                        // Handle height using parse_dimension
                         if let Some(h) = height_prop {
                             let value = self.get_prop_expr(&h.value);
-                            let trimmed = value.trim().trim_matches('"');
-                            if trimmed == "100%" {
+                            let (dim_expr, is_percent) = self.parse_dimension(value, "height", "Image");
+                            if is_percent {
                                 // Only add if not already added via fillMaxHeight/fillMaxSize
                                 if !modifiers.iter().any(|m| m.contains("fillMaxHeight") || m.contains("fillMaxSize")) {
                                     modifiers.push(".fillMaxHeight()".to_string());
                                 }
-                            } else {
-                                modifiers.push(format!(".height({}.dp)", trimmed));
+                            } else if !dim_expr.is_empty() {
+                                modifiers.push(format!(".height({})", dim_expr));
                             }
                         }
                         params.push(format!("modifier = Modifier{}", modifiers.join("")));
@@ -3086,10 +3086,9 @@ impl ComposeBackend {
                 Ok(vec![])
             }
             // Button onClick needs braces.
-            // Note: We don't wrap with remember because:
-            // 1. Local functions capture stable MutableState objects, not values
-            // 2. Compose compiler handles lambda stability for @Composable inline functions
-            // 3. The "flash" issue (if any) is not caused by lambda recreation
+            // Note: Strong skipping mode (Kotlin 2.1+) automatically memoizes lambdas,
+            // so explicit remember {} is not needed. The "flash" issue was actually
+            // caused by layout shift from AsyncImage loading, not recomposition.
             ("Button", "onClick") | ("IconButton", "onClick") => {
                 // Note: transform_lambda_arrow has already run at this point
                 // So () => expr has been converted to { expr }
@@ -3618,6 +3617,70 @@ impl ComposeBackend {
                 ""
             }
         }
+    }
+
+    /// Parse a dimension value and return the Kotlin expression.
+    ///
+    /// Rules:
+    /// - `{300}` (number) → `300.dp` (defaults to dp)
+    /// - `{someVar}` (variable) → `someVar` (used as-is, assumed to have units)
+    /// - `"300dp"` (string with unit) → `300.dp`
+    /// - `"300sp"` (string with unit) → `300.sp`
+    /// - `"100%"` (percentage) → returns None (caller handles as fillMax*)
+    /// - `"300"` (string without unit) → `300.dp` with warning
+    ///
+    /// Returns: (kotlin_expr, is_percentage)
+    fn parse_dimension(&self, value: &str, prop_name: &str, _component_name: &str) -> (String, bool) {
+        let trimmed = value.trim();
+
+        // Check if it's a quoted string
+        let is_string = trimmed.starts_with('"') && trimmed.ends_with('"');
+        let inner = if is_string {
+            trimmed.trim_matches('"')
+        } else {
+            trimmed
+        };
+
+        // Handle percentage
+        if inner == "100%" {
+            return (String::new(), true);
+        }
+
+        // Handle string with units
+        if is_string {
+            if inner.ends_with("dp") {
+                let num = inner.trim_end_matches("dp");
+                return (format!("{}.dp", num), false);
+            }
+            if inner.ends_with("sp") {
+                let num = inner.trim_end_matches("sp");
+                return (format!("{}.sp", num), false);
+            }
+            // String without unit - be lenient but warn
+            if inner.parse::<f64>().is_ok() {
+                eprintln!(
+                    "Warning: {}=\"{}\" has no unit, assuming \"{}dp\". Consider using {{{}}} or \"{}dp\" for clarity.",
+                    prop_name, inner, inner, inner, inner
+                );
+                return (format!("{}.dp", inner), false);
+            }
+            // Some other string value (like a variable reference in quotes?)
+            return (inner.to_string(), false);
+        }
+
+        // Handle numeric value (from {300})
+        if trimmed.parse::<f64>().is_ok() {
+            return (format!("{}.dp", trimmed), false);
+        }
+
+        // Handle variable/expression (from {someVar} or {size * 2})
+        // Check if it already has .dp or .sp suffix
+        if trimmed.ends_with(".dp") || trimmed.ends_with(".sp") {
+            return (trimmed.to_string(), false);
+        }
+
+        // Variable without unit - use as-is (caller is responsible for units)
+        (trimmed.to_string(), false)
     }
 
     /// Check if an expression references any mutable state variables
