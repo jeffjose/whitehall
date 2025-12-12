@@ -328,20 +328,9 @@ fn stream_logcat(toolchain: &Toolchain, package: &str, device_id: &str) -> Resul
                         continue;
                     }
 
-                    // Color code based on log level
-                    if line.contains(" E ") || line.contains("ERROR") || line.contains("FATAL") {
-                        println!("{}", line.red());
-                    } else if line.contains(" W ") || line.contains("WARN") {
-                        println!("{}", line.yellow());
-                    } else if line.contains(" I ") || line.contains("INFO") {
-                        println!("{}", line.white());
-                    } else if line.contains(" D ") || line.contains("DEBUG") {
-                        println!("{}", line.dimmed());
-                    } else if line.contains(" V ") || line.contains("VERBOSE") {
-                        println!("{}", line.dimmed());
-                    } else {
-                        println!("{}", line);
-                    }
+                    // Parse and colorize logcat line
+                    // Format: "L/Tag(PID): Message" where L is the log level
+                    print_colorized_logcat(&line);
                 }
                 Err(_) => break,
             }
@@ -352,4 +341,48 @@ fn stream_logcat(toolchain: &Toolchain, package: &str, device_id: &str) -> Resul
     let _ = child.kill();
 
     Ok(())
+}
+
+/// Parse and print a colorized logcat line.
+/// Format: "L/Tag(PID): Message" where L is the log level (V, D, I, W, E, F)
+fn print_colorized_logcat(line: &str) {
+    // Try to parse the brief format: "L/Tag( PID): Message"
+    if line.len() >= 2 && line.chars().nth(1) == Some('/') {
+        let level = line.chars().next().unwrap();
+
+        // Find the end of tag (look for the colon after the closing paren)
+        if let Some(colon_pos) = line.find("): ") {
+            let tag_part = &line[2..colon_pos + 1]; // "Tag(PID)"
+            let message = &line[colon_pos + 3..];   // Everything after "): "
+
+            // Color the level indicator
+            let level_colored = match level {
+                'E' | 'F' => format!("{}", level.to_string().red().bold()),
+                'W' => format!("{}", level.to_string().yellow().bold()),
+                'I' => format!("{}", level.to_string().green().bold()),
+                'D' => format!("{}", level.to_string().blue().bold()),
+                'V' => format!("{}", level.to_string().white().dimmed()),
+                _ => level.to_string(),
+            };
+
+            // Color the tag (cyan)
+            let tag_colored = format!("{}", tag_part.cyan());
+
+            // Color the message based on level
+            let message_colored = match level {
+                'E' | 'F' => format!("{}", message.red()),
+                'W' => format!("{}", message.yellow()),
+                'I' => message.to_string(),
+                'D' => format!("{}", message.dimmed()),
+                'V' => format!("{}", message.dimmed()),
+                _ => message.to_string(),
+            };
+
+            println!("{}/{} {}", level_colored, tag_colored, message_colored);
+            return;
+        }
+    }
+
+    // Fallback: print as-is if we couldn't parse
+    println!("{}", line);
 }
