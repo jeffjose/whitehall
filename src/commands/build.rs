@@ -5,7 +5,6 @@ use indicatif::{ProgressBar, ProgressStyle};
 use notify::{Event, RecursiveMode, Watcher};
 use std::env;
 use std::fs;
-use std::io::{self, Write};
 use std::path::{Path, PathBuf};
 use std::sync::mpsc::channel;
 use std::time::{Duration, Instant};
@@ -270,8 +269,6 @@ fn execute_single_file_watch(file_path: &str) -> Result<()> {
                     match run_single_file_build_watch(&file_path_buf, &original_dir) {
                         Ok(_) => print_build_status(start.elapsed(), true),
                         Err(e) => {
-                            // Clear the line and print error
-                            print!("\r\x1b[K");
                             eprintln!("{} {}", "error:".red().bold(), e);
                         }
                     }
@@ -378,8 +375,6 @@ fn execute_project_watch(manifest_path: &str) -> Result<()> {
                     match run_build_watch(&config) {
                         Ok(_) => print_build_status(start.elapsed(), true),
                         Err(e) => {
-                            // Clear the line and print error
-                            print!("\r\x1b[K");
                             eprintln!("{} {}", "error:".red().bold(), e);
                         }
                     }
@@ -407,13 +402,10 @@ fn run_build_watch(config: &crate::config::Config) -> Result<()> {
     Ok(())
 }
 
-/// Print build status on a single line (overwrites previous)
+/// Print build status on a new line
 fn print_build_status(elapsed: Duration, _success: bool) {
     let ms = elapsed.as_millis();
-    // Clear line and print status
-    print!("\r\x1b[K");
-    print!("   {} transpilation in {}ms", "Finished".green().bold(), format!("{}", ms).cyan());
-    io::stdout().flush().unwrap();
+    println!("   {} transpilation in {}ms", "Finished".green().bold(), format!("{}", ms).cyan());
 }
 
 /// Load gitignore from the current directory if it exists
