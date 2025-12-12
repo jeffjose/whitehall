@@ -741,6 +741,7 @@ Currently, Whitehall uses `$` prefix to denote framework-provided features that 
 | Magic | Description |
 |-------|-------------|
 | `$routes` | Type-safe route references (`$routes.login`, `$routes.post.detail`) |
+| `$navigate` | Navigation function (`$navigate($routes.login)` → `navController.navigate(...)`) |
 | `$screen` | Current screen context (`$screen.params.id`) |
 | `$scope` | Coroutine scope management |
 | `$ffi` | Foreign function interface |
@@ -751,6 +752,7 @@ Currently, Whitehall uses `$` prefix to denote framework-provided features that 
 ```whitehall
 // Future syntax (not yet implemented)
 import whitehall/fetch
+import whitehall/navigate
 import whitehall/routes
 import whitehall/screen
 

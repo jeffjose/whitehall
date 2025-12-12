@@ -564,12 +564,9 @@ impl ComposeBackend {
                             transformed_line = self.transform_fetch_call(&transformed_line);
                         }
 
-                        // For screens, transform navigate() to navController.navigate()
+                        // For screens, transform $navigate() to navController.navigate()
                         if self.component_type.as_deref() == Some("screen") {
-                            let trimmed = transformed_line.trim();
-                            if trimmed.starts_with("navigate(") {
-                                output.push_str("navController.");
-                            }
+                            transformed_line = transformed_line.replace("$navigate(", "navController.navigate(");
                         }
 
                         // For non-suspend functions with launch calls, prefix with coroutineScope.
@@ -762,12 +759,9 @@ impl ComposeBackend {
                             transformed_line = self.transform_fetch_call(&transformed_line);
                         }
 
-                        // For screens, transform navigate() to navController.navigate()
+                        // For screens, transform $navigate() to navController.navigate()
                         if self.component_type.as_deref() == Some("screen") {
-                            let trimmed = transformed_line.trim();
-                            if trimmed.starts_with("navigate(") {
-                                output.push_str("navController.");
-                            }
+                            transformed_line = transformed_line.replace("$navigate(", "navController.navigate(");
                         }
 
                         // For non-suspend functions with launch calls, prefix with coroutineScope.
@@ -3081,6 +3075,13 @@ impl ComposeBackend {
 
         // Transform route aliases first: $routes → Routes (before adding braces)
         let value = self.transform_route_aliases(prop_value);
+
+        // Transform $navigate() → navController.navigate() for screens
+        let value = if self.component_type.as_deref() == Some("screen") {
+            value.replace("$navigate(", "navController.navigate(")
+        } else {
+            value
+        };
 
         // Transform lambda arrow syntax: () => to {}
         let value = self.transform_lambda_arrow(&value);

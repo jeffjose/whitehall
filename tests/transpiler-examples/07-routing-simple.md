@@ -6,11 +6,11 @@ Tests basic $routes navigation without parameters.
 
 ```whitehall
   fun handleLoginClick() {
-    navigate($routes.login)
+    $navigate($routes.login)
   }
 
   fun handleSignupClick() {
-    navigate($routes.signup)
+    $navigate($routes.signup)
   }
 
 <Column spacing={16}>

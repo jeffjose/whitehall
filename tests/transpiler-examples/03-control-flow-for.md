@@ -11,7 +11,7 @@ import $models.Post
 
 <Column spacing={16}>
   @for (post in posts, key = { it.id }) {
-    <Card onClick={() => navigate($routes.post.detail(id = post.id))}>
+    <Card onClick={() => $navigate($routes.post.detail(id = post.id))}>
       <Column padding={12}>
         <Text fontSize={16} fontWeight="bold">{post.title}</Text>
         <Text color="secondary">{post.excerpt}</Text>
@@ -58,7 +58,7 @@ fun PostList(
             posts.forEach { post ->
                 key(post.id) {
                     Card(
-                        onClick = { navigate(Routes.Post.Detail(id = post.id)) }
+                        onClick = { $navigate(Routes.Post.Detail(id = post.id)) }
                     ) {
                         Column(modifier = Modifier.padding(12.dp)) {
                             Text(

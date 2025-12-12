@@ -280,6 +280,7 @@ match (component, prop_name) {
 
 - **Lambda arrows:** `() => expr` → `{ expr }`
 - **Route aliases:** `$routes.post.detail` → `Routes.Post.Detail`
+- **Navigation:** `$navigate($routes.login)` → `navController.navigate(Routes.Login)` (in screens)
 - **String literals:** `"bold"` → `FontWeight.Bold`
 - **Numbers:** `16` → `16.dp` or `16.sp` (context-dependent)
 - **Ternary operators:** `condition ? a : b` → `.let { if (condition) a else b }`

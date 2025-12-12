@@ -23,7 +23,7 @@ Tests string resource references for internationalization support.
 
   <Button
     text={R.string.action_continue}
-    onClick={() => navigate($routes.home)}
+    onClick={() => $navigate($routes.home)}
   />
 </Column>
 ```
@@ -65,7 +65,7 @@ fun WelcomeScreen(
         Text(
             text = "${stringResource(R.string.items_count, itemCount)}"
         )
-        Button(onClick = { navigate(Routes.Home) }) {
+        Button(onClick = { $navigate(Routes.Home) }) {
             Text(text = "${stringResource(R.string.action_continue)}")
         }
     }
