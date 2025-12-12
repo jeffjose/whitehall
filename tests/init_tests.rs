@@ -69,10 +69,15 @@ fn test_init_substitutes_project_name() {
         "Manifest should contain project name"
     );
 
-    // Verify snake_case package name substitution
+    // Verify snake_case package name substitution (uses current username)
+    let username = std::env::var("USER")
+        .or_else(|_| std::env::var("USERNAME"))
+        .unwrap_or_else(|_| "example".to_string())
+        .to_lowercase()
+        .replace('-', "_");
     assert!(
-        manifest_content.contains("package = \"com.example.my_awesome_app\""),
-        "Manifest should contain snake_case package name"
+        manifest_content.contains(&format!("package = \"com.{}.my_awesome_app\"", username)),
+        "Manifest should contain snake_case package name with username"
     );
 }
 
@@ -86,6 +91,12 @@ fn test_init_handles_different_naming_conventions() {
         ("with spaces", "with_spaces"),
     ];
 
+    let username = std::env::var("USER")
+        .or_else(|_| std::env::var("USERNAME"))
+        .unwrap_or_else(|_| "example".to_string())
+        .to_lowercase()
+        .replace('-', "_");
+
     for (input_name, expected_snake) in test_cases {
         let temp_dir = TempDir::new().unwrap();
         let project_path = temp_dir.path().join(input_name);
@@ -97,7 +108,7 @@ fn test_init_handles_different_naming_conventions() {
         let manifest_content = fs::read_to_string(project_path.join("whitehall.toml")).unwrap();
 
         assert!(
-            manifest_content.contains(&format!("package = \"com.example.{}\"", expected_snake)),
+            manifest_content.contains(&format!("package = \"com.{}.{}\"", username, expected_snake)),
             "Package name should be snake_case for input '{}'",
             input_name
         );

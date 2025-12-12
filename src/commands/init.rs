@@ -20,10 +20,18 @@ pub fn execute(project_name: &str) -> Result<()> {
     fs::create_dir_all(project_path.join("src"))
         .context("Failed to create project directories")?;
 
+    // Get current username for package name
+    let username = std::env::var("USER")
+        .or_else(|_| std::env::var("USERNAME"))
+        .unwrap_or_else(|_| "example".to_string())
+        .to_lowercase()
+        .replace('-', "_");
+
     // Generate whitehall.toml with substitutions
     let manifest_content = MANIFEST_TEMPLATE
         .replace("{{PROJECT_NAME}}", project_name)
-        .replace("{{PROJECT_NAME_SNAKE}}", &to_snake_case(project_name));
+        .replace("{{PROJECT_NAME_SNAKE}}", &to_snake_case(project_name))
+        .replace("{{USER}}", &username);
 
     fs::write(project_path.join("whitehall.toml"), manifest_content)
         .context("Failed to write whitehall.toml")?;
