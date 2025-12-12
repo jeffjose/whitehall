@@ -814,6 +814,17 @@ impl ComposeBackend {
             }
         }
 
+        // Check if @Serializable was used in kotlin blocks
+        if output.contains("@Serializable") {
+            let serializable_import = "import kotlinx.serialization.Serializable\n";
+            if !output.contains(serializable_import) {
+                if let Some(package_end) = output.find('\n') {
+                    let insert_pos = package_end + 1;
+                    output.insert_str(insert_pos, serializable_import);
+                }
+            }
+        }
+
         // Check if CoroutineScope.launch was used (for custom scopes)
         if output.contains(".launch {") || output.contains(".launch(") {
             let launch_import = "import kotlinx.coroutines.launch\n";
@@ -4783,6 +4794,13 @@ impl ComposeBackend {
 
         if has_suspend || has_lifecycle_hooks {
             vm_imports.push("kotlinx.coroutines.launch".to_string());
+        }
+
+        // Check if @Serializable is used in kotlin blocks
+        let uses_serializable = file.kotlin_blocks.iter()
+            .any(|block| block.content.contains("@Serializable"));
+        if uses_serializable {
+            vm_imports.push("kotlinx.serialization.Serializable".to_string());
         }
 
         // Add any user imports from the file
