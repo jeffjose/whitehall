@@ -1,10 +1,14 @@
 use anyhow::{Context, Result};
 use colored::Colorize;
+use ignore::gitignore::{Gitignore, GitignoreBuilder};
 use indicatif::{ProgressBar, ProgressStyle};
+use notify::{Event, RecursiveMode, Watcher};
 use std::env;
 use std::fs;
-use std::path::Path;
-use std::time::Instant;
+use std::io::{self, Write};
+use std::path::{Path, PathBuf};
+use std::sync::mpsc::channel;
+use std::time::{Duration, Instant};
 
 use crate::build_pipeline;
 use crate::config;
@@ -12,11 +16,23 @@ use crate::single_file;
 use crate::commands::{detect_target, Target};
 use crate::toolchain::Toolchain;
 
-pub fn execute(target: &str) -> Result<()> {
+pub fn execute(target: &str, watch: bool) -> Result<()> {
     // Detect if we're building a project or single file
     match detect_target(target) {
-        Target::Project(manifest_path) => execute_project(&manifest_path),
-        Target::SingleFile(file_path) => execute_single_file(&file_path),
+        Target::Project(manifest_path) => {
+            if watch {
+                execute_project_watch(&manifest_path)
+            } else {
+                execute_project(&manifest_path)
+            }
+        }
+        Target::SingleFile(file_path) => {
+            if watch {
+                execute_single_file_watch(&file_path)
+            } else {
+                execute_single_file(&file_path)
+            }
+        }
     }
 }
 
@@ -210,4 +226,229 @@ fn build_with_gradle(toolchain: &Toolchain, config: &crate::config::Config, outp
     }
 
     Ok(())
+}
+
+// ============================================================================
+// Watch mode implementations
+// ============================================================================
+
+/// Watch a single .wh file for changes and rebuild
+fn execute_single_file_watch(file_path: &str) -> Result<()> {
+    let file_path_buf = PathBuf::from(file_path);
+    let original_dir = env::current_dir()?;
+
+    // Load gitignore from the file's directory
+    let watch_dir = file_path_buf.parent().unwrap_or(Path::new("."));
+    let gitignore = load_gitignore(watch_dir);
+
+    // Initial build
+    let start = Instant::now();
+    match run_single_file_build_watch(&file_path_buf, &original_dir) {
+        Ok(_) => print_build_status(start.elapsed(), true),
+        Err(e) => {
+            eprintln!("{} {}", "error:".red().bold(), e);
+        }
+    }
+
+    // Set up file watcher
+    let (tx, rx) = channel();
+    let mut watcher = notify::recommended_watcher(move |res: Result<Event, _>| {
+        if let Ok(event) = res {
+            let _ = tx.send(event);
+        }
+    })?;
+
+    // Watch the single .wh file
+    watcher.watch(&file_path_buf, RecursiveMode::NonRecursive)?;
+
+    // Watch loop
+    loop {
+        match rx.recv_timeout(Duration::from_millis(100)) {
+            Ok(event) => {
+                if should_rebuild(&event, &gitignore) {
+                    let start = Instant::now();
+                    match run_single_file_build_watch(&file_path_buf, &original_dir) {
+                        Ok(_) => print_build_status(start.elapsed(), true),
+                        Err(e) => {
+                            // Clear the line and print error
+                            print!("\r\x1b[K");
+                            eprintln!("{} {}", "error:".red().bold(), e);
+                        }
+                    }
+                }
+            }
+            Err(_) => {
+                // Timeout, continue loop (allows Ctrl+C to work)
+            }
+        }
+    }
+}
+
+/// Build a single file for watch mode (transpilation only)
+fn run_single_file_build_watch(file_path: &Path, original_dir: &Path) -> Result<()> {
+    // Parse frontmatter
+    let content = fs::read_to_string(file_path)?;
+    let (single_config, code) = single_file::parse_frontmatter(&content)?;
+
+    // Generate temporary project
+    let temp_project_dir = single_file::generate_temp_project(file_path, &single_config, &code)?;
+
+    // Change to temp project directory
+    env::set_current_dir(&temp_project_dir)?;
+
+    // Load config
+    let config = config::load_config("whitehall.toml")?;
+
+    // Run build (incremental, transpilation only)
+    let result = build_pipeline::execute_build(&config, false)?;
+
+    // Restore directory
+    env::set_current_dir(original_dir)?;
+
+    if !result.errors.is_empty() {
+        for error in &result.errors {
+            eprintln!("  {} - {}", error.file.display(), error.message);
+        }
+        anyhow::bail!("Build failed with {} error(s)", result.errors.len());
+    }
+
+    Ok(())
+}
+
+/// Watch a project for changes and rebuild
+fn execute_project_watch(manifest_path: &str) -> Result<()> {
+    // Determine project directory from manifest path
+    let manifest_path = Path::new(manifest_path);
+    let original_dir = env::current_dir()?;
+
+    let project_dir = if manifest_path == Path::new("whitehall.toml") {
+        original_dir.clone()
+    } else {
+        let dir = manifest_path
+            .parent()
+            .unwrap_or_else(|| Path::new("."))
+            .to_path_buf();
+
+        if dir.is_relative() {
+            original_dir.join(dir)
+        } else {
+            dir
+        }
+    };
+
+    // Change to project directory if needed
+    if project_dir != original_dir {
+        env::set_current_dir(&project_dir)?;
+    }
+
+    // Load gitignore from project directory
+    let gitignore = load_gitignore(&env::current_dir()?);
+
+    // Load configuration
+    let manifest_file = manifest_path.file_name().unwrap().to_str().unwrap();
+    let config = config::load_config(manifest_file)?;
+
+    // Initial build
+    let start = Instant::now();
+    match run_build_watch(&config) {
+        Ok(_) => print_build_status(start.elapsed(), true),
+        Err(e) => {
+            eprintln!("{} {}", "error:".red().bold(), e);
+        }
+    }
+
+    // Set up file watcher
+    let (tx, rx) = channel();
+    let mut watcher = notify::recommended_watcher(move |res: Result<Event, _>| {
+        if let Ok(event) = res {
+            let _ = tx.send(event);
+        }
+    })?;
+
+    // Watch src/ directory and whitehall.toml
+    watcher.watch(Path::new("src"), RecursiveMode::Recursive)?;
+    watcher.watch(Path::new(manifest_file), RecursiveMode::NonRecursive)?;
+
+    // Watch loop
+    loop {
+        match rx.recv_timeout(Duration::from_millis(100)) {
+            Ok(event) => {
+                if should_rebuild(&event, &gitignore) {
+                    let start = Instant::now();
+                    match run_build_watch(&config) {
+                        Ok(_) => print_build_status(start.elapsed(), true),
+                        Err(e) => {
+                            // Clear the line and print error
+                            print!("\r\x1b[K");
+                            eprintln!("{} {}", "error:".red().bold(), e);
+                        }
+                    }
+                }
+            }
+            Err(_) => {
+                // Timeout, continue loop (allows Ctrl+C to work)
+            }
+        }
+    }
+}
+
+/// Run transpilation build for watch mode
+fn run_build_watch(config: &crate::config::Config) -> Result<()> {
+    // Run build with clean=false for incremental builds
+    let result = build_pipeline::execute_build(config, false)?;
+
+    if !result.errors.is_empty() {
+        for error in &result.errors {
+            eprintln!("  {} - {}", error.file.display(), error.message);
+        }
+        anyhow::bail!("Build failed with {} error(s)", result.errors.len());
+    }
+
+    Ok(())
+}
+
+/// Print build status on a single line (overwrites previous)
+fn print_build_status(elapsed: Duration, _success: bool) {
+    let ms = elapsed.as_millis();
+    // Clear line and print status
+    print!("\r\x1b[K");
+    print!("Build completed in {}ms", ms);
+    io::stdout().flush().unwrap();
+}
+
+/// Load gitignore from the current directory if it exists
+fn load_gitignore(dir: &Path) -> Gitignore {
+    let gitignore_path = dir.join(".gitignore");
+    let mut builder = GitignoreBuilder::new(dir);
+
+    if gitignore_path.exists() {
+        let _ = builder.add(&gitignore_path);
+    }
+
+    builder.build().unwrap_or_else(|_| Gitignore::empty())
+}
+
+/// Check if an event should trigger a rebuild
+fn should_rebuild(event: &notify::Event, gitignore: &Gitignore) -> bool {
+    use notify::EventKind::*;
+
+    match event.kind {
+        Modify(_) | Create(_) | Remove(_) => {
+            // Check if any path is a .wh file or whitehall.toml
+            // AND is not ignored by gitignore
+            event.paths.iter().any(|p| {
+                let is_relevant = p.extension().map_or(false, |ext| ext == "wh")
+                    || p.file_name().map_or(false, |name| name == "whitehall.toml");
+
+                if !is_relevant {
+                    return false;
+                }
+
+                // Check if path is ignored by gitignore
+                // matched() returns Match which has is_ignore() method
+                !gitignore.matched(p, p.is_dir()).is_ignore()
+            })
+        }
+        _ => false,
+    }
 }

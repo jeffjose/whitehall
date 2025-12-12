@@ -37,6 +37,9 @@ enum Commands {
         /// Path to project directory or .wh file (defaults to current directory)
         #[arg(default_value = ".")]
         target: String,
+        /// Watch for changes and rebuild automatically
+        #[arg(long, short)]
+        watch: bool,
     },
     /// Watch for changes and rebuild automatically
     /// Works with both project directories (whitehall.toml) and single .wh files
@@ -187,8 +190,8 @@ fn main() {
         Commands::Compile { target, package, no_package } => {
             commands::compile::execute(&target, package.as_deref(), no_package)
         }
-        Commands::Build { target } => {
-            commands::build::execute(&target)
+        Commands::Build { target, watch } => {
+            commands::build::execute(&target, watch)
         }
         Commands::Watch { target } => {
             commands::watch::execute(&target)
