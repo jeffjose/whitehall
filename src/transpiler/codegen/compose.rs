@@ -18,6 +18,7 @@ pub struct ComposeBackend {
     uses_dispatchers: bool, // Phase 2: Track if dispatcher syntax is used (io/cpu/main)
     uses_experimental_material3: bool, // Track if experimental Material3 APIs are used (DropdownMenu, etc.)
     uses_fetch: bool, // Track if $fetch() API is used (for Ktor imports)
+    uses_routes: bool, // Track if $routes or $navigate is used (for Routes import)
     // Phase 1.1: ViewModel wrapper context
     in_viewmodel_wrapper: bool, // Are we generating markup inside a ViewModel wrapper?
     mutable_vars: std::collections::HashSet<String>, // Mutable vars (need uiState prefix)
@@ -85,6 +86,7 @@ impl ComposeBackend {
             uses_dispatchers: false, // Phase 2: Track dispatcher syntax usage
             uses_experimental_material3: false, // Track experimental Material3 API usage
             uses_fetch: false, // Track $fetch() API usage
+            uses_routes: false, // Track $routes/$navigate usage for Routes import
             in_viewmodel_wrapper: false, // Phase 1.1: Not in ViewModel wrapper by default
             mutable_vars: std::collections::HashSet::new(), // Phase 1.1: Track mutable vars
             derived_props: std::collections::HashSet::new(), // Phase 1.1: Track derived properties
@@ -188,6 +190,8 @@ impl ComposeBackend {
         };
 
         if is_component_viewmodel {
+            // Pre-pass: Detect $routes/$navigate usage (for Routes import in wrapper)
+            self.detect_routes_usage(file);
             // Component has inline vars → Generate ViewModel + wrapper component
             return self.generate_component_viewmodel(file);
         }
@@ -200,6 +204,9 @@ impl ComposeBackend {
 
         // Pre-pass: Detect $fetch() API usage
         self.detect_fetch_usage(file);
+
+        // Pre-pass: Detect $routes/$navigate usage (for Routes import)
+        self.detect_routes_usage(file);
 
         // Otherwise, generate standard Composable component
         let mut output = String::new();
@@ -296,6 +303,13 @@ impl ComposeBackend {
             imports.push("io.ktor.client.request.get".to_string());
             imports.push("io.ktor.serialization.kotlinx.json.json".to_string());
             imports.push("kotlinx.serialization.json.Json".to_string());
+        }
+
+        // Add Routes import if $routes or $navigate is used (for screens)
+        if self.uses_routes && self.component_type.as_deref() == Some("screen") {
+            // Extract base package (e.g., com.example.app.screens -> com.example.app)
+            let base_package = self.get_base_package();
+            imports.push(format!("{}.routes.Routes", base_package));
         }
 
         // Note: Dispatchers import is added later if needed (see end of generate function)
@@ -1395,6 +1409,8 @@ impl ComposeBackend {
                         }
 
                         let prop_expr = self.get_prop_expr(&prop.value);
+                        // Apply $screen.params transformation
+                        let prop_expr = prop_expr.replace("$screen.params.", "");
 
                         match prop.name.as_str() {
                             // Web-style aliases
@@ -1438,10 +1454,16 @@ impl ComposeBackend {
                             }
                             // Other props pass through
                             _ => {
-                                let transformed = self.transform_prop("AsyncImage", &prop.name, prop_expr);
+                                let transformed = self.transform_prop("AsyncImage", &prop.name, &prop_expr);
                                 params.extend(transformed?);
                             }
                         }
+                    }
+
+                    // Add contentDescription = null if not provided (AsyncImage requires it)
+                    let has_content_desc = comp.props.iter().any(|p| p.name == "alt" || p.name == "contentDescription");
+                    if !has_content_desc {
+                        params.push("contentDescription = null".to_string());
                     }
 
                     // Change component name to AsyncImage for output
@@ -2991,8 +3013,10 @@ impl ComposeBackend {
     }
 
     fn transform_prop(&mut self, component: &str, prop_name: &str, prop_value: &str) -> Result<Vec<String>, String> {
+        // Transform $screen.params.{name} → {name} for screens
+        let prop_value = prop_value.replace("$screen.params.", "");
         // Transform string interpolation first: {expr} → ${expr}
-        let prop_value = self.transform_string_interpolation(prop_value);
+        let prop_value = self.transform_string_interpolation(&prop_value);
 
         // Handle bind:value special syntax BEFORE transform_viewmodel_expression
         // because we need the original variable name, not the transformed one
@@ -3451,6 +3475,24 @@ impl ComposeBackend {
         result
     }
 
+    /// Get the base package by removing screen-related suffixes
+    /// e.g., com.example.app.screens -> com.example.app
+    /// e.g., com.example.app.screens.detail -> com.example.app
+    fn get_base_package(&self) -> String {
+        let parts: Vec<&str> = self.package.split('.').collect();
+        // Find the "screens" part and take everything before it
+        if let Some(screens_idx) = parts.iter().position(|&p| p == "screens") {
+            parts[..screens_idx].join(".")
+        } else {
+            // Fallback: remove last segment
+            if parts.len() > 1 {
+                parts[..parts.len() - 1].join(".")
+            } else {
+                self.package.clone()
+            }
+        }
+    }
+
     fn transform_route_aliases(&self, value: &str) -> String {
         // Transform $routes.foo.bar(params) to Routes.Foo.Bar(params)
         if let Some(routes_pos) = value.find("$routes.") {
@@ -3504,9 +3546,80 @@ impl ComposeBackend {
             self.extract_params_from_text(&state.initial_value, &mut params);
         }
 
+        // Scan markup for $screen.params.{name} (e.g., in props like src={...})
+        self.extract_params_from_single_markup(&file.markup, &mut params);
+
         let mut param_vec: Vec<String> = params.into_iter().collect();
         param_vec.sort();
         param_vec
+    }
+
+    fn extract_params_from_single_markup(&self, markup: &Markup, params: &mut std::collections::HashSet<String>) {
+        match markup {
+            Markup::Component(comp) => {
+                // Scan props
+                for prop in &comp.props {
+                    if let PropValue::Expression(expr) = &prop.value {
+                        self.extract_params_from_text(expr, params);
+                    }
+                }
+                // Scan children recursively
+                for child in &comp.children {
+                    self.extract_params_from_single_markup(child, params);
+                }
+            }
+            Markup::Text(text) => {
+                self.extract_params_from_text(text, params);
+            }
+            Markup::Interpolation(expr) => {
+                self.extract_params_from_text(expr, params);
+            }
+            Markup::Sequence(items) => {
+                for item in items {
+                    self.extract_params_from_single_markup(item, params);
+                }
+            }
+            Markup::IfElse(block) => {
+                // Scan condition
+                self.extract_params_from_text(&block.condition, params);
+                // Scan branches
+                for item in &block.then_branch {
+                    self.extract_params_from_single_markup(item, params);
+                }
+                for else_if in &block.else_ifs {
+                    self.extract_params_from_text(&else_if.condition, params);
+                    for item in &else_if.body {
+                        self.extract_params_from_single_markup(item, params);
+                    }
+                }
+                if let Some(else_branch) = &block.else_branch {
+                    for item in else_branch {
+                        self.extract_params_from_single_markup(item, params);
+                    }
+                }
+            }
+            Markup::ForLoop(block) => {
+                // Scan collection expression and body
+                self.extract_params_from_text(&block.collection, params);
+                for item in &block.body {
+                    self.extract_params_from_single_markup(item, params);
+                }
+                if let Some(empty) = &block.empty_block {
+                    for item in empty {
+                        self.extract_params_from_single_markup(item, params);
+                    }
+                }
+            }
+            Markup::When(block) => {
+                // Scan branches
+                for branch in &block.branches {
+                    if let Some(cond) = &branch.condition {
+                        self.extract_params_from_text(cond, params);
+                    }
+                    self.extract_params_from_single_markup(&branch.body, params);
+                }
+            }
+        }
     }
 
     fn extract_params_from_text(&self, text: &str, params: &mut std::collections::HashSet<String>) {
@@ -3756,6 +3869,29 @@ impl ComposeBackend {
                 self.uses_fetch = true;
                 return;
             }
+        }
+    }
+
+    /// Detect if a file uses $routes or $navigate (needs Routes import)
+    fn detect_routes_usage(&mut self, file: &WhitehallFile) {
+        // Check functions for $routes or $navigate
+        for func in &file.functions {
+            if func.body.contains("$routes") || func.body.contains("$navigate") {
+                self.uses_routes = true;
+                return;
+            }
+        }
+        // Check lifecycle hooks
+        for hook in &file.lifecycle_hooks {
+            if hook.body.contains("$routes") || hook.body.contains("$navigate") {
+                self.uses_routes = true;
+                return;
+            }
+        }
+        // Check markup (onClick handlers, etc.)
+        let markup_str = format!("{:?}", file.markup);
+        if markup_str.contains("$routes") || markup_str.contains("$navigate") {
+            self.uses_routes = true;
         }
     }
 
@@ -5061,6 +5197,12 @@ impl ComposeBackend {
         // For screens, add NavController import
         if self.component_type.as_deref() == Some("screen") {
             imports.push("androidx.navigation.NavController".to_string());
+        }
+
+        // Add Routes import if $routes or $navigate is used (for screens)
+        if self.uses_routes && self.component_type.as_deref() == Some("screen") {
+            let base_package = self.get_base_package();
+            imports.push(format!("{}.routes.Routes", base_package));
         }
 
         // Sort imports alphabetically (standard Kotlin convention)
