@@ -260,11 +260,19 @@ fn execute_single_file_watch(file_path: &str) -> Result<()> {
     // Watch the single .wh file
     watcher.watch(&file_path_buf, RecursiveMode::NonRecursive)?;
 
-    // Watch loop
+    // Watch loop with debouncing
+    let mut last_build = Instant::now();
     loop {
         match rx.recv_timeout(Duration::from_millis(100)) {
             Ok(event) => {
                 if should_rebuild(&event, &gitignore) {
+                    // Debounce: skip if we just built within 100ms
+                    if last_build.elapsed() < Duration::from_millis(100) {
+                        continue;
+                    }
+                    // Drain any additional pending events
+                    while rx.try_recv().is_ok() {}
+
                     let start = Instant::now();
                     match run_single_file_build_watch(&file_path_buf, &original_dir) {
                         Ok(_) => print_build_status(start.elapsed(), true),
@@ -272,6 +280,7 @@ fn execute_single_file_watch(file_path: &str) -> Result<()> {
                             eprintln!("{} {}", "error:".red().bold(), e);
                         }
                     }
+                    last_build = Instant::now();
                 }
             }
             Err(_) => {
@@ -366,11 +375,19 @@ fn execute_project_watch(manifest_path: &str) -> Result<()> {
     watcher.watch(Path::new("src"), RecursiveMode::Recursive)?;
     watcher.watch(Path::new(manifest_file), RecursiveMode::NonRecursive)?;
 
-    // Watch loop
+    // Watch loop with debouncing
+    let mut last_build = Instant::now();
     loop {
         match rx.recv_timeout(Duration::from_millis(100)) {
             Ok(event) => {
                 if should_rebuild(&event, &gitignore) {
+                    // Debounce: skip if we just built within 100ms
+                    if last_build.elapsed() < Duration::from_millis(100) {
+                        continue;
+                    }
+                    // Drain any additional pending events
+                    while rx.try_recv().is_ok() {}
+
                     let start = Instant::now();
                     match run_build_watch(&config) {
                         Ok(_) => print_build_status(start.elapsed(), true),
@@ -378,6 +395,7 @@ fn execute_project_watch(manifest_path: &str) -> Result<()> {
                             eprintln!("{} {}", "error:".red().bold(), e);
                         }
                     }
+                    last_build = Instant::now();
                 }
             }
             Err(_) => {
