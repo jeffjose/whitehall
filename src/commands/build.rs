@@ -412,7 +412,7 @@ fn print_build_status(elapsed: Duration, _success: bool) {
     let ms = elapsed.as_millis();
     // Clear line and print status
     print!("\r\x1b[K");
-    print!("{} in {}ms", "Build completed".green().bold(), format!("{}", ms).cyan());
+    print!("   {} transpilation in {}ms", "Finished".green().bold(), format!("{}", ms).cyan());
     io::stdout().flush().unwrap();
 }
 
