@@ -17,6 +17,7 @@ pub struct ComposeBackend {
     uses_hilt_viewmodel: bool, // Phase 2: Track if any Hilt stores are used (for imports)
     uses_dispatchers: bool, // Phase 2: Track if dispatcher syntax is used (io/cpu/main)
     uses_experimental_material3: bool, // Track if experimental Material3 APIs are used (DropdownMenu, etc.)
+    uses_fetch: bool, // Track if fetch() API is used (for Ktor imports)
     // Phase 1.1: ViewModel wrapper context
     in_viewmodel_wrapper: bool, // Are we generating markup inside a ViewModel wrapper?
     mutable_vars: std::collections::HashSet<String>, // Mutable vars (need uiState prefix)
@@ -83,6 +84,7 @@ impl ComposeBackend {
             uses_hilt_viewmodel: false, // Phase 2: Track Hilt store usage for imports
             uses_dispatchers: false, // Phase 2: Track dispatcher syntax usage
             uses_experimental_material3: false, // Track experimental Material3 API usage
+            uses_fetch: false, // Track fetch() API usage
             in_viewmodel_wrapper: false, // Phase 1.1: Not in ViewModel wrapper by default
             mutable_vars: std::collections::HashSet::new(), // Phase 1.1: Track mutable vars
             derived_props: std::collections::HashSet::new(), // Phase 1.1: Track derived properties
@@ -196,6 +198,9 @@ impl ComposeBackend {
         // Pre-pass: Detect dispatcher usage (io/cpu/main)
         self.detect_dispatcher_usage(file);
 
+        // Pre-pass: Detect fetch() API usage
+        self.detect_fetch_usage(file);
+
         // Otherwise, generate standard Composable component
         let mut output = String::new();
 
@@ -282,6 +287,17 @@ impl ComposeBackend {
             imports.push("androidx.compose.material3.ExperimentalMaterial3Api".to_string());
         }
 
+        // Add Ktor imports for fetch() API usage
+        if self.uses_fetch {
+            imports.push("io.ktor.client.HttpClient".to_string());
+            imports.push("io.ktor.client.call.body".to_string());
+            imports.push("io.ktor.client.engine.okhttp.OkHttp".to_string());
+            imports.push("io.ktor.client.plugins.contentnegotiation.ContentNegotiation".to_string());
+            imports.push("io.ktor.client.request.get".to_string());
+            imports.push("io.ktor.serialization.kotlinx.json.json".to_string());
+            imports.push("kotlinx.serialization.json.Json".to_string());
+        }
+
         // Note: Dispatchers import is added later if needed (see end of generate function)
 
         // Deduplicate and sort imports alphabetically (standard Kotlin convention)
@@ -294,6 +310,11 @@ impl ComposeBackend {
         }
 
         output.push('\n');
+
+        // Generate HttpClient singleton if fetch() is used
+        if self.uses_fetch {
+            output.push_str(&self.generate_http_client());
+        }
 
         // Component function
         // Add @OptIn if using experimental Material3 APIs
@@ -538,6 +559,11 @@ impl ComposeBackend {
                         // Transform $screen.params.{name} → {name}
                         transformed_line = transformed_line.replace("$screen.params.", "");
 
+                        // Transform fetch() calls to Ktor HttpClient calls
+                        if transformed_line.contains("fetch(") {
+                            transformed_line = self.transform_fetch_call(&transformed_line);
+                        }
+
                         // For screens, transform navigate() to navController.navigate()
                         if self.component_type.as_deref() == Some("screen") {
                             let trimmed = transformed_line.trim();
@@ -606,7 +632,11 @@ impl ComposeBackend {
                         output.push_str(&"  ".repeat(original_indent / 2));
                     }
 
-                    let transformed_line = line.trim_start().replace("$screen.params.", "");
+                    let mut transformed_line = line.trim_start().replace("$screen.params.", "");
+                    // Transform fetch() calls to Ktor HttpClient calls
+                    if transformed_line.contains("fetch(") {
+                        transformed_line = self.transform_fetch_call(&transformed_line);
+                    }
                     if transformed_line.trim().starts_with("launch ") || transformed_line.trim().starts_with("launch{") {
                         output.push_str("coroutineScope.");
                         output.push_str(transformed_line.trim());
@@ -660,7 +690,11 @@ impl ComposeBackend {
                             output.push_str(&"  ".repeat(original_indent / 2));
                         }
 
-                        let transformed_line = line.trim_start().replace("$screen.params.", "");
+                        let mut transformed_line = line.trim_start().replace("$screen.params.", "");
+                        // Transform fetch() calls to Ktor HttpClient calls
+                        if transformed_line.contains("fetch(") {
+                            transformed_line = self.transform_fetch_call(&transformed_line);
+                        }
                         if transformed_line.trim().starts_with("launch ") || transformed_line.trim().starts_with("launch{") {
                             output.push_str("coroutineScope.");
                             output.push_str(transformed_line.trim());
@@ -722,6 +756,11 @@ impl ComposeBackend {
 
                         // Transform $screen.params.{name} → {name}
                         transformed_line = transformed_line.replace("$screen.params.", "");
+
+                        // Transform fetch() calls to Ktor HttpClient calls
+                        if transformed_line.contains("fetch(") {
+                            transformed_line = self.transform_fetch_call(&transformed_line);
+                        }
 
                         // For screens, transform navigate() to navController.navigate()
                         if self.component_type.as_deref() == Some("screen") {
@@ -3681,6 +3720,83 @@ impl ComposeBackend {
 
         // Variable without unit - use as-is (caller is responsible for units)
         (trimmed.to_string(), false)
+    }
+
+    /// Detect if a file uses the fetch() API by scanning state and lifecycle hooks
+    fn detect_fetch_usage(&mut self, file: &WhitehallFile) {
+        // Check state initial values
+        for state in &file.state {
+            if state.initial_value.contains("fetch(") {
+                self.uses_fetch = true;
+                return;
+            }
+        }
+        // Check lifecycle hooks
+        for hook in &file.lifecycle_hooks {
+            if hook.body.contains("fetch(") {
+                self.uses_fetch = true;
+                return;
+            }
+        }
+        // Check functions
+        for func in &file.functions {
+            if func.body.contains("fetch(") {
+                self.uses_fetch = true;
+                return;
+            }
+        }
+    }
+
+    /// Transform fetch() calls to Ktor HttpClient calls
+    /// Input: photos = fetch("https://api.example.com/data")
+    /// Output: photos = httpClient.get("https://api.example.com/data").body()
+    fn transform_fetch_call(&self, line: &str) -> String {
+        // Simple regex-like replacement for fetch("url") -> httpClient.get("url").body()
+        // Handle: fetch("url") or fetch("url")
+        let mut result = line.to_string();
+
+        // Find fetch( and replace with httpClient.get(
+        if let Some(start) = result.find("fetch(") {
+            // Find the matching closing paren
+            let after_fetch = &result[start + 6..]; // after "fetch("
+            let mut depth = 1;
+            let mut end_pos = 0;
+
+            for (i, ch) in after_fetch.char_indices() {
+                match ch {
+                    '(' => depth += 1,
+                    ')' => {
+                        depth -= 1;
+                        if depth == 0 {
+                            end_pos = i;
+                            break;
+                        }
+                    }
+                    _ => {}
+                }
+            }
+
+            if depth == 0 {
+                // Extract the URL argument
+                let url_arg = &after_fetch[..end_pos];
+                // Replace fetch(...) with httpClient.get(...).body()
+                let replacement = format!("httpClient.get({}).body()", url_arg);
+                result = format!("{}{}{}", &result[..start], replacement, &after_fetch[end_pos + 1..]);
+            }
+        }
+
+        result
+    }
+
+    /// Generate HttpClient singleton for fetch() API
+    fn generate_http_client(&self) -> String {
+        r#"private val httpClient = HttpClient(OkHttp) {
+    install(ContentNegotiation) {
+        json(Json { ignoreUnknownKeys = true })
+    }
+}
+
+"#.to_string()
     }
 
     /// Check if an expression references any mutable state variables

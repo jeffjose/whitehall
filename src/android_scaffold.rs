@@ -24,9 +24,11 @@ plugins {{
     id("com.android.application") version "{}" apply false
     id("org.jetbrains.kotlin.android") version "{}" apply false
     id("org.jetbrains.kotlin.plugin.compose") version "{}" apply false
+    id("org.jetbrains.kotlin.plugin.serialization") version "{}" apply false
 }}
 "#,
         config.toolchain.agp,
+        config.toolchain.kotlin,
         config.toolchain.kotlin,
         config.toolchain.kotlin
     );
@@ -88,6 +90,7 @@ fn generate_app_gradle(config: &Config, output_dir: &Path) -> Result<()> {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
     id("org.jetbrains.kotlin.plugin.compose")
+    id("org.jetbrains.kotlin.plugin.serialization")
 }}
 
 android {{
@@ -168,6 +171,15 @@ dependencies {{
 
     // Coil for AsyncImage
     implementation("io.coil-kt:coil-compose:2.6.0")
+
+    // Ktor for HTTP client (fetch API)
+    implementation("io.ktor:ktor-client-core:3.0.3")
+    implementation("io.ktor:ktor-client-okhttp:3.0.3")
+    implementation("io.ktor:ktor-client-content-negotiation:3.0.3")
+    implementation("io.ktor:ktor-serialization-kotlinx-json:3.0.3")
+
+    // Kotlinx Serialization
+    implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.7.3")
 }}
 "#,
         config.android.package,
