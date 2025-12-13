@@ -1,6 +1,4 @@
 <Image
   src={"https://picsum.photos/id/${$screen.params.id}/1080/1920"}
-  fit="contain"
   width="100%"
-  height="100%"
 />

@@ -1338,6 +1338,28 @@ impl ComposeBackend {
                     }
                 }
                 // Special handling for Image component (alias for AsyncImage with web-friendly props)
+                //
+                // CSS-like behavior for Image sizing and fit:
+                //
+                // Size props (width/height):
+                //   - "100%" → fillMaxWidth()/fillMaxHeight() modifier
+                //   - "200" or "200dp" → fixed size modifier
+                //   - No size → intrinsic size (image determines its own size)
+                //
+                // Fit prop (maps to ContentScale):
+                //   - "contain" → Fit (show entire image, maintain aspect ratio, may letterbox)
+                //   - "cover" → Crop (fill container, maintain aspect ratio, may crop)
+                //   - "fill" → FillBounds (stretch to fill, may distort)
+                //   - "none" → None (no scaling)
+                //   - "scale-down" → Inside (like contain but never scale up)
+                //
+                // Smart defaults (when no fit specified):
+                //   - width="100%" only → FillWidth (scale to fill width, maintain aspect ratio)
+                //   - height="100%" only → FillHeight (scale to fill height, maintain aspect ratio)
+                //   - both 100% → Fit (fit within bounds)
+                //   - fixed size → Fit (fit within the fixed size)
+                //   - no size props → Fit (default)
+                //
                 else if comp.name == "Image" {
                     // Collect size-related props for modifier
                     let width_prop = comp.props.iter().find(|p| p.name == "width");
@@ -1345,6 +1367,14 @@ impl ComposeBackend {
                     let fill_max_width = comp.props.iter().find(|p| p.name == "fillMaxWidth");
                     let fill_max_height = comp.props.iter().find(|p| p.name == "fillMaxHeight");
                     let fill_max_size = comp.props.iter().find(|p| p.name == "fillMaxSize");
+                    let fit_prop = comp.props.iter().find(|p| p.name == "fit");
+                    let content_scale_prop = comp.props.iter().find(|p| p.name == "contentScale");
+
+                    // Track what size modifiers we're adding for smart defaults
+                    let mut has_fill_width = false;
+                    let mut has_fill_height = false;
+                    let mut has_fixed_width = false;
+                    let mut has_fixed_height = false;
 
                     // Build modifier if we have size/layout props
                     if width_prop.is_some() || height_prop.is_some() || fill_max_width.is_some() || fill_max_height.is_some() || fill_max_size.is_some() {
@@ -1355,6 +1385,8 @@ impl ComposeBackend {
                             let value = self.get_prop_expr(&fs.value);
                             if value.trim() == "true" {
                                 modifiers.push(".fillMaxSize()".to_string());
+                                has_fill_width = true;
+                                has_fill_height = true;
                             }
                         } else {
                             // fillMaxWidth
@@ -1362,6 +1394,7 @@ impl ComposeBackend {
                                 let value = self.get_prop_expr(&fw.value);
                                 if value.trim() == "true" {
                                     modifiers.push(".fillMaxWidth()".to_string());
+                                    has_fill_width = true;
                                 }
                             }
                             // fillMaxHeight
@@ -1369,6 +1402,7 @@ impl ComposeBackend {
                                 let value = self.get_prop_expr(&fh.value);
                                 if value.trim() == "true" {
                                     modifiers.push(".fillMaxHeight()".to_string());
+                                    has_fill_height = true;
                                 }
                             }
                         }
@@ -1381,9 +1415,11 @@ impl ComposeBackend {
                                 // Only add if not already added via fillMaxWidth/fillMaxSize
                                 if !modifiers.iter().any(|m| m.contains("fillMaxWidth") || m.contains("fillMaxSize")) {
                                     modifiers.push(".fillMaxWidth()".to_string());
+                                    has_fill_width = true;
                                 }
                             } else if !dim_expr.is_empty() {
                                 modifiers.push(format!(".width({})", dim_expr));
+                                has_fixed_width = true;
                             }
                         }
                         // Handle height using parse_dimension
@@ -1394,9 +1430,11 @@ impl ComposeBackend {
                                 // Only add if not already added via fillMaxHeight/fillMaxSize
                                 if !modifiers.iter().any(|m| m.contains("fillMaxHeight") || m.contains("fillMaxSize")) {
                                     modifiers.push(".fillMaxHeight()".to_string());
+                                    has_fill_height = true;
                                 }
                             } else if !dim_expr.is_empty() {
                                 modifiers.push(format!(".height({})", dim_expr));
+                                has_fixed_height = true;
                             }
                         }
                         params.push(format!("modifier = Modifier{}", modifiers.join("")));
@@ -1458,6 +1496,28 @@ impl ComposeBackend {
                                 params.extend(transformed?);
                             }
                         }
+                    }
+
+                    // Smart default for contentScale based on size props (if not explicitly set)
+                    // This gives CSS-like "width: 100%; height: auto" behavior
+                    if fit_prop.is_none() && content_scale_prop.is_none() {
+                        let default_content_scale = if has_fill_width && has_fill_height {
+                            // Both dimensions constrained → Fit (contain)
+                            "ContentScale.Fit"
+                        } else if has_fill_width {
+                            // Only width constrained → FillWidth (CSS-like behavior)
+                            "ContentScale.FillWidth"
+                        } else if has_fill_height {
+                            // Only height constrained → FillHeight
+                            "ContentScale.FillHeight"
+                        } else if has_fixed_width || has_fixed_height {
+                            // Fixed size → Fit
+                            "ContentScale.Fit"
+                        } else {
+                            // No size constraints → Fit (safe default)
+                            "ContentScale.Fit"
+                        };
+                        params.push(format!("contentScale = {}", default_content_scale));
                     }
 
                     // Add contentDescription = null if not provided (AsyncImage requires it)
@@ -2634,11 +2694,8 @@ impl ComposeBackend {
                         if !component_imports.contains(&import) {
                             component_imports.push(import);
                         }
-                        // Check if contentScale/fit is used - need ContentScale import
-                        let has_content_scale = comp.props.iter().any(|p| p.name == "contentScale" || p.name == "fit");
-                        if has_content_scale {
-                            self.add_import_if_missing(prop_imports, "androidx.compose.ui.layout.ContentScale");
-                        }
+                        // Always need ContentScale import - we add smart defaults even if not specified
+                        self.add_import_if_missing(prop_imports, "androidx.compose.ui.layout.ContentScale");
                         // Check if any size/layout props are used - need Modifier and dp imports
                         let has_size_props = comp.props.iter().any(|p|
                             matches!(p.name.as_str(), "width" | "height" | "fillMaxWidth" | "fillMaxHeight" | "fillMaxSize")
