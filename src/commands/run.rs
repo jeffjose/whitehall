@@ -5,8 +5,13 @@ use indicatif::{ProgressBar, ProgressStyle};
 use notify::{Event, RecursiveMode, Watcher};
 use std::env;
 use std::fs;
+use std::io::{BufRead, BufReader};
 use std::path::{Path, PathBuf};
+use std::process::{Child, Stdio};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::channel;
+use std::sync::Arc;
+use std::thread;
 use std::time::{Duration, Instant};
 
 use crate::build_pipeline;
@@ -441,8 +446,16 @@ fn execute_single_file_watch(file_path: &str, device_query: Option<&str>) -> Res
 
     // Initial build and run
     let start = Instant::now();
+    let mut logcat_handle: Option<LogcatHandle> = None;
     match run_full_cycle(&toolchain, &config, &device.id, &config.android.package) {
-        Ok(_) => print_build_status(start.elapsed()),
+        Ok(_) => {
+            print_build_status(start.elapsed());
+            // Start logcat after successful build
+            println!("{}", "─".repeat(60).dimmed());
+            if let Ok(handle) = start_logcat_background(&toolchain, &config.android.package, &device.id) {
+                logcat_handle = Some(handle);
+            }
+        }
         Err(e) => {
             eprintln!("{} {}", "error:".red().bold(), e);
         }
@@ -474,6 +487,11 @@ fn execute_single_file_watch(file_path: &str, device_query: Option<&str>) -> Res
                     }
                     while rx.try_recv().is_ok() {}
 
+                    // Stop current logcat
+                    if let Some(ref mut handle) = logcat_handle {
+                        handle.stop();
+                    }
+
                     // Re-read and regenerate project
                     let content = fs::read_to_string(&file_path_buf)?;
                     let (single_config, code) = single_file::parse_frontmatter(&content)?;
@@ -482,9 +500,17 @@ fn execute_single_file_watch(file_path: &str, device_query: Option<&str>) -> Res
                     env::set_current_dir(&temp_project_dir)?;
                     let config = config::load_config("whitehall.toml")?;
 
+                    println!("{}", "─".repeat(60).dimmed());
                     let start = Instant::now();
                     match run_full_cycle(&toolchain, &config, &device.id, &config.android.package) {
-                        Ok(_) => print_build_status(start.elapsed()),
+                        Ok(_) => {
+                            print_build_status(start.elapsed());
+                            // Restart logcat
+                            println!("{}", "─".repeat(60).dimmed());
+                            if let Ok(handle) = start_logcat_background(&toolchain, &config.android.package, &device.id) {
+                                logcat_handle = Some(handle);
+                            }
+                        }
                         Err(e) => {
                             eprintln!("{} {}", "error:".red().bold(), e);
                         }
@@ -539,8 +565,16 @@ fn execute_project_watch(manifest_path: &str, device_query: Option<&str>) -> Res
 
     // Initial build and run
     let start = Instant::now();
+    let mut logcat_handle: Option<LogcatHandle> = None;
     match run_full_cycle(&toolchain, &config, &device.id, &config.android.package) {
-        Ok(_) => print_build_status(start.elapsed()),
+        Ok(_) => {
+            print_build_status(start.elapsed());
+            // Start logcat after successful build
+            println!("{}", "─".repeat(60).dimmed());
+            if let Ok(handle) = start_logcat_background(&toolchain, &config.android.package, &device.id) {
+                logcat_handle = Some(handle);
+            }
+        }
         Err(e) => {
             eprintln!("{} {}", "error:".red().bold(), e);
         }
@@ -570,9 +604,22 @@ fn execute_project_watch(manifest_path: &str, device_query: Option<&str>) -> Res
                     }
                     while rx.try_recv().is_ok() {}
 
+                    // Stop current logcat
+                    if let Some(ref mut handle) = logcat_handle {
+                        handle.stop();
+                    }
+
+                    println!("{}", "─".repeat(60).dimmed());
                     let start = Instant::now();
                     match run_full_cycle(&toolchain, &config, &device.id, &config.android.package) {
-                        Ok(_) => print_build_status(start.elapsed()),
+                        Ok(_) => {
+                            print_build_status(start.elapsed());
+                            // Restart logcat
+                            println!("{}", "─".repeat(60).dimmed());
+                            if let Ok(handle) = start_logcat_background(&toolchain, &config.android.package, &device.id) {
+                                logcat_handle = Some(handle);
+                            }
+                        }
                         Err(e) => {
                             eprintln!("{} {}", "error:".red().bold(), e);
                         }
@@ -651,4 +698,84 @@ fn should_rebuild(event: &notify::Event, gitignore: &Gitignore) -> bool {
         }
         _ => false,
     }
+}
+
+/// Handle for background logcat process
+struct LogcatHandle {
+    child: Child,
+    running: Arc<AtomicBool>,
+}
+
+impl LogcatHandle {
+    fn stop(&mut self) {
+        self.running.store(false, Ordering::SeqCst);
+        let _ = self.child.kill();
+    }
+}
+
+/// Start logcat streaming in background thread
+fn start_logcat_background(
+    toolchain: &Toolchain,
+    package: &str,
+    device_id: &str,
+) -> Result<LogcatHandle> {
+    // Clear logcat first
+    let _ = toolchain
+        .adb_cmd()?
+        .args(["-s", device_id, "logcat", "-c"])
+        .output();
+
+    // Start logcat process
+    let mut child = toolchain
+        .adb_cmd()?
+        .args(["-s", device_id, "logcat", "-v", "brief"])
+        .stdout(Stdio::piped())
+        .spawn()
+        .context("Failed to start logcat")?;
+
+    let running = Arc::new(AtomicBool::new(true));
+    let running_clone = running.clone();
+    let package = package.to_string();
+
+    // Take stdout and spawn reader thread
+    if let Some(stdout) = child.stdout.take() {
+        thread::spawn(move || {
+            let reader = BufReader::new(stdout);
+            for line in reader.lines() {
+                if !running_clone.load(Ordering::SeqCst) {
+                    break;
+                }
+                if let Ok(line) = line {
+                    // Filter relevant lines
+                    let relevant = line.contains(&package)
+                        || line.contains("AndroidRuntime")
+                        || (line.contains("ActivityManager") && line.contains(&package));
+
+                    if !relevant {
+                        continue;
+                    }
+
+                    // Skip noisy logs
+                    if line.contains("AiAiEcho")
+                        || line.contains("PackageUpdatedTask")
+                        || line.contains("ApkAssets")
+                        || line.contains("ziparchive")
+                        || line.contains("nativeloader")
+                        || line.contains("ProximityAuth")
+                        || line.contains("SQLiteLog")
+                        || (line.contains("ActivityThread") && line.contains("REPLACED"))
+                        || line.contains("Finsky")
+                        || line.contains("InputManager-JNI")
+                        || line.contains("CoreBackPreview")
+                    {
+                        continue;
+                    }
+
+                    print_colorized_logcat(&line);
+                }
+            }
+        });
+    }
+
+    Ok(LogcatHandle { child, running })
 }
