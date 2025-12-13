@@ -511,7 +511,9 @@ Whitehall automatically determines component types based on directory structure:
 | `src/components/Button.wh` | Component | `{package}.components` | `Button.kt` |
 | `src/screens/HomeScreen.wh` | Screen | `{package}.screens` | `HomeScreen.kt` |
 | `src/stores/UserProfile.wh` | Store | `{package}.stores` | `UserProfile.kt` |
-| `src/main.wh` | Main | `{package}` | `MainActivity.kt` |
+| `src/routes/+screen.wh` | Screen (Home) | `{package}.screens` | `HomeScreen.kt` |
+| `src/routes/photo/[id]/+screen.wh` | Screen (Photo) | `{package}.screens` | `PhotoScreen.kt` |
+| `src/main.wh` | App Config | `{package}` | `MainActivity.kt` |
 
 **Package Mapping:**
 ```
@@ -520,8 +522,37 @@ whitehall.toml: package = "com.example.myapp"
 src/components/Button.wh → com.example.myapp.components.Button
 src/screens/Home.wh      → com.example.myapp.screens.Home
 src/stores/UserProfile.wh → com.example.myapp.stores.UserProfile
-src/main.wh              → com.example.myapp.MainActivity
+src/routes/+screen.wh     → com.example.myapp.screens.HomeScreen
+src/main.wh              → com.example.myapp.MainActivity (theme config)
 ```
+
+### main.wh and App Configuration
+
+`main.wh` serves as the app shell and configuration:
+
+**With routes (SvelteKit-style):**
+```whitehall
+<App colorScheme="dynamic" darkMode="system">
+  <slot />
+</App>
+```
+
+When `src/routes/` contains screen files:
+- `main.wh` provides app-level configuration (theme, dark mode)
+- `<slot />` is where the NavHost renders screens
+- Routes are auto-discovered from directory structure
+
+**Without routes (simple app):**
+```whitehall
+var count: Int = 0
+
+<Column>
+  <Text>{count}</Text>
+  <Button onClick={() => count++}>Add</Button>
+</Column>
+```
+
+When no routes exist, `main.wh` is transpiled as the main App composable.
 
 ---
 

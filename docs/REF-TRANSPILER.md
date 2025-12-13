@@ -293,6 +293,46 @@ match (component, prop_name) {
 - **String resources with args:** `R.string.greeting(name)` → `stringResource(R.string.greeting, name)`
 - **Escape braces:** `\{literal\}` → `{literal}` (not interpolated)
 
+### App Configuration (main.wh)
+
+The `<App>` component in `main.wh` configures app-level theme settings:
+
+**Syntax:**
+```whitehall
+<App colorScheme="dynamic" darkMode="system">
+  <slot />
+</App>
+```
+
+**Props:**
+
+| Prop | Values | Description |
+|------|--------|-------------|
+| `colorScheme` | `"dynamic"` | Use Android 12+ wallpaper-based dynamic colors |
+| `darkMode` | `"system"`, `"light"`, `"dark"` | Control dark/light theme |
+
+**Generated Kotlin (dynamic colors):**
+
+```kotlin
+val darkTheme = isSystemInDarkTheme()
+val context = LocalContext.current
+val colorScheme = when {
+    Build.VERSION.SDK_INT >= Build.VERSION_CODES.S -> {
+        if (darkTheme) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
+    }
+    darkTheme -> darkColorScheme()
+    else -> lightColorScheme()
+}
+MaterialTheme(colorScheme = colorScheme) {
+    // NavHost content
+}
+```
+
+**Notes:**
+- `<slot />` represents where screen content (NavHost) is rendered
+- When no `<App>` is specified, defaults to `MaterialTheme {}` with system defaults
+- Dynamic colors gracefully fall back to default Material3 colors on Android < 12
+
 ### Control Flow Syntax
 
 Whitehall uses `@` prefix for control flow constructs within markup:
