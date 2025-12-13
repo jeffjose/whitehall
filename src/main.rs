@@ -65,6 +65,9 @@ enum Commands {
         target: String,
         /// Device ID (partial match supported) - auto-selects if only one device connected
         device: Option<String>,
+        /// Watch for changes and rebuild/reinstall/relaunch automatically
+        #[arg(long, short)]
+        watch: bool,
     },
     /// Manage toolchains (Java, Gradle, Android SDK)
     Toolchain {
@@ -199,8 +202,8 @@ fn main() {
         Commands::Install { target, device } => {
             commands::install::execute(&target, device.as_deref())
         }
-        Commands::Run { target, device } => {
-            commands::run::execute(&target, device.as_deref())
+        Commands::Run { target, device, watch } => {
+            commands::run::execute(&target, device.as_deref(), watch)
         }
         Commands::Toolchain { command } => {
             match command {
