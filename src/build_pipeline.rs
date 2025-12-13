@@ -419,11 +419,12 @@ fn generate_navhost_main_activity(config: &Config, routes: &[routes::Route], app
             // No parameters: ProfileScreen(navController)
             format!("{}(navController)", route.screen_name)
         } else {
-            // With parameters: ProfileScreen(navController, it.id)
+            // With parameters: extract route via toRoute<T>() for type-safe navigation
+            // it.toRoute<Routes.Photo>().id, it.toRoute<Routes.Photo>().name, etc.
             let params_str = route
                 .params
                 .iter()
-                .map(|p| format!("it.{}", p.name))
+                .map(|p| format!("it.toRoute<Routes.{}>().{}", route.name, p.name))
                 .collect::<Vec<_>>()
                 .join(", ");
             format!("{}(navController, {})", route.screen_name, params_str)
@@ -561,6 +562,7 @@ import androidx.activity.compose.setContent
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
+import androidx.navigation.toRoute
 import {}.routes.Routes
 import {}.screens.*
 
