@@ -4,13 +4,13 @@ Issues discovered during Pokemon app example development.
 
 ## Status Summary
 
-**✅ Fixed (2):**
+**✅ Fixed (3):**
 - Top-level Kotlin imports
 - Private/public class-level fields with initialization
+- Hex colors transpilation (commit 89b6dfa)
 
-**❌ Blocking Issues (2):**
+**❌ Blocking Issues (1):**
 - Data classes outside main class
-- Hex colors incorrectly transpiled
 
 **⚠️ Needs Investigation (1):**
 - Box width/height not properly handled
@@ -92,30 +92,23 @@ data class Item(        // ❌ Parser error
 
 ## Transpiler Bugs
 
-### 1. Hex colors incorrectly transpiled
+### 1. ~~Hex colors incorrectly transpiled~~ ✅ FIXED
 
-**Issue:** Hex colors in component props generate invalid Kotlin
+**Issue:** ~~Hex colors in component props generate invalid Kotlin~~
 
 **Example:**
 ```whitehall
-<Box backgroundColor="#f0f0f0">  // ❌ Transpiles incorrectly
+<Box backgroundColor="#f0f0f0">  // ✅ Now works!
 ```
 
-**Transpiled (incorrect):**
+**Transpiled (correct):**
 ```kotlin
-Box(modifier = Modifier.background(Color.#f0f0f0))  // Invalid: Color.#...
+Box(modifier = Modifier.background(Color(0xFFF0F0F0)))  // ✅ Valid
 ```
 
-**Expected:**
-```kotlin
-Box(modifier = Modifier.background(Color(0xFFf0f0f0)))
-```
-
-**Current State:** ❌ Bug in transpiler
-**Location:** `src/components/PokemonCard.wh:14,18`, `src/screens/PokemonDetailScreen.wh`
-**Impact:** Build failure - invalid Kotlin syntax
-
-**Code Location:** `src/transpiler/codegen/compose.rs` - hex color conversion in prop transformations
+**Current State:** ✅ **FIXED** - Hex colors now transpile correctly
+**Fixed:** Commit 89b6dfa (6 weeks ago)
+**Details:** Hex colors (#RGB, #RRGGBB, #RRGGBBAA) are converted to Color(0xAARRGGBB) format
 
 ---
 
@@ -169,7 +162,7 @@ Box(modifier = Modifier.size(48.dp, 48.dp))
 ## Priority
 
 **High Priority (blocks real apps):**
-1. Hex color transpilation bug
+1. ~~Hex color transpilation bug~~ ✅ FIXED
 2. Top-level data classes
 3. ~~Private val fields with initialization~~ ✅ FIXED
 
@@ -190,7 +183,8 @@ See `examples/pokemon-app/` for real-world example hitting remaining issues.
 **Current Status:**
 - ✅ Import statements now work
 - ✅ Private class fields now work
-- ❌ Still blocked by: data classes outside main class, hex color bug
+- ✅ Hex colors now work (fixed in 89b6dfa)
+- ❌ Still blocked by: data classes outside main class
 
 **To reproduce remaining issues:**
 ```bash
