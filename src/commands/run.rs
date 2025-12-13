@@ -441,7 +441,7 @@ fn execute_single_file_watch(file_path: &str, device_query: Option<&str>) -> Res
 
     // Initial build and run
     let start = Instant::now();
-    match run_full_cycle(&toolchain, &config, &temp_project_dir, &device.id, &config.android.package) {
+    match run_full_cycle(&toolchain, &config, &device.id, &config.android.package) {
         Ok(_) => print_build_status(start.elapsed()),
         Err(e) => {
             eprintln!("{} {}", "error:".red().bold(), e);
@@ -483,7 +483,7 @@ fn execute_single_file_watch(file_path: &str, device_query: Option<&str>) -> Res
                     let config = config::load_config("whitehall.toml")?;
 
                     let start = Instant::now();
-                    match run_full_cycle(&toolchain, &config, &temp_project_dir, &device.id, &config.android.package) {
+                    match run_full_cycle(&toolchain, &config, &device.id, &config.android.package) {
                         Ok(_) => print_build_status(start.elapsed()),
                         Err(e) => {
                             eprintln!("{} {}", "error:".red().bold(), e);
@@ -537,12 +537,9 @@ fn execute_project_watch(manifest_path: &str, device_query: Option<&str>) -> Res
     let device = device::resolve_device(&toolchain, device_query)?;
     println!("    {} {}", "Device".cyan(), device.display_name());
 
-    // Get the output directory (where build_pipeline puts generated code)
-    let output_dir = project_dir.join(".whitehall");
-
     // Initial build and run
     let start = Instant::now();
-    match run_full_cycle(&toolchain, &config, &output_dir, &device.id, &config.android.package) {
+    match run_full_cycle(&toolchain, &config, &device.id, &config.android.package) {
         Ok(_) => print_build_status(start.elapsed()),
         Err(e) => {
             eprintln!("{} {}", "error:".red().bold(), e);
@@ -574,7 +571,7 @@ fn execute_project_watch(manifest_path: &str, device_query: Option<&str>) -> Res
                     while rx.try_recv().is_ok() {}
 
                     let start = Instant::now();
-                    match run_full_cycle(&toolchain, &config, &output_dir, &device.id, &config.android.package) {
+                    match run_full_cycle(&toolchain, &config, &device.id, &config.android.package) {
                         Ok(_) => print_build_status(start.elapsed()),
                         Err(e) => {
                             eprintln!("{} {}", "error:".red().bold(), e);
@@ -592,7 +589,6 @@ fn execute_project_watch(manifest_path: &str, device_query: Option<&str>) -> Res
 fn run_full_cycle(
     toolchain: &Toolchain,
     config: &crate::config::Config,
-    output_dir: &Path,
     device_id: &str,
     package: &str,
 ) -> Result<()> {
@@ -607,10 +603,10 @@ fn run_full_cycle(
     }
 
     // 2. Build APK with Gradle
-    build_with_gradle(toolchain, config, output_dir)?;
+    build_with_gradle(toolchain, config, &result.output_dir)?;
 
     // 3. Install APK
-    install_apk(toolchain, output_dir, device_id)?;
+    install_apk(toolchain, &result.output_dir, device_id)?;
 
     // 4. Launch app
     launch_app(toolchain, package, device_id)?;
