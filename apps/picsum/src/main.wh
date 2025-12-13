@@ -1,2 +1,3 @@
-// App shell - picsum photo gallery
-// Screens are in src/routes/
+<App colorScheme="dynamic" darkMode="system">
+  <slot />
+</App>

@@ -8,6 +8,36 @@ use crate::project::{discover_files, FileType, WhitehallFile};
 use crate::routes;
 use crate::transpiler;
 
+/// App-level configuration parsed from main.wh's <App> component
+#[derive(Debug, Clone, Default)]
+pub struct AppConfig {
+    pub color_scheme: ColorScheme,
+    pub dark_mode: DarkMode,
+}
+
+#[derive(Debug, Clone, Default)]
+pub enum ColorScheme {
+    #[default]
+    Default,           // Use Material3 default colors
+    Dynamic,           // Use Android 12+ dynamic colors (wallpaper-based)
+    Custom {           // Custom color palette
+        primary: Option<String>,
+        secondary: Option<String>,
+        tertiary: Option<String>,
+        background: Option<String>,
+        surface: Option<String>,
+        error: Option<String>,
+    },
+}
+
+#[derive(Debug, Clone, Default)]
+pub enum DarkMode {
+    #[default]
+    System,  // Follow system setting
+    Light,   // Always light
+    Dark,    // Always dark
+}
+
 /// Represents the result of a build operation
 #[derive(Debug)]
 pub struct BuildResult {
@@ -259,11 +289,12 @@ fn generate_main_activity(
     let main_file = files.iter().find(|f| f.file_type == FileType::Main);
 
     // Priority: Routes > main.wh > default
-    // When routes exist, always use NavHost (main.wh becomes app shell/layout - future feature)
+    // When routes exist, always use NavHost (main.wh becomes app config + layout)
     let main_content = if !discovered_routes.is_empty() {
-        // Generate MainActivity with NavHost for routing
-        // Note: main.wh is ignored when routes exist (future: use as layout wrapper)
-        generate_navhost_main_activity(config, &discovered_routes)
+        // Parse main.wh for <App> configuration (theme, dark mode, etc.)
+        let app_config = parse_app_config(main_file);
+        // Generate MainActivity with NavHost for routing + theme from main.wh
+        generate_navhost_main_activity(config, &discovered_routes, &app_config)
     } else if let Some(main_file) = main_file {
         // No routes - use transpiled main.wh content as the App composable
         let source = fs::read_to_string(&main_file.path)?;
@@ -379,7 +410,7 @@ class MainActivity : ComponentActivity() {{
 }
 
 /// Generate MainActivity with NavHost for routing
-fn generate_navhost_main_activity(config: &Config, routes: &[routes::Route]) -> String {
+fn generate_navhost_main_activity(config: &Config, routes: &[routes::Route], app_config: &AppConfig) -> String {
     // Generate composable calls for each route
     let mut composable_entries = Vec::new();
 
@@ -414,13 +445,119 @@ fn generate_navhost_main_activity(config: &Config, routes: &[routes::Route]) -> 
         .map(|r| format!("Routes.{}", r.name))
         .unwrap_or_else(|| format!("Routes.{}", routes[0].name));
 
+    // Generate imports based on color scheme
+    let theme_imports = match &app_config.color_scheme {
+        ColorScheme::Dynamic => r#"import android.os.Build
+import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.darkColorScheme
+import androidx.compose.material3.dynamicDarkColorScheme
+import androidx.compose.material3.dynamicLightColorScheme
+import androidx.compose.material3.lightColorScheme
+import androidx.compose.ui.platform.LocalContext"#,
+        ColorScheme::Default | ColorScheme::Custom { .. } => {
+            match &app_config.dark_mode {
+                DarkMode::System => r#"import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.darkColorScheme
+import androidx.compose.material3.lightColorScheme"#,
+                _ => "import androidx.compose.material3.MaterialTheme",
+            }
+        }
+    };
+
+    // Generate dark theme check based on dark_mode setting
+    let dark_theme_check = match &app_config.dark_mode {
+        DarkMode::System => "val darkTheme = isSystemInDarkTheme()",
+        DarkMode::Light => "val darkTheme = false",
+        DarkMode::Dark => "val darkTheme = true",
+    };
+
+    // Generate color scheme setup based on color_scheme setting
+    let color_scheme_setup = match &app_config.color_scheme {
+        ColorScheme::Dynamic => format!(
+            r#"{}
+            val context = LocalContext.current
+            val colorScheme = when {{
+                Build.VERSION.SDK_INT >= Build.VERSION_CODES.S -> {{
+                    if (darkTheme) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
+                }}
+                darkTheme -> darkColorScheme()
+                else -> lightColorScheme()
+            }}"#,
+            dark_theme_check
+        ),
+        ColorScheme::Default => match &app_config.dark_mode {
+            DarkMode::System => format!(
+                r#"{}
+            val colorScheme = if (darkTheme) darkColorScheme() else lightColorScheme()"#,
+                dark_theme_check
+            ),
+            DarkMode::Light => "val colorScheme = lightColorScheme()".to_string(),
+            DarkMode::Dark => "val colorScheme = darkColorScheme()".to_string(),
+        },
+        ColorScheme::Custom { .. } => {
+            // TODO: Support custom colors
+            "val colorScheme = lightColorScheme()".to_string()
+        }
+    };
+
+    // Generate MaterialTheme wrapper - use colorScheme param if we computed one
+    let material_theme_start = if matches!(app_config.color_scheme, ColorScheme::Default)
+        && matches!(app_config.dark_mode, DarkMode::System)
+        && !matches!(app_config.color_scheme, ColorScheme::Dynamic) {
+        // Simple case: default theme with system dark mode - just use MaterialTheme {}
+        "MaterialTheme {".to_string()
+    } else {
+        "MaterialTheme(colorScheme = colorScheme) {".to_string()
+    };
+
+    // For simple default case, skip the color scheme setup entirely
+    let needs_color_scheme_setup = !matches!(
+        (&app_config.color_scheme, &app_config.dark_mode),
+        (ColorScheme::Default, DarkMode::System)
+    );
+
+    let set_content_body = if needs_color_scheme_setup {
+        format!(
+            r#"            {}
+            {}
+                val navController = rememberNavController()
+                NavHost(
+                    navController = navController,
+                    startDestination = {}
+                ) {{
+{}
+                }}
+            }}"#,
+            color_scheme_setup,
+            material_theme_start,
+            start_destination,
+            composables
+        )
+    } else {
+        format!(
+            r#"            MaterialTheme {{
+                val navController = rememberNavController()
+                NavHost(
+                    navController = navController,
+                    startDestination = {}
+                ) {{
+{}
+                }}
+            }}"#,
+            start_destination,
+            composables
+        )
+    };
+
     format!(
         r#"package {}
 
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
-import androidx.compose.material3.MaterialTheme
+{}
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
@@ -431,24 +568,16 @@ class MainActivity : ComponentActivity() {{
     override fun onCreate(savedInstanceState: Bundle?) {{
         super.onCreate(savedInstanceState)
         setContent {{
-            MaterialTheme {{
-                val navController = rememberNavController()
-                NavHost(
-                    navController = navController,
-                    startDestination = {}
-                ) {{
 {}
-                }}
-            }}
         }}
     }}
 }}
 "#,
         config.android.package,
+        theme_imports,
         config.android.package,
         config.android.package,
-        start_destination,
-        composables
+        set_content_body
     )
 }
 
@@ -483,6 +612,75 @@ class MainActivity : ComponentActivity() {{
 "#,
         config.android.package
     )
+}
+
+/// Parse main.wh to extract <App> configuration
+/// Returns AppConfig with theme settings, or default if no App component found
+fn parse_app_config(main_file: Option<&WhitehallFile>) -> AppConfig {
+    let Some(file) = main_file else {
+        return AppConfig::default();
+    };
+
+    let Ok(source) = fs::read_to_string(&file.path) else {
+        return AppConfig::default();
+    };
+
+    let mut config = AppConfig::default();
+
+    // Simple parsing: look for <App ...> and extract props
+    // Format: <App colorScheme="dynamic" darkMode="system">
+    if let Some(app_start) = source.find("<App") {
+        let app_section = &source[app_start..];
+        let app_end = app_section.find('>').unwrap_or(app_section.len());
+        let app_tag = &app_section[..app_end];
+
+        // Parse colorScheme prop
+        if let Some(cs_start) = app_tag.find("colorScheme=") {
+            let after_eq = &app_tag[cs_start + 12..];
+            if let Some(value) = extract_prop_value(after_eq) {
+                config.color_scheme = match value.as_str() {
+                    "dynamic" => ColorScheme::Dynamic,
+                    _ => ColorScheme::Default,
+                };
+            }
+        }
+
+        // Parse darkMode prop
+        if let Some(dm_start) = app_tag.find("darkMode=") {
+            let after_eq = &app_tag[dm_start + 9..];
+            if let Some(value) = extract_prop_value(after_eq) {
+                config.dark_mode = match value.as_str() {
+                    "light" => DarkMode::Light,
+                    "dark" => DarkMode::Dark,
+                    "system" | _ => DarkMode::System,
+                };
+            }
+        }
+    }
+
+    config
+}
+
+/// Extract a quoted prop value from a string starting after the '='
+fn extract_prop_value(s: &str) -> Option<String> {
+    let s = s.trim_start();
+    if s.starts_with('"') {
+        // "value"
+        let end = s[1..].find('"')?;
+        Some(s[1..=end].to_string())
+    } else if s.starts_with('{') {
+        // {value} - for expression props, just extract the content
+        let end = s[1..].find('}')?;
+        let inner = s[1..=end].trim();
+        // Handle {"value"} case
+        if inner.starts_with('"') && inner.ends_with('"') {
+            Some(inner[1..inner.len()-1].to_string())
+        } else {
+            Some(inner.to_string())
+        }
+    } else {
+        None
+    }
 }
 
 /// Generate Routes.kt file from route directory structure

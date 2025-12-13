@@ -2791,7 +2791,9 @@ impl ComposeBackend {
                 }
                 // Single interpolation - wrap in string template to ensure string conversion
                 Markup::Interpolation(expr) => {
-                    let transformed = self.transform_string_resource(expr);
+                    // Transform $screen.params.{name} → {name}
+                    let expr = expr.replace("$screen.params.", "");
+                    let transformed = self.transform_string_resource(&expr);
                     let with_ternary = self.transform_ternary_to_if_else(&transformed);
                     let with_vm = self.transform_viewmodel_expression(&with_ternary);
                     let with_assertions = self.add_null_assertions(&with_vm);
@@ -2817,7 +2819,9 @@ impl ComposeBackend {
                     parts.push(self.escape_dollar_signs(cleaned));
                 }
                 Markup::Interpolation(expr) => {
-                    let str_res_transformed = self.transform_string_resource(expr);
+                    // Transform $screen.params.{name} → {name}
+                    let expr = expr.replace("$screen.params.", "");
+                    let str_res_transformed = self.transform_string_resource(&expr);
                     let with_ternary = self.transform_ternary_to_if_else(&str_res_transformed);
                     let with_vm = self.transform_viewmodel_expression(&with_ternary);
                     let transformed = self.add_null_assertions(&with_vm);
