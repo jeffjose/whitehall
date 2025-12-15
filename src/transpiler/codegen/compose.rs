@@ -1932,14 +1932,63 @@ impl ComposeBackend {
                         params.extend(transformed?);
                     }
                 } else {
+                    // Generic component handling with universal width/height support
+
+                    // Check for width/height props that need modifier conversion
+                    let width_prop = comp.props.iter().find(|p| p.name == "width");
+                    let height_prop = comp.props.iter().find(|p| p.name == "height");
+                    let fill_max_width = comp.props.iter().find(|p| p.name == "fillMaxWidth");
+                    let fill_max_height = comp.props.iter().find(|p| p.name == "fillMaxHeight");
+
                     // Check for padding/margin shortcuts that need to be combined
                     let padding_shortcuts: Vec<_> = comp.props.iter()
                         .filter(|p| matches!(p.name.as_str(), "p" | "px" | "py" | "pt" | "pb" | "pl" | "pr" |
                                                                "m" | "mx" | "my" | "mt" | "mb" | "ml" | "mr"))
                         .collect();
 
+                    // Build modifier if we have any modifier-related props
+                    let mut modifiers = Vec::new();
+                    let mut handled_width = false;
+                    let mut handled_height = false;
+
+                    // Handle width="100%" → fillMaxWidth()
+                    if let Some(w) = width_prop {
+                        let value = self.get_prop_expr(&w.value);
+                        let trimmed = value.trim().trim_matches('"');
+                        if trimmed == "100%" {
+                            modifiers.push(".fillMaxWidth()".to_string());
+                            self.add_import_if_missing(&mut vec![], "androidx.compose.foundation.layout.fillMaxWidth");
+                            handled_width = true;
+                        }
+                    }
+
+                    // Handle height="100%" → fillMaxHeight()
+                    if let Some(h) = height_prop {
+                        let value = self.get_prop_expr(&h.value);
+                        let trimmed = value.trim().trim_matches('"');
+                        if trimmed == "100%" {
+                            modifiers.push(".fillMaxHeight()".to_string());
+                            self.add_import_if_missing(&mut vec![], "androidx.compose.foundation.layout.fillMaxHeight");
+                            handled_height = true;
+                        }
+                    }
+
+                    // Handle explicit fillMaxWidth/fillMaxHeight props
+                    if let Some(fw) = fill_max_width {
+                        let value = self.get_prop_expr(&fw.value);
+                        if value.trim() == "true" && !handled_width {
+                            modifiers.push(".fillMaxWidth()".to_string());
+                        }
+                    }
+                    if let Some(fh) = fill_max_height {
+                        let value = self.get_prop_expr(&fh.value);
+                        if value.trim() == "true" && !handled_height {
+                            modifiers.push(".fillMaxHeight()".to_string());
+                        }
+                    }
+
+                    // Add padding shortcuts to modifier
                     if !padding_shortcuts.is_empty() {
-                        // Build combined padding modifier
                         let mut padding_parts = Vec::new();
 
                         for prop in &padding_shortcuts {
@@ -1971,16 +2020,31 @@ impl ComposeBackend {
                         }
 
                         if !padding_parts.is_empty() {
-                            // Format as multiline for consistency with expected output
-                            params.push(format!("modifier = Modifier\n            .padding({})", padding_parts.join(", ")));
+                            modifiers.push(format!(".padding({})", padding_parts.join(", ")));
                         }
                     }
 
-                    // Regular prop handling for other components (excluding shortcuts)
+                    // Output combined modifier if we have any
+                    if !modifiers.is_empty() {
+                        params.push(format!("modifier = Modifier{}", modifiers.join("")));
+                    }
+
+                    // Regular prop handling for other components (excluding handled props)
                     for prop in &comp.props {
                         // Skip padding/margin shortcuts - already handled
                         if matches!(prop.name.as_str(), "p" | "px" | "py" | "pt" | "pb" | "pl" | "pr" |
                                                         "m" | "mx" | "my" | "mt" | "mb" | "ml" | "mr") {
+                            continue;
+                        }
+                        // Skip width/height if converted to fillMax modifiers
+                        if prop.name == "width" && handled_width {
+                            continue;
+                        }
+                        if prop.name == "height" && handled_height {
+                            continue;
+                        }
+                        // Skip explicit fillMaxWidth/fillMaxHeight props
+                        if prop.name == "fillMaxWidth" || prop.name == "fillMaxHeight" {
                             continue;
                         }
 
