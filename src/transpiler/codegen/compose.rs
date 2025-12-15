@@ -70,6 +70,21 @@ fn convert_hex_to_color(hex: &str) -> Result<String, String> {
     }
 }
 
+/// Configuration for which modifiers to build in the unified modifier builder
+#[derive(Default)]
+struct ModifierConfig {
+    /// Handle width/height props (100% → fillMax*, fixed → .width()/.height())
+    handle_size: bool,
+    /// Handle padding/p/px/py/pt/pb/pl/pr props
+    handle_padding: bool,
+    /// Handle backgroundColor prop
+    handle_background: bool,
+    /// Handle onClick as clickable modifier (for components without native onClick)
+    handle_click_as_modifier: bool,
+    /// Handle fillMaxWidth/fillMaxHeight/fillMaxSize props
+    handle_fill_max: bool,
+}
+
 impl ComposeBackend {
     pub fn new(package: &str, component_name: &str, component_type: Option<&str>) -> Self {
         ComposeBackend {
@@ -1550,104 +1565,57 @@ impl ComposeBackend {
                 }
                 // Special handling for Text, Card, and Button with modifier props
                 else if comp.name == "Text" || comp.name == "Card" || comp.name == "Button" {
-                    // Collect modifier-related props (including shortcuts)
-                    let padding = comp.props.iter().find(|p| p.name == "padding");
-                    let fill_max_width = comp.props.iter().find(|p| p.name == "fillMaxWidth");
-                    let explicit_modifier = comp.props.iter().find(|p| p.name == "modifier");
-                    let on_click = comp.props.iter().find(|p| p.name == "onClick");
+                    // Use unified builder for padding and onClick (Text only)
+                    let (mut modifiers, mut handled) = self.build_modifiers_for_component(comp, ModifierConfig {
+                        handle_padding: true,
+                        handle_fill_max: true,
+                        handle_click_as_modifier: comp.name == "Text", // Text uses clickable modifier
+                        ..Default::default()
+                    })?;
 
-                    // Collect padding/margin shortcuts
-                    let padding_shortcuts: Vec<_> = comp.props.iter()
-                        .filter(|p| matches!(p.name.as_str(), "p" | "px" | "py" | "pt" | "pb" | "pl" | "pr" |
-                                                               "m" | "mx" | "my" | "mt" | "mb" | "ml" | "mr"))
-                        .collect();
-
-                    // Build modifier chain if we have modifier-related props
-                    // Note: Card has native onClick parameter, doesn't need clickable modifier
-                    // Text needs clickable modifier for onClick since it doesn't have native onClick
-                    if padding.is_some() || fill_max_width.is_some() || explicit_modifier.is_some() || !padding_shortcuts.is_empty() || (on_click.is_some() && comp.name == "Text") {
-                        let mut modifiers = Vec::new();
-
-                        // Build padding with Tailwind-style cascade (specific beats general)
-                        // padding prop is lowest priority, then p, px/py, then pt/pb/pl/pr
-                        let base_padding = padding.map(|p| self.get_prop_expr(&p.value));
-                        if let Some(padding_mod) = self.build_padding_modifier(&padding_shortcuts, base_padding.as_deref()) {
-                            modifiers.push(padding_mod);
+                    // Special handling for fillMaxWidth with variable (not just true/false)
+                    if let Some(fw_prop) = comp.props.iter().find(|p| p.name == "fillMaxWidth") {
+                        let fw_value = self.get_prop_expr(&fw_prop.value);
+                        let trimmed = fw_value.trim();
+                        if trimmed != "true" && trimmed != "false" {
+                            // It's a variable - use .let { if ... }
+                            // Remove simple fillMaxWidth if already added
+                            modifiers.retain(|m| !m.contains("fillMaxWidth"));
+                            modifiers.push(format!(".let {{ if ({}) it.fillMaxWidth() else it }}", trimmed));
                         }
+                    }
 
-                        // Add fillMaxWidth if present (as boolean prop or variable)
-                        if let Some(fw_prop) = fill_max_width {
-                            let fw_value = self.get_prop_expr(&fw_prop.value).trim();
-                            if fw_value == "true" {
-                                modifiers.push(".fillMaxWidth()".to_string());
-                            } else if fw_value == "false" {
-                                // Skip - don't add modifier
-                            } else {
-                                // It's a variable - use .let { if ... }
-                                modifiers.push(format!(".let {{ if ({}) it.fillMaxWidth() else it }}", fw_value));
-                            }
-                        }
+                    // Add explicit modifier last (if present) - special handling for chaining
+                    if let Some(mod_prop) = comp.props.iter().find(|p| p.name == "modifier") {
+                        let mod_value = self.get_prop_expr(&mod_prop.value);
+                        let transformed = self.transform_ternary(&mod_value);
+                        let transformed = self.convert_hex_in_modifier(&transformed)?;
 
-                        // Add onClick as clickable modifier (for Text only, Card has native onClick)
-                        if let Some(click_prop) = on_click {
-                            if comp.name == "Text" {
-                                let click_value = self.get_prop_expr(&click_prop.value);
-                                // Transform the onClick value (same logic as Button onClick)
-                                let transformed = self.transform_lambda_arrow(click_value);
+                        // If explicit modifier starts with "Modifier.", strip it for chaining
+                        let chainable = if transformed.starts_with("Modifier.") {
+                            format!(".{}", &transformed[9..])
+                        } else if transformed.starts_with("Modifier\n") {
+                            transformed.replacen("Modifier\n", "", 1)
+                        } else {
+                            transformed
+                        };
 
-                                // Handle bare function names vs lambda expressions
-                                let clickable_expr = if !transformed.starts_with('{') {
-                                    // Bare function name: add (), transform for ViewModel, wrap in braces
-                                    let with_parens = format!("{}()", transformed);
-                                    let with_viewmodel = self.transform_viewmodel_expression(&with_parens);
-                                    format!("{{ {} }}", with_viewmodel)
-                                } else {
-                                    // Already a lambda expression, just transform for ViewModel
-                                    self.transform_viewmodel_expression(&transformed)
-                                };
+                        modifiers.push(chainable);
+                        handled.insert("modifier".to_string());
+                    }
 
-                                modifiers.push(format!(".clickable {}", clickable_expr));
-                            }
-                        }
-
-                        // Add explicit modifier last (if present)
-                        if let Some(mod_prop) = explicit_modifier {
-                            let mod_value = self.get_prop_expr(&mod_prop.value);
-                            let transformed = self.transform_ternary(mod_value);
-                            // Convert hex colors in the modifier expression
-                            let transformed = self.convert_hex_in_modifier(&transformed)?;
-
-                            // If explicit modifier starts with "Modifier.", strip it for chaining
-                            let chainable = if transformed.starts_with("Modifier.") {
-                                format!(".{}", &transformed[9..]) // "Modifier." is 9 chars
-                            } else if transformed.starts_with("Modifier\n") {
-                                // Multi-line modifier chain starting with "Modifier\n    ."
-                                transformed.replacen("Modifier\n", "", 1)
-                            } else {
-                                transformed
-                            };
-
-                            modifiers.push(chainable);
-                        }
-
-                        // Combine into modifier parameter
-                        // For Text/Card, always use multiline format for consistency with expected output
-                        if !modifiers.is_empty() {
-                            let modifier_chain = modifiers.iter()
-                                .map(|m| format!("            {}", m))
-                                .collect::<Vec<_>>()
-                                .join("\n");
-                            params.push(format!("modifier = Modifier\n{}", modifier_chain));
-                        }
+                    // Combine into modifier parameter
+                    if !modifiers.is_empty() {
+                        let modifier_chain = modifiers.iter()
+                            .map(|m| format!("            {}", m))
+                            .collect::<Vec<_>>()
+                            .join("\n");
+                        params.push(format!("modifier = Modifier\n{}", modifier_chain));
                     }
 
                     // Add other props (excluding the ones we handled)
                     for prop in &comp.props {
-                        // Skip props already handled
-                        if prop.name == "padding" || prop.name == "fillMaxWidth" || prop.name == "modifier" ||
-                           (prop.name == "onClick" && comp.name == "Text") ||  // onClick on Text handled as clickable modifier
-                           matches!(prop.name.as_str(), "p" | "px" | "py" | "pt" | "pb" | "pl" | "pr" |
-                                                        "m" | "mx" | "my" | "mt" | "mb" | "ml" | "mr") {
+                        if handled.contains(&prop.name) {
                             continue;
                         }
                         let prop_expr = self.get_prop_expr(&prop.value);
@@ -1655,74 +1623,35 @@ impl ComposeBackend {
                         params.extend(transformed?);
                     }
                 }
-                // Special handling for Column/Row with backgroundColor + padding + shortcuts
+                // Special handling for Column/Row with unified modifier builder
                 else if comp.name == "Column" || comp.name == "Row" {
-                    // Check for background color, padding, and shortcuts
-                    let background_color = comp.props.iter().find(|p| p.name == "backgroundColor")
-                        .map(|p| self.get_prop_expr(&p.value));
-                    let padding = comp.props.iter().find(|p| p.name == "padding")
-                        .map(|p| self.get_prop_expr(&p.value));
+                    let (modifiers, handled) = self.build_modifiers_for_component(comp, ModifierConfig {
+                        handle_padding: true,
+                        handle_background: true,
+                        ..Default::default()
+                    })?;
 
-                    // Collect padding shortcuts for Tailwind-style cascade
-                    let padding_shortcuts: Vec<_> = comp.props.iter()
-                        .filter(|p| matches!(p.name.as_str(), "p" | "px" | "py" | "pt" | "pb" | "pl" | "pr"))
-                        .collect();
-
-                    // Build chained modifier if any modifier-related props exist
-                    if background_color.is_some() || padding.is_some() || !padding_shortcuts.is_empty() {
-                        let mut modifiers = Vec::new();
-
-                        if let Some(color) = background_color {
-                            // Transform hex colors to Color(0x...)
-                            let color_str = if color.starts_with('"') && color.ends_with('"') {
-                                let c = &color[1..color.len()-1];
-                                if c.starts_with('#') {
-                                    convert_hex_to_color(&c[1..])?
-                                } else {
-                                    format!("Color.{}", c.chars().next().unwrap().to_uppercase().collect::<String>() + &c[1..])
-                                }
-                            } else {
-                                color.to_string()
-                            };
-                            modifiers.push(format!(".background({})", color_str));
-                        }
-
-                        // Build padding with Tailwind-style cascade (specific beats general)
-                        // padding prop is lowest priority, then p, px/py, then pt/pb/pl/pr
-                        if let Some(padding_mod) = self.build_padding_modifier(&padding_shortcuts, padding) {
-                            modifiers.push(padding_mod);
-                        }
-
-                        // Combine into modifier parameter
+                    // Combine into modifier parameter
+                    if !modifiers.is_empty() {
                         if modifiers.len() == 1 {
-                            // Single modifier - format on one line
                             params.push(format!("modifier = Modifier{}", modifiers[0]));
                         } else {
-                            // Chain of modifiers - format multiline
                             let modifier_chain = modifiers.iter()
                                 .map(|m| format!("                {}", m))
                                 .collect::<Vec<_>>()
                                 .join("\n");
                             params.push(format!("modifier = Modifier\n{}", modifier_chain));
                         }
+                    }
 
-                        // Process other props, skipping backgroundColor, padding, and shortcuts
-                        for prop in &comp.props {
-                            if prop.name == "backgroundColor" || prop.name == "padding" ||
-                               matches!(prop.name.as_str(), "p" | "px" | "py" | "pt" | "pb" | "pl" | "pr") {
-                                continue;
-                            }
-                            let prop_expr = self.get_prop_expr(&prop.value);
-                            let transformed = self.transform_prop(&comp.name, &prop.name, prop_expr);
-                            params.extend(transformed?);
+                    // Process other props, skipping handled ones
+                    for prop in &comp.props {
+                        if handled.contains(&prop.name) {
+                            continue;
                         }
-                    } else {
-                        // No special handling needed - process all props normally
-                        for prop in &comp.props {
-                            let prop_expr = self.get_prop_expr(&prop.value);
-                            let transformed = self.transform_prop(&comp.name, &prop.name, prop_expr);
-                            params.extend(transformed?);
-                        }
+                        let prop_expr = self.get_prop_expr(&prop.value);
+                        let transformed = self.transform_prop(&comp.name, &prop.name, prop_expr);
+                        params.extend(transformed?);
                     }
                 }
                 else if comp.name == "Box" || comp.name == "AsyncImage" {
@@ -1903,68 +1832,13 @@ impl ComposeBackend {
                         params.extend(transformed?);
                     }
                 } else {
-                    // Generic component handling with universal width/height support
-
-                    // Check for width/height props that need modifier conversion
-                    let width_prop = comp.props.iter().find(|p| p.name == "width");
-                    let height_prop = comp.props.iter().find(|p| p.name == "height");
-                    let fill_max_width = comp.props.iter().find(|p| p.name == "fillMaxWidth");
-                    let fill_max_height = comp.props.iter().find(|p| p.name == "fillMaxHeight");
-                    let padding_prop = comp.props.iter().find(|p| p.name == "padding");
-
-                    // Check for padding/margin shortcuts that need to be combined
-                    let padding_shortcuts: Vec<_> = comp.props.iter()
-                        .filter(|p| matches!(p.name.as_str(), "p" | "px" | "py" | "pt" | "pb" | "pl" | "pr" |
-                                                               "m" | "mx" | "my" | "mt" | "mb" | "ml" | "mr"))
-                        .collect();
-
-                    // Build modifier if we have any modifier-related props
-                    let mut modifiers = Vec::new();
-                    let mut handled_width = false;
-                    let mut handled_height = false;
-
-                    // Handle width="100%" → fillMaxWidth()
-                    if let Some(w) = width_prop {
-                        let value = self.get_prop_expr(&w.value);
-                        let trimmed = value.trim().trim_matches('"');
-                        if trimmed == "100%" {
-                            modifiers.push(".fillMaxWidth()".to_string());
-                            self.add_import_if_missing(&mut vec![], "androidx.compose.foundation.layout.fillMaxWidth");
-                            handled_width = true;
-                        }
-                    }
-
-                    // Handle height="100%" → fillMaxHeight()
-                    if let Some(h) = height_prop {
-                        let value = self.get_prop_expr(&h.value);
-                        let trimmed = value.trim().trim_matches('"');
-                        if trimmed == "100%" {
-                            modifiers.push(".fillMaxHeight()".to_string());
-                            self.add_import_if_missing(&mut vec![], "androidx.compose.foundation.layout.fillMaxHeight");
-                            handled_height = true;
-                        }
-                    }
-
-                    // Handle explicit fillMaxWidth/fillMaxHeight props
-                    if let Some(fw) = fill_max_width {
-                        let value = self.get_prop_expr(&fw.value);
-                        if value.trim() == "true" && !handled_width {
-                            modifiers.push(".fillMaxWidth()".to_string());
-                        }
-                    }
-                    if let Some(fh) = fill_max_height {
-                        let value = self.get_prop_expr(&fh.value);
-                        if value.trim() == "true" && !handled_height {
-                            modifiers.push(".fillMaxHeight()".to_string());
-                        }
-                    }
-
-                    // Build padding with Tailwind-style cascade (specific beats general)
-                    // padding prop is lowest priority, then p, px/py, then pt/pb/pl/pr
-                    let base_padding = padding_prop.map(|p| self.get_prop_expr(&p.value));
-                    if let Some(padding_mod) = self.build_padding_modifier(&padding_shortcuts, base_padding.as_deref()) {
-                        modifiers.push(padding_mod);
-                    }
+                    // Generic component handling with unified modifier builder
+                    let (modifiers, handled) = self.build_modifiers_for_component(comp, ModifierConfig {
+                        handle_size: true,
+                        handle_padding: true,
+                        handle_fill_max: true,
+                        ..Default::default()
+                    })?;
 
                     // Output combined modifier if we have any
                     if !modifiers.is_empty() {
@@ -1973,24 +1847,7 @@ impl ComposeBackend {
 
                     // Regular prop handling for other components (excluding handled props)
                     for prop in &comp.props {
-                        // Skip padding/margin shortcuts - already handled
-                        if matches!(prop.name.as_str(), "p" | "px" | "py" | "pt" | "pb" | "pl" | "pr" |
-                                                        "m" | "mx" | "my" | "mt" | "mb" | "ml" | "mr") {
-                            continue;
-                        }
-                        // Skip padding prop - already handled
-                        if prop.name == "padding" {
-                            continue;
-                        }
-                        // Skip width/height if converted to fillMax modifiers
-                        if prop.name == "width" && handled_width {
-                            continue;
-                        }
-                        if prop.name == "height" && handled_height {
-                            continue;
-                        }
-                        // Skip explicit fillMaxWidth/fillMaxHeight props
-                        if prop.name == "fillMaxWidth" || prop.name == "fillMaxHeight" {
+                        if handled.contains(&prop.name) {
                             continue;
                         }
 
@@ -3916,6 +3773,136 @@ impl ComposeBackend {
 
         // Variable without unit - use as-is (caller is responsible for units)
         (trimmed.to_string(), false)
+    }
+
+    /// Build modifiers for a component based on configuration.
+    ///
+    /// Returns: (modifiers_vec, handled_props_set)
+    /// - modifiers_vec: List of modifier strings like ".fillMaxWidth()", ".padding(8.dp)"
+    /// - handled_props_set: Set of prop names that were handled and should be skipped in normal prop processing
+    fn build_modifiers_for_component(
+        &self,
+        comp: &crate::transpiler::ast::Component,
+        config: ModifierConfig,
+    ) -> Result<(Vec<String>, std::collections::HashSet<String>), String> {
+        let mut modifiers = Vec::new();
+        let mut handled = std::collections::HashSet::new();
+
+        // Handle fillMaxSize/fillMaxWidth/fillMaxHeight
+        if config.handle_fill_max || config.handle_size {
+            if let Some(fs) = comp.props.iter().find(|p| p.name == "fillMaxSize") {
+                let value = self.get_prop_expr(&fs.value);
+                if value.trim() == "true" {
+                    modifiers.push(".fillMaxSize()".to_string());
+                }
+                handled.insert("fillMaxSize".to_string());
+            }
+            if let Some(fw) = comp.props.iter().find(|p| p.name == "fillMaxWidth") {
+                let value = self.get_prop_expr(&fw.value);
+                if value.trim() == "true" && !modifiers.iter().any(|m| m.contains("fillMaxSize")) {
+                    modifiers.push(".fillMaxWidth()".to_string());
+                }
+                handled.insert("fillMaxWidth".to_string());
+            }
+            if let Some(fh) = comp.props.iter().find(|p| p.name == "fillMaxHeight") {
+                let value = self.get_prop_expr(&fh.value);
+                if value.trim() == "true" && !modifiers.iter().any(|m| m.contains("fillMaxSize")) {
+                    modifiers.push(".fillMaxHeight()".to_string());
+                }
+                handled.insert("fillMaxHeight".to_string());
+            }
+        }
+
+        // Handle width/height props (100% → fillMax*, fixed → .width()/.height())
+        if config.handle_size {
+            if let Some(w) = comp.props.iter().find(|p| p.name == "width") {
+                let value = self.get_prop_expr(&w.value);
+                let (dim_expr, is_percent) = self.parse_dimension(&value, "width", &comp.name);
+                if is_percent {
+                    if !modifiers.iter().any(|m| m.contains("fillMaxWidth") || m.contains("fillMaxSize")) {
+                        modifiers.push(".fillMaxWidth()".to_string());
+                    }
+                } else if !dim_expr.is_empty() {
+                    modifiers.push(format!(".width({})", dim_expr));
+                }
+                handled.insert("width".to_string());
+            }
+            if let Some(h) = comp.props.iter().find(|p| p.name == "height") {
+                let value = self.get_prop_expr(&h.value);
+                let (dim_expr, is_percent) = self.parse_dimension(&value, "height", &comp.name);
+                if is_percent {
+                    if !modifiers.iter().any(|m| m.contains("fillMaxHeight") || m.contains("fillMaxSize")) {
+                        modifiers.push(".fillMaxHeight()".to_string());
+                    }
+                } else if !dim_expr.is_empty() {
+                    modifiers.push(format!(".height({})", dim_expr));
+                }
+                handled.insert("height".to_string());
+            }
+        }
+
+        // Handle backgroundColor
+        if config.handle_background {
+            if let Some(bg) = comp.props.iter().find(|p| p.name == "backgroundColor") {
+                let color = self.get_prop_expr(&bg.value);
+                let color_str = if color.starts_with('"') && color.ends_with('"') {
+                    let c = &color[1..color.len()-1];
+                    if c.starts_with('#') {
+                        convert_hex_to_color(&c[1..])?
+                    } else {
+                        format!("Color.{}", c.chars().next().unwrap().to_uppercase().collect::<String>() + &c[1..])
+                    }
+                } else {
+                    color.to_string()
+                };
+                modifiers.push(format!(".background({})", color_str));
+                handled.insert("backgroundColor".to_string());
+            }
+        }
+
+        // Handle padding with Tailwind-style cascade
+        if config.handle_padding {
+            let padding_prop = comp.props.iter().find(|p| p.name == "padding");
+            let padding_shortcuts: Vec<_> = comp.props.iter()
+                .filter(|p| matches!(p.name.as_str(), "p" | "px" | "py" | "pt" | "pb" | "pl" | "pr"))
+                .collect();
+
+            let base_padding = padding_prop.map(|p| self.get_prop_expr(&p.value));
+            if let Some(padding_mod) = self.build_padding_modifier(&padding_shortcuts, base_padding.as_deref()) {
+                modifiers.push(padding_mod);
+            }
+
+            // Mark padding props as handled
+            if padding_prop.is_some() {
+                handled.insert("padding".to_string());
+            }
+            for shortcut in &["p", "px", "py", "pt", "pb", "pl", "pr"] {
+                if comp.props.iter().any(|p| p.name == *shortcut) {
+                    handled.insert(shortcut.to_string());
+                }
+            }
+        }
+
+        // Handle onClick as clickable modifier (for Text and similar components)
+        if config.handle_click_as_modifier {
+            if let Some(click_prop) = comp.props.iter().find(|p| p.name == "onClick") {
+                let click_value = self.get_prop_expr(&click_prop.value);
+                let transformed = self.transform_lambda_arrow(&click_value);
+
+                let clickable_expr = if !transformed.starts_with('{') {
+                    let with_parens = format!("{}()", transformed);
+                    let with_viewmodel = self.transform_viewmodel_expression(&with_parens);
+                    format!("{{ {} }}", with_viewmodel)
+                } else {
+                    self.transform_viewmodel_expression(&transformed)
+                };
+
+                modifiers.push(format!(".clickable {}", clickable_expr));
+                handled.insert("onClick".to_string());
+            }
+        }
+
+        Ok((modifiers, handled))
     }
 
     /// Build padding modifier string from Tailwind-style shortcuts with proper cascade.

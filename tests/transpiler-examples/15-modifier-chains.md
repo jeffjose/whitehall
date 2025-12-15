@@ -52,8 +52,8 @@ fun ActionCard(
         Text(
             text = "${text}",
             modifier = Modifier
-                .padding(16.dp)
                 .fillMaxWidth()
+                .padding(16.dp)
         )
     }
 }
