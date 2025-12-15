@@ -1369,6 +1369,12 @@ impl ComposeBackend {
                     let fill_max_size = comp.props.iter().find(|p| p.name == "fillMaxSize");
                     let fit_prop = comp.props.iter().find(|p| p.name == "fit");
                     let content_scale_prop = comp.props.iter().find(|p| p.name == "contentScale");
+                    let padding_prop = comp.props.iter().find(|p| p.name == "padding");
+
+                    // Collect padding shortcuts for Tailwind-style cascade
+                    let padding_shortcuts: Vec<_> = comp.props.iter()
+                        .filter(|p| matches!(p.name.as_str(), "p" | "px" | "py" | "pt" | "pb" | "pl" | "pr"))
+                        .collect();
 
                     // Track what size modifiers we're adding for smart defaults
                     let mut has_fill_width = false;
@@ -1376,8 +1382,8 @@ impl ComposeBackend {
                     let mut has_fixed_width = false;
                     let mut has_fixed_height = false;
 
-                    // Build modifier if we have size/layout props
-                    if width_prop.is_some() || height_prop.is_some() || fill_max_width.is_some() || fill_max_height.is_some() || fill_max_size.is_some() {
+                    // Build modifier if we have size/layout/padding props
+                    if width_prop.is_some() || height_prop.is_some() || fill_max_width.is_some() || fill_max_height.is_some() || fill_max_size.is_some() || padding_prop.is_some() || !padding_shortcuts.is_empty() {
                         let mut modifiers = Vec::new();
 
                         // fillMaxSize first (takes precedence)
@@ -1437,12 +1443,23 @@ impl ComposeBackend {
                                 has_fixed_height = true;
                             }
                         }
+
+                        // Build padding with Tailwind-style cascade (specific beats general)
+                        let base_padding = padding_prop.map(|p| self.get_prop_expr(&p.value));
+                        if let Some(padding_mod) = self.build_padding_modifier(&padding_shortcuts, base_padding.as_deref()) {
+                            modifiers.push(padding_mod);
+                        }
+
                         params.push(format!("modifier = Modifier{}", modifiers.join("")));
                     }
 
                     for prop in &comp.props {
-                        // Skip size/layout props - handled as modifier above
-                        if prop.name == "width" || prop.name == "height" || prop.name == "fillMaxWidth" || prop.name == "fillMaxHeight" || prop.name == "fillMaxSize" {
+                        // Skip size/layout/padding props - handled as modifier above
+                        if prop.name == "width" || prop.name == "height" || prop.name == "fillMaxWidth" || prop.name == "fillMaxHeight" || prop.name == "fillMaxSize" || prop.name == "padding" {
+                            continue;
+                        }
+                        // Skip padding shortcuts - handled as modifier above
+                        if matches!(prop.name.as_str(), "p" | "px" | "py" | "pt" | "pb" | "pl" | "pr") {
                             continue;
                         }
 
