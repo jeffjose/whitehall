@@ -1,5 +1,4 @@
 <Image
-p={18}
   src={"https://picsum.photos/id/${$screen.params.id}/1080/1920"}
-  width="100%"
+  fillMaxSize={true}
 />

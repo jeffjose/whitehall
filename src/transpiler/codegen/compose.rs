@@ -1654,76 +1654,58 @@ impl ComposeBackend {
                         params.extend(transformed?);
                     }
                 }
-                else if comp.name == "Box" || comp.name == "AsyncImage" {
-                    // Special handling for Box and AsyncImage with width/height/etc
+                else if comp.name == "Box" {
+                    // Box uses unified modifier builder for size/padding/background
+                    let (modifiers, mut handled) = self.build_modifiers_for_component(comp, ModifierConfig {
+                        handle_size: true,
+                        handle_padding: true,
+                        handle_background: true,
+                        handle_fill_max: true,
+                        ..Default::default()
+                    })?;
+
+                    // Handle alignment as contentAlignment parameter (not modifier)
+                    let alignment = comp.props.iter().find(|p| p.name == "alignment")
+                        .map(|p| self.get_prop_expr(&p.value));
+                    if let Some(align) = &alignment {
+                        let align_str = if align.starts_with('"') && align.ends_with('"') {
+                            let a = &align[1..align.len()-1];
+                            format!("Alignment.{}", a.chars().next().unwrap().to_uppercase().collect::<String>() + &a[1..])
+                        } else {
+                            align.to_string()
+                        };
+                        params.push(format!("contentAlignment = {}", align_str));
+                        handled.insert("alignment".to_string());
+                    }
+
+                    // Output combined modifier if we have any
+                    if !modifiers.is_empty() {
+                        params.push(format!("modifier = Modifier{}", modifiers.join("")));
+                    }
+
+                    // Process other props
+                    for prop in &comp.props {
+                        if handled.contains(&prop.name) {
+                            continue;
+                        }
+                        let prop_expr = self.get_prop_expr(&prop.value);
+                        let transformed = self.transform_prop(&comp.name, &prop.name, prop_expr);
+                        params.extend(transformed?);
+                    }
+                }
+                else if comp.name == "AsyncImage" {
+                    // Special handling for AsyncImage with width/height/etc
                     // Collect special props as expression strings
                     let width = comp.props.iter().find(|p| p.name == "width")
                         .map(|p| self.get_prop_expr(&p.value));
                     let height = comp.props.iter().find(|p| p.name == "height")
                         .map(|p| self.get_prop_expr(&p.value));
-                    let bg_color = comp.props.iter().find(|p| p.name == "backgroundColor")
-                        .map(|p| self.get_prop_expr(&p.value));
-                    let alignment = comp.props.iter().find(|p| p.name == "alignment")
-                        .map(|p| self.get_prop_expr(&p.value));
                     let url = comp.props.iter().find(|p| p.name == "url")
                         .map(|p| self.get_prop_expr(&p.value));
                     let content_desc = comp.props.iter().find(|p| p.name == "contentDescription");
 
-                    // Build modifier chain for Box
-                    if comp.name == "Box" && (width.is_some() || height.is_some() || bg_color.is_some() || alignment.is_some()) {
-                        let mut modifiers = Vec::new();
-
-                        // Add size modifier if width/height present
-                        if let (Some(w), Some(_h)) = (width, height) {
-                            modifiers.push(format!(".size({}.dp)", w));
-                        }
-
-                        // Add background modifier
-                        if let Some(color) = bg_color {
-                            let color_str = if color.starts_with('"') && color.ends_with('"') {
-                                let c = &color[1..color.len()-1];
-                                if c.starts_with('#') {
-                                    // Hex color: convert to Color(0xFFRRGGBB)
-                                    convert_hex_to_color(&c[1..]).unwrap_or_else(|_| format!("Color.White"))
-                                } else {
-                                    // Named color: Color.Red, Color.Blue, etc.
-                                    format!("Color.{}", c.chars().next().unwrap().to_uppercase().collect::<String>() + &c[1..])
-                                }
-                            } else {
-                                color.to_string()
-                            };
-                            modifiers.push(format!(".background({})", color_str));
-                        }
-
-                        // Add alignment modifier
-                        if let Some(align) = alignment {
-                            let align_str = if align.starts_with('"') && align.ends_with('"') {
-                                let a = &align[1..align.len()-1];
-                                format!("Alignment.{}", a.chars().next().unwrap().to_uppercase().collect::<String>() + &a[1..])
-                            } else {
-                                align.to_string()
-                            };
-                            modifiers.push(format!(".align({})", align_str));
-                        }
-
-                        // Combine into modifier parameter
-                        if !modifiers.is_empty() {
-                            if modifiers.len() == 1 {
-                                // Single modifier - format on one line
-                                params.push(format!("modifier = Modifier{}", modifiers[0]));
-                            } else {
-                                // Chain of modifiers - format multiline
-                                let modifier_chain = modifiers.iter()
-                                    .map(|m| format!("                    {}", m))
-                                    .collect::<Vec<_>>()
-                                    .join("\n");
-                                params.push(format!("modifier = Modifier\n{}", modifier_chain));
-                            }
-                        }
-                    }
-
                     // Handle AsyncImage special props
-                    if comp.name == "AsyncImage" {
+                    {
                         let has_modifier = comp.props.iter().any(|p| p.name == "modifier");
                         let placeholder = comp.props.iter().find(|p| p.name == "placeholder")
                             .map(|p| self.get_prop_expr(&p.value));
@@ -1804,15 +1786,11 @@ impl ComposeBackend {
                     }
 
                     // Add other props (excluding the ones we handled)
-                    let has_async_image_modifier = comp.name == "AsyncImage" &&
-                        comp.props.iter().any(|p| p.name == "modifier");
+                    let has_async_image_modifier = comp.props.iter().any(|p| p.name == "modifier");
 
                     for prop in &comp.props {
                         // Skip props we've already handled
-                        if comp.name == "Box" && (prop.name == "width" || prop.name == "height" || prop.name == "backgroundColor" || prop.name == "alignment") {
-                            continue; // Box props handled above
-                        }
-                        if comp.name == "AsyncImage" && !has_async_image_modifier &&
+                        if !has_async_image_modifier &&
                             (prop.name == "url" || prop.name == "width" || prop.name == "height" ||
                              prop.name == "placeholder" || prop.name == "error" || prop.name == "crossfade" ||
                              prop.name == "contentDescription") {
