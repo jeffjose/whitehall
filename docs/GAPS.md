@@ -4,13 +4,14 @@ Issues discovered during Pokemon app example development.
 
 ## Status Summary
 
-**✅ Fixed (3):**
+**✅ Fixed (4):**
 - Top-level Kotlin imports
 - Private/public class-level fields with initialization
 - Hex colors transpilation (commit 89b6dfa)
+- Data classes outside main class (pass-through architecture)
 
-**❌ Blocking Issues (1):**
-- Data classes outside main class
+**❌ Blocking Issues (0):**
+- None!
 
 **⚠️ Needs Investigation (1):**
 - Box width/height not properly handled
@@ -65,9 +66,9 @@ class MyStore {
 
 ---
 
-### 3. Data classes outside main class
+### 3. ~~Data classes outside main class~~ ✅ FIXED
 
-**Issue:** Parser can't parse `data class` definitions that appear after the main class
+**Issue:** ~~Parser can't parse `data class` definitions that appear after the main class~~
 
 **Example:**
 ```kotlin
@@ -75,18 +76,16 @@ class MyStore {
     var items: List<Item> = []
 }
 
-@Serializable           // ❌ Parser error
-data class Item(        // ❌ Parser error
+@Serializable           // ✅ Now works!
+data class Item(        // ✅ Now works!
     val id: Int,
     val name: String
 )
 ```
 
-**Current State:** ❌ Not supported
-**Location:** `src/stores/PokemonStore.wh:58-107`
-**Error:** `Expected component, found: "data class PokemonListResponse"`
-
-**Workaround:** None - need separate Kotlin files for data classes
+**Current State:** ✅ **FIXED** - Pass-through architecture now supports data classes, sealed classes, enum classes after main class
+**Fixed:** Pass-through architecture (commits 5f17d70, f5180f9)
+**Details:** Parser captures Kotlin blocks after the main class and codegen includes them in the output
 
 ---
 
@@ -133,17 +132,17 @@ Box(modifier = Modifier.size(48.dp, 48.dp))
 
 ## Missing Features
 
-### 1. Kotlin interop for complex types
+### 1. ~~Kotlin interop for complex types~~ ✅ FIXED
 
-**Needed for:** Data classes, sealed classes, annotations outside main class
+~~**Needed for:** Data classes, sealed classes, annotations outside main class~~
 
-**Use case:** JSON serialization models, API response types
+~~**Use case:** JSON serialization models, API response types~~
 
-**Impact:** Can't define complex domain models in same file as ViewModel
+~~**Impact:** Can't define complex domain models in same file as ViewModel~~
 
-**Workaround:** Would need separate `.kt` files for models
+~~**Workaround:** Would need separate `.kt` files for models~~
 
-**Note:** Top-level imports are now supported (fixed 2025-11-07), but top-level data class definitions after the main class are still not supported (see Parser Limitations #3).
+**Status:** ✅ **FIXED** - Pass-through architecture now supports data classes, sealed classes, enum classes, and other Kotlin constructs both before and after the main class. Top-level imports also supported.
 
 ---
 
@@ -163,7 +162,7 @@ Box(modifier = Modifier.size(48.dp, 48.dp))
 
 **High Priority (blocks real apps):**
 1. ~~Hex color transpilation bug~~ ✅ FIXED
-2. Top-level data classes
+2. ~~Top-level data classes~~ ✅ FIXED
 3. ~~Private val fields with initialization~~ ✅ FIXED
 
 **Medium Priority:**
@@ -178,23 +177,24 @@ Box(modifier = Modifier.size(48.dp, 48.dp))
 
 ## Test Case
 
-See `examples/pokemon-app/` for real-world example hitting remaining issues.
+See `examples/pokemon-app/` for real-world example - now fully working!
 
 **Current Status:**
 - ✅ Import statements now work
 - ✅ Private class fields now work
 - ✅ Hex colors now work (fixed in 89b6dfa)
-- ❌ Still blocked by: data classes outside main class
+- ✅ Data classes outside main class now work (pass-through architecture)
 
-**To reproduce remaining issues:**
+**All blocking issues resolved!** The Pokemon app should now compile successfully:
 ```bash
 cd examples/pokemon-app
 cargo run --manifest-path ../../Cargo.toml -- compile src/stores/PokemonStore.wh
-# Error: [Line 63:1] Expected component, found: "data class PokemonListResponse"
+# ✅ Compiles successfully with all data classes included
 ```
 
 ---
 
-*Last Updated: 2025-11-07*
+*Last Updated: 2025-12-15*
 *Import support added: 2025-11-07*
 *Private field support added: 2025-11-07*
+*Data class pass-through support: 2025-12-15*
