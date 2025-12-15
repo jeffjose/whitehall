@@ -260,7 +260,9 @@ match (component, prop_name) {
     ("Box", "backgroundColor") => "modifier = Modifier.background(Color.{value})",
     ("Box", "alignment") => "contentAlignment = Alignment.{value}",
 
-    // Universal padding/margin shortcuts (CSS-like)
+    // Universal padding/margin shortcuts (Tailwind-style with cascade)
+    // Priority: specific (pt/pb/pl/pr) > axis (px/py) > all (p/padding)
+    // Example: padding={16} pt={32} → .padding(top=32.dp, bottom=16.dp, start=16.dp, end=16.dp)
     (_, "p" | "m") => "modifier = Modifier.padding({value}.dp)",
     (_, "px" | "mx") => "modifier = Modifier.padding(horizontal = {value}.dp)",
     (_, "py" | "my") => "modifier = Modifier.padding(vertical = {value}.dp)",

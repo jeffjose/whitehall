@@ -17,7 +17,7 @@ onMount {
   loading = false
 }
 
-<Column spacing={8} padding={16}>
+<Column spacing={8} padding={16} pt={48}>
 <TextField value={query} onValueChange={(v) => query = v} placeholder="Search by author..." width="100%"/>
   <Text>Photos</Text>
 @if (loading) {

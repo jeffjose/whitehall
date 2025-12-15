@@ -1551,31 +1551,11 @@ impl ComposeBackend {
                     if padding.is_some() || fill_max_width.is_some() || explicit_modifier.is_some() || !padding_shortcuts.is_empty() || (on_click.is_some() && comp.name == "Text") {
                         let mut modifiers = Vec::new();
 
-                        // Add padding first (if present)
-                        if let Some(pad_prop) = padding {
-                            let pad_value = self.get_prop_expr(&pad_prop.value);
-                            modifiers.push(format!(".padding({}.dp)", pad_value));
-                        }
-
-                        // Add padding shortcuts
-                        if !padding_shortcuts.is_empty() {
-                            let mut padding_parts = Vec::new();
-                            for prop in &padding_shortcuts {
-                                let value = self.get_prop_expr(&prop.value);
-                                match prop.name.as_str() {
-                                    "p" | "m" => padding_parts.push(format!("{}.dp", value)),
-                                    "px" | "mx" => padding_parts.push(format!("horizontal = {}.dp", value)),
-                                    "py" | "my" => padding_parts.push(format!("vertical = {}.dp", value)),
-                                    "pt" | "mt" => padding_parts.push(format!("top = {}.dp", value)),
-                                    "pb" | "mb" => padding_parts.push(format!("bottom = {}.dp", value)),
-                                    "pl" | "ml" => padding_parts.push(format!("start = {}.dp", value)),
-                                    "pr" | "mr" => padding_parts.push(format!("end = {}.dp", value)),
-                                    _ => {}
-                                }
-                            }
-                            if !padding_parts.is_empty() {
-                                modifiers.push(format!(".padding({})", padding_parts.join(", ")));
-                            }
+                        // Build padding with Tailwind-style cascade (specific beats general)
+                        // padding prop is lowest priority, then p, px/py, then pt/pb/pl/pr
+                        let base_padding = padding.map(|p| self.get_prop_expr(&p.value));
+                        if let Some(padding_mod) = self.build_padding_modifier(&padding_shortcuts, base_padding.as_deref()) {
+                            modifiers.push(padding_mod);
                         }
 
                         // Add fillMaxWidth if present (as boolean prop or variable)
@@ -1666,10 +1646,9 @@ impl ComposeBackend {
                     let padding = comp.props.iter().find(|p| p.name == "padding")
                         .map(|p| self.get_prop_expr(&p.value));
 
-                    // Collect padding/margin shortcuts
+                    // Collect padding shortcuts for Tailwind-style cascade
                     let padding_shortcuts: Vec<_> = comp.props.iter()
-                        .filter(|p| matches!(p.name.as_str(), "p" | "px" | "py" | "pt" | "pb" | "pl" | "pr" |
-                                                               "m" | "mx" | "my" | "mt" | "mb" | "ml" | "mr"))
+                        .filter(|p| matches!(p.name.as_str(), "p" | "px" | "py" | "pt" | "pb" | "pl" | "pr"))
                         .collect();
 
                     // Build chained modifier if any modifier-related props exist
@@ -1691,34 +1670,10 @@ impl ComposeBackend {
                             modifiers.push(format!(".background({})", color_str));
                         }
 
-                        if let Some(pad) = padding {
-                            let padding_value = if pad.ends_with(".dp") {
-                                pad.to_string()
-                            } else {
-                                format!("{}.dp", pad)
-                            };
-                            modifiers.push(format!(".padding({})", padding_value));
-                        }
-
-                        // Add padding shortcuts
-                        if !padding_shortcuts.is_empty() {
-                            let mut padding_parts = Vec::new();
-                            for prop in &padding_shortcuts {
-                                let value = self.get_prop_expr(&prop.value);
-                                match prop.name.as_str() {
-                                    "p" | "m" => padding_parts.push(format!("{}.dp", value)),
-                                    "px" | "mx" => padding_parts.push(format!("horizontal = {}.dp", value)),
-                                    "py" | "my" => padding_parts.push(format!("vertical = {}.dp", value)),
-                                    "pt" | "mt" => padding_parts.push(format!("top = {}.dp", value)),
-                                    "pb" | "mb" => padding_parts.push(format!("bottom = {}.dp", value)),
-                                    "pl" | "ml" => padding_parts.push(format!("start = {}.dp", value)),
-                                    "pr" | "mr" => padding_parts.push(format!("end = {}.dp", value)),
-                                    _ => {}
-                                }
-                            }
-                            if !padding_parts.is_empty() {
-                                modifiers.push(format!(".padding({})", padding_parts.join(", ")));
-                            }
+                        // Build padding with Tailwind-style cascade (specific beats general)
+                        // padding prop is lowest priority, then p, px/py, then pt/pb/pl/pr
+                        if let Some(padding_mod) = self.build_padding_modifier(&padding_shortcuts, padding) {
+                            modifiers.push(padding_mod);
                         }
 
                         // Combine into modifier parameter
@@ -1737,8 +1692,7 @@ impl ComposeBackend {
                         // Process other props, skipping backgroundColor, padding, and shortcuts
                         for prop in &comp.props {
                             if prop.name == "backgroundColor" || prop.name == "padding" ||
-                               matches!(prop.name.as_str(), "p" | "px" | "py" | "pt" | "pb" | "pl" | "pr" |
-                                                            "m" | "mx" | "my" | "mt" | "mb" | "ml" | "mr") {
+                               matches!(prop.name.as_str(), "p" | "px" | "py" | "pt" | "pb" | "pl" | "pr") {
                                 continue;
                             }
                             let prop_expr = self.get_prop_expr(&prop.value);
@@ -1939,6 +1893,7 @@ impl ComposeBackend {
                     let height_prop = comp.props.iter().find(|p| p.name == "height");
                     let fill_max_width = comp.props.iter().find(|p| p.name == "fillMaxWidth");
                     let fill_max_height = comp.props.iter().find(|p| p.name == "fillMaxHeight");
+                    let padding_prop = comp.props.iter().find(|p| p.name == "padding");
 
                     // Check for padding/margin shortcuts that need to be combined
                     let padding_shortcuts: Vec<_> = comp.props.iter()
@@ -1987,41 +1942,11 @@ impl ComposeBackend {
                         }
                     }
 
-                    // Add padding shortcuts to modifier
-                    if !padding_shortcuts.is_empty() {
-                        let mut padding_parts = Vec::new();
-
-                        for prop in &padding_shortcuts {
-                            let value = self.get_prop_expr(&prop.value);
-                            match prop.name.as_str() {
-                                "p" | "m" => {
-                                    padding_parts.push(format!("{}.dp", value));
-                                }
-                                "px" | "mx" => {
-                                    padding_parts.push(format!("horizontal = {}.dp", value));
-                                }
-                                "py" | "my" => {
-                                    padding_parts.push(format!("vertical = {}.dp", value));
-                                }
-                                "pt" | "mt" => {
-                                    padding_parts.push(format!("top = {}.dp", value));
-                                }
-                                "pb" | "mb" => {
-                                    padding_parts.push(format!("bottom = {}.dp", value));
-                                }
-                                "pl" | "ml" => {
-                                    padding_parts.push(format!("start = {}.dp", value));
-                                }
-                                "pr" | "mr" => {
-                                    padding_parts.push(format!("end = {}.dp", value));
-                                }
-                                _ => {}
-                            }
-                        }
-
-                        if !padding_parts.is_empty() {
-                            modifiers.push(format!(".padding({})", padding_parts.join(", ")));
-                        }
+                    // Build padding with Tailwind-style cascade (specific beats general)
+                    // padding prop is lowest priority, then p, px/py, then pt/pb/pl/pr
+                    let base_padding = padding_prop.map(|p| self.get_prop_expr(&p.value));
+                    if let Some(padding_mod) = self.build_padding_modifier(&padding_shortcuts, base_padding.as_deref()) {
+                        modifiers.push(padding_mod);
                     }
 
                     // Output combined modifier if we have any
@@ -2034,6 +1959,10 @@ impl ComposeBackend {
                         // Skip padding/margin shortcuts - already handled
                         if matches!(prop.name.as_str(), "p" | "px" | "py" | "pt" | "pb" | "pl" | "pr" |
                                                         "m" | "mx" | "my" | "mt" | "mb" | "ml" | "mr") {
+                            continue;
+                        }
+                        // Skip padding prop - already handled
+                        if prop.name == "padding" {
                             continue;
                         }
                         // Skip width/height if converted to fillMax modifiers
@@ -3970,6 +3899,100 @@ impl ComposeBackend {
 
         // Variable without unit - use as-is (caller is responsible for units)
         (trimmed.to_string(), false)
+    }
+
+    /// Build padding modifier string from Tailwind-style shortcuts with proper cascade.
+    ///
+    /// Priority (highest wins):
+    /// 1. pt, pb, pl, pr (specific sides)
+    /// 2. px, py (axis)
+    /// 3. p / padding (all sides)
+    ///
+    /// Example: p={8} pl={16} → padding(top=8.dp, bottom=8.dp, start=16.dp, end=8.dp)
+    fn build_padding_modifier(&self, props: &[&crate::transpiler::ast::ComponentProp], base_padding: Option<&str>) -> Option<String> {
+        // Collect values with priority
+        let mut top: Option<(String, u8)> = None;    // (value, priority)
+        let mut bottom: Option<(String, u8)> = None;
+        let mut start: Option<(String, u8)> = None;
+        let mut end: Option<(String, u8)> = None;
+
+        // Priority 1: base padding prop (lowest)
+        if let Some(pad) = base_padding {
+            let value = if pad.ends_with(".dp") { pad.to_string() } else { format!("{}.dp", pad) };
+            top = Some((value.clone(), 1));
+            bottom = Some((value.clone(), 1));
+            start = Some((value.clone(), 1));
+            end = Some((value, 1));
+        }
+
+        for prop in props {
+            let value = self.get_prop_expr(&prop.value);
+            let dp_value = format!("{}.dp", value);
+
+            match prop.name.as_str() {
+                // Priority 1: all sides (same as base padding)
+                "p" => {
+                    if top.as_ref().map_or(true, |(_, p)| *p <= 1) { top = Some((dp_value.clone(), 1)); }
+                    if bottom.as_ref().map_or(true, |(_, p)| *p <= 1) { bottom = Some((dp_value.clone(), 1)); }
+                    if start.as_ref().map_or(true, |(_, p)| *p <= 1) { start = Some((dp_value.clone(), 1)); }
+                    if end.as_ref().map_or(true, |(_, p)| *p <= 1) { end = Some((dp_value, 1)); }
+                }
+                // Priority 2: axis
+                "px" => {
+                    if start.as_ref().map_or(true, |(_, p)| *p <= 2) { start = Some((dp_value.clone(), 2)); }
+                    if end.as_ref().map_or(true, |(_, p)| *p <= 2) { end = Some((dp_value, 2)); }
+                }
+                "py" => {
+                    if top.as_ref().map_or(true, |(_, p)| *p <= 2) { top = Some((dp_value.clone(), 2)); }
+                    if bottom.as_ref().map_or(true, |(_, p)| *p <= 2) { bottom = Some((dp_value, 2)); }
+                }
+                // Priority 3: specific sides (highest)
+                "pt" => { top = Some((dp_value, 3)); }
+                "pb" => { bottom = Some((dp_value, 3)); }
+                "pl" => { start = Some((dp_value, 3)); }
+                "pr" => { end = Some((dp_value, 3)); }
+                _ => {}
+            }
+        }
+
+        // Generate padding call
+        let top_val = top.map(|(v, _)| v);
+        let bottom_val = bottom.map(|(v, _)| v);
+        let start_val = start.map(|(v, _)| v);
+        let end_val = end.map(|(v, _)| v);
+
+        // Check if all values are the same (can use simple padding)
+        if let (Some(t), Some(b), Some(s), Some(e)) = (&top_val, &bottom_val, &start_val, &end_val) {
+            if t == b && b == s && s == e {
+                return Some(format!(".padding({})", t));
+            }
+        }
+
+        // Check for horizontal/vertical shorthand
+        let h_same = start_val == end_val;
+        let v_same = top_val == bottom_val;
+
+        if h_same && v_same && start_val.is_some() && top_val.is_some() {
+            let h = start_val.unwrap();
+            let v = top_val.unwrap();
+            if h == v {
+                return Some(format!(".padding({})", h));
+            }
+            return Some(format!(".padding(horizontal = {}, vertical = {})", h, v));
+        }
+
+        // Build individual padding parts
+        let mut parts = Vec::new();
+        if let Some(t) = top_val { parts.push(format!("top = {}", t)); }
+        if let Some(b) = bottom_val { parts.push(format!("bottom = {}", b)); }
+        if let Some(s) = start_val { parts.push(format!("start = {}", s)); }
+        if let Some(e) = end_val { parts.push(format!("end = {}", e)); }
+
+        if parts.is_empty() {
+            None
+        } else {
+            Some(format!(".padding({})", parts.join(", ")))
+        }
     }
 
     /// Detect if a file uses the $fetch() API by scanning state and lifecycle hooks
