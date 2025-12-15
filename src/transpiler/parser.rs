@@ -522,14 +522,27 @@ impl Parser {
         self.skip_whitespace();
 
         // Parse initial value (simple string or expression for now)
-        let initial_value = self.parse_value()?;
+        let mut initial_value = self.parse_value()?;
 
-        // Detect if this uses derivedStateOf pattern
-        let is_derived_state = initial_value.trim().starts_with("derivedStateOf");
+        // Detect if this uses derivedStateOf or $derived() pattern
+        let mut is_derived_state = initial_value.trim().starts_with("derivedStateOf");
+        let mut effective_mutable = mutable;
+
+        // Transform $derived(expr) → derivedStateOf { expr }
+        // Note: $derived() always creates immutable derived state, even if declared with var
+        if initial_value.trim().starts_with("$derived(") {
+            is_derived_state = true;
+            effective_mutable = false; // $derived() is always treated as val
+            // Extract the expression inside $derived(...)
+            let trimmed = initial_value.trim();
+            if let Some(inner) = trimmed.strip_prefix("$derived(").and_then(|s| s.strip_suffix(")")) {
+                initial_value = format!("derivedStateOf {{ {} }}", inner.trim());
+            }
+        }
 
         Ok(StateDeclaration {
             name,
-            mutable,
+            mutable: effective_mutable,
             type_annotation,
             initial_value,
             is_derived_state,

@@ -5093,9 +5093,12 @@ impl ComposeBackend {
             }
         }
 
-        // Derived state (val with computed expressions)
-        let derived_state: Vec<_> = file.state.iter().filter(|s| !s.mutable).collect();
-        for state in &derived_state {
+        // Simple immutable state (val without $derived) - generate as getters in ViewModel
+        // Note: $derived() state is handled in wrapper component using derivedStateOf
+        let simple_val_state: Vec<_> = file.state.iter()
+            .filter(|s| !s.mutable && !s.is_derived_state)
+            .collect();
+        for state in &simple_val_state {
             let type_str = if let Some(type_ann) = &state.type_annotation {
                 format!(": {}", type_ann)
             } else {
@@ -5243,6 +5246,13 @@ impl ComposeBackend {
         imports.push("androidx.compose.runtime.collectAsState".to_string());
         imports.push("androidx.compose.runtime.getValue".to_string());
 
+        // Add remember and derivedStateOf imports if any derived state exists
+        let has_derived_state = file.state.iter().any(|s| !s.mutable && s.is_derived_state);
+        if has_derived_state {
+            imports.push("androidx.compose.runtime.remember".to_string());
+            imports.push("androidx.compose.runtime.derivedStateOf".to_string());
+        }
+
         // User imports (resolve $ aliases)
         for import in &file.imports {
             let resolved = self.resolve_import(&import.path);
@@ -5316,10 +5326,12 @@ impl ComposeBackend {
         for state in &file.state {
             if state.mutable {
                 self.mutable_vars.insert(state.name.clone());
-            } else {
-                // Derived properties (need viewModel prefix)
+            } else if !state.is_derived_state {
+                // Simple val properties (need viewModel prefix)
+                // Note: $derived() state is local to wrapper, doesn't need prefix
                 self.derived_props.insert(state.name.clone());
             }
+            // $derived() state: no prefix needed, it's a local val in the wrapper
         }
 
         // Collect function names (need viewModel prefix)
@@ -5348,6 +5360,27 @@ impl ComposeBackend {
                     // Single line - output as-is
                     output.push_str(&format!("val {}{} = {}\n", state.name, type_annotation, transformed_value));
                 }
+            }
+        }
+
+        // Generate derived state (val x = $derived(...))
+        // These use derivedStateOf and need remember {} wrapper
+        for state in &file.state {
+            if !state.mutable && state.is_derived_state {
+                output.push_str(&self.indent());
+
+                // Transform variable references in the derivedStateOf expression
+                // e.g., photos.filter {...} → uiState.photos.filter {...}
+                let transformed_value = self.transform_viewmodel_expression(&state.initial_value);
+
+                // Generate: val name by remember { derivedStateOf { expr } }
+                output.push_str(&format!("val {} by remember {{\n", state.name));
+                self.indent_level += 1;
+                output.push_str(&self.indent());
+                output.push_str(&format!("{}\n", transformed_value));
+                self.indent_level -= 1;
+                output.push_str(&self.indent());
+                output.push_str("}\n");
             }
         }
 
