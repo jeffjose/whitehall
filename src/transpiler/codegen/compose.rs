@@ -1481,6 +1481,8 @@ impl ComposeBackend {
                         let prop_expr = self.get_prop_expr(&prop.value);
                         // Apply $screen.params transformation
                         let prop_expr = prop_expr.replace("$screen.params.", "");
+                        // Apply viewmodel transformation for state variables
+                        let prop_expr = self.transform_viewmodel_expression(&prop_expr);
 
                         match prop.name.as_str() {
                             // Web-style aliases

@@ -1,5 +1,24 @@
-<Image
-  src={"https://picsum.photos/id/${$screen.params.id}/1080/1920"}
-  fillMaxSize={true}
-  fit="fill-width"
-/>
+@Serializable
+data class PhotoInfo(
+  val id: String,
+  val author: String,
+  val width: Int,
+  val height: Int,
+  val url: String,
+  val download_url: String
+)
+
+var photo: PhotoInfo? = null
+
+onMount {
+  photo = $fetch("https://picsum.photos/id/${$screen.params.id}/info")
+}
+
+<Column>
+@if (photo != null) {
+  <Image src={photo!!.download_url} width="100%" fit="contain" />
+  <Text>{photo!!.author}</Text>
+} @else {
+  <Text>Loading...</Text>
+}
+</Column>
