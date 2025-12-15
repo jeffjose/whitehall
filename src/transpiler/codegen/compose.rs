@@ -1492,6 +1492,8 @@ impl ComposeBackend {
                                     "cover" => "ContentScale.Crop",
                                     "contain" => "ContentScale.Fit",
                                     "fill" => "ContentScale.FillBounds",
+                                    "fill-width" => "ContentScale.FillWidth",
+                                    "fill-height" => "ContentScale.FillHeight",
                                     "none" => "ContentScale.None",
                                     "scale-down" => "ContentScale.Inside",
                                     // Pass through Compose-style values
