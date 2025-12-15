@@ -56,6 +56,9 @@ enum Commands {
         target: String,
         /// Device ID (partial match supported) - auto-selects if only one device connected
         device: Option<String>,
+        /// Watch for changes and rebuild/reinstall automatically
+        #[arg(long, short)]
+        watch: bool,
     },
     /// Build, install, and run the app on a connected device
     /// Works with both project directories (whitehall.toml) and single .wh files
@@ -211,8 +214,8 @@ fn main() {
         Commands::Watch { target } => {
             commands::watch::execute(&target)
         }
-        Commands::Install { target, device } => {
-            commands::install::execute(&target, device.as_deref())
+        Commands::Install { target, device, watch } => {
+            commands::install::execute(&target, device.as_deref(), watch)
         }
         Commands::Run { target, device, watch } => {
             commands::run::execute(&target, device.as_deref(), watch)
