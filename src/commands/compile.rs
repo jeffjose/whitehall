@@ -119,20 +119,33 @@ fn execute_single_file(file_path: &str, package: Option<&str>, no_package: bool)
     let result = transpiler::transpile(&code, package_name, &component_name, None)
         .map_err(|e| anyhow::anyhow!("Transpilation error: {}", e))?;
 
-    // Get primary content (for compile command, we only show the main file)
-    let kotlin_code = result.primary_content();
+    // Get all output files
+    let files = result.files();
 
-    // Output the Kotlin code
-    if no_package {
-        // Strip package declaration for pasting into existing files
-        let code_without_package = kotlin_code
-            .lines()
-            .skip_while(|line| line.trim().is_empty() || line.starts_with("package "))
-            .collect::<Vec<_>>()
-            .join("\n");
-        println!("{}", code_without_package);
-    } else {
-        println!("{}", kotlin_code);
+    // Output all Kotlin files
+    for (i, (suffix, kotlin_code)) in files.iter().enumerate() {
+        // Add separator between multiple files
+        if i > 0 {
+            println!("\n{}", "// ─────────────────────────────────────────────────────────────────".dimmed());
+            let file_label = if suffix.is_empty() {
+                format!("// {}.kt", component_name)
+            } else {
+                format!("// {}{}.kt", component_name, suffix)
+            };
+            println!("{}\n", file_label.dimmed());
+        }
+
+        if no_package {
+            // Strip package declaration for pasting into existing files
+            let code_without_package = kotlin_code
+                .lines()
+                .skip_while(|line| line.trim().is_empty() || line.starts_with("package "))
+                .collect::<Vec<_>>()
+                .join("\n");
+            println!("{}", code_without_package);
+        } else {
+            println!("{}", kotlin_code);
+        }
     }
 
     Ok(())
