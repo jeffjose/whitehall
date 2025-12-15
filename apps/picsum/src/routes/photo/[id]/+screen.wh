@@ -14,11 +14,6 @@ onMount {
   photo = $fetch("https://picsum.photos/id/${$screen.params.id}/info")
 }
 
-<Column>
-@if (photo != null) {
+<Box fillMaxSize={true} backgroundColor="black" contentAlignment="center">
   <Image src={photo!!.download_url} width="100%" fit="contain" />
-  <Text>{photo!!.author}</Text>
-} @else {
-  <Text>Loading...</Text>
-}
-</Column>
+</Box>

@@ -1668,10 +1668,11 @@ impl ComposeBackend {
                         ..Default::default()
                     })?;
 
-                    // Handle alignment as contentAlignment parameter (not modifier)
-                    let alignment = comp.props.iter().find(|p| p.name == "alignment")
-                        .map(|p| self.get_prop_expr(&p.value));
-                    if let Some(align) = &alignment {
+                    // Handle alignment/contentAlignment as contentAlignment parameter (not modifier)
+                    let alignment = comp.props.iter()
+                        .find(|p| p.name == "alignment" || p.name == "contentAlignment")
+                        .map(|p| (p.name.clone(), self.get_prop_expr(&p.value)));
+                    if let Some((prop_name, align)) = &alignment {
                         let align_str = if align.starts_with('"') && align.ends_with('"') {
                             let a = &align[1..align.len()-1];
                             format!("Alignment.{}", a.chars().next().unwrap().to_uppercase().collect::<String>() + &a[1..])
@@ -1679,7 +1680,7 @@ impl ComposeBackend {
                             align.to_string()
                         };
                         params.push(format!("contentAlignment = {}", align_str));
-                        handled.insert("alignment".to_string());
+                        handled.insert(prop_name.clone());
                     }
 
                     // Output combined modifier if we have any
@@ -2279,8 +2280,13 @@ impl ComposeBackend {
                             self.add_import_if_missing(prop_imports, "androidx.compose.foundation.background");
                             self.add_import_if_missing(prop_imports, "androidx.compose.ui.graphics.Color");
                         }
-                        ("Box", "alignment") => {
-                            // alignment → .align(Alignment.Name)
+                        ("Box", "fillMaxSize") => {
+                            // fillMaxSize → Modifier.fillMaxSize()
+                            self.add_import_if_missing(prop_imports, "androidx.compose.ui.Modifier");
+                            self.add_import_if_missing(prop_imports, "androidx.compose.foundation.layout.fillMaxSize");
+                        }
+                        ("Box", "alignment") | ("Box", "contentAlignment") => {
+                            // alignment/contentAlignment → contentAlignment = Alignment.X
                             self.add_import_if_missing(prop_imports, "androidx.compose.ui.Alignment");
                         }
                         ("AsyncImage", "url") | ("AsyncImage", "width") | ("AsyncImage", "height") => {
