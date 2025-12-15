@@ -5364,9 +5364,25 @@ impl ComposeBackend {
         let is_screen = self.component_type.as_deref() == Some("screen");
         let mut params = Vec::new();
 
+        // Get route parameters from store registry
+        let route_params = if let Some(registry) = &self.store_registry {
+            if let Some(store_info) = registry.get(&self.component_name) {
+                store_info.route_params.clone()
+            } else {
+                vec![]
+            }
+        } else {
+            vec![]
+        };
+
         // For screens, add navController parameter first
         if is_screen {
             params.push("navController: NavController".to_string());
+        }
+
+        // Add route parameters (extracted from $screen.params.xxx usage)
+        for param in &route_params {
+            params.push(format!("{}: String", param));
         }
 
         // Add props
