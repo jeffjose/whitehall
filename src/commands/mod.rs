@@ -8,6 +8,8 @@ pub mod toolchain;
 pub mod emulator;
 pub mod device;
 pub mod doctor;
+pub mod clean;
+pub mod check;
 
 use std::path::Path;
 

@@ -114,6 +114,18 @@ enum Commands {
         #[arg(default_value = "whitehall.toml")]
         manifest: String,
     },
+    /// Remove build artifacts
+    Clean {
+        /// Path to project directory (defaults to current directory)
+        #[arg(default_value = ".")]
+        target: String,
+    },
+    /// Check syntax of .wh files without building
+    Check {
+        /// Path to project directory or .wh file (defaults to current directory)
+        #[arg(default_value = ".")]
+        target: String,
+    },
 }
 
 #[derive(Subcommand)]
@@ -262,6 +274,12 @@ fn main() {
         }
         Commands::Doctor { manifest } => {
             commands::doctor::execute(&manifest)
+        }
+        Commands::Clean { target } => {
+            commands::clean::execute(&target)
+        }
+        Commands::Check { target } => {
+            commands::check::execute(&target)
         }
     };
 
