@@ -15,5 +15,8 @@ onMount {
 }
 
 <Box fillMaxSize={true} backgroundColor="black" contentAlignment="center">
+@if (photo!=null) {
   <Image src={photo!!.download_url} width="100%" fit="contain" />
+}
+
 </Box>
