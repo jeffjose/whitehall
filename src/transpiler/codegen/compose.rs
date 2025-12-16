@@ -19,6 +19,7 @@ pub struct ComposeBackend {
     uses_experimental_material3: bool, // Track if experimental Material3 APIs are used (DropdownMenu, etc.)
     uses_fetch: bool, // Track if $fetch() API is used (for Ktor imports)
     uses_routes: bool, // Track if $routes or $navigate is used (for Routes import)
+    uses_on_appear: bool, // Track if onAppear prop is used (for LaunchedEffect import)
     // Phase 1.1: ViewModel wrapper context
     in_viewmodel_wrapper: bool, // Are we generating markup inside a ViewModel wrapper?
     mutable_vars: std::collections::HashSet<String>, // Mutable vars (need uiState prefix)
@@ -102,6 +103,7 @@ impl ComposeBackend {
             uses_experimental_material3: false, // Track experimental Material3 API usage
             uses_fetch: false, // Track $fetch() API usage
             uses_routes: false, // Track $routes/$navigate usage for Routes import
+            uses_on_appear: false, // Track onAppear prop usage for LaunchedEffect import
             in_viewmodel_wrapper: false, // Phase 1.1: Not in ViewModel wrapper by default
             mutable_vars: std::collections::HashSet::new(), // Phase 1.1: Track mutable vars
             derived_props: std::collections::HashSet::new(), // Phase 1.1: Track derived properties
@@ -267,6 +269,10 @@ impl ComposeBackend {
             prop_imports.retain(|imp| !imp.starts_with("androidx.compose.runtime."));
         } else {
             imports.push("androidx.compose.runtime.Composable".to_string());
+            // Add LaunchedEffect if onAppear is used
+            if self.uses_on_appear {
+                imports.push("androidx.compose.runtime.LaunchedEffect".to_string());
+            }
         }
 
         // Add prop imports (Modifier, clickable)
@@ -1881,6 +1887,31 @@ impl ComposeBackend {
                         output.push_str(" {\n");
                     }
 
+                    // Handle onAppear prop - inject LaunchedEffect(Unit) { expr }
+                    if let Some(on_appear_prop) = comp.props.iter().find(|p| p.name == "onAppear") {
+                        self.uses_on_appear = true;
+                        let mut appear_expr = self.get_prop_expr(&on_appear_prop.value).to_string();
+
+                        // Check if the expression is just a function reference (no parentheses)
+                        // If it's a known function name without (), add () to make it a call
+                        if self.in_viewmodel_wrapper {
+                            let expr_trimmed = appear_expr.trim();
+                            if self.function_names.contains(&expr_trimmed.to_string()) && !expr_trimmed.contains('(') {
+                                appear_expr = format!("{}()", expr_trimmed);
+                            }
+                        }
+
+                        // Transform the expression (handle viewModel references, etc.)
+                        let transformed_expr = if self.in_viewmodel_wrapper {
+                            self.transform_viewmodel_expression(&appear_expr)
+                        } else {
+                            appear_expr.clone()
+                        };
+                        output.push_str(&format!("{}    LaunchedEffect(Unit) {{\n", indent_str));
+                        output.push_str(&format!("{}        {}\n", indent_str, transformed_expr));
+                        output.push_str(&format!("{}    }}\n", indent_str));
+                    }
+
                     // If Button with text prop, generate Text child
                     if let Some(text) = button_text {
                         // Check if text is an R.string reference
@@ -2064,6 +2095,67 @@ impl ComposeBackend {
                 caps[0].to_string()
             }
         }).to_string()
+    }
+
+    /// Scan markup recursively to check if any component uses onAppear prop
+    fn scan_for_on_appear(&self, markup: &Markup) -> bool {
+        match markup {
+            Markup::Component(comp) => {
+                // Check if this component has onAppear prop
+                if comp.props.iter().any(|p| p.name == "onAppear") {
+                    return true;
+                }
+                // Check children
+                for child in &comp.children {
+                    if self.scan_for_on_appear(child) {
+                        return true;
+                    }
+                }
+                false
+            }
+            Markup::IfElse(if_else) => {
+                // Check then branch
+                for item in &if_else.then_branch {
+                    if self.scan_for_on_appear(item) {
+                        return true;
+                    }
+                }
+                // Check else-if branches
+                for else_if in &if_else.else_ifs {
+                    for item in &else_if.body {
+                        if self.scan_for_on_appear(item) {
+                            return true;
+                        }
+                    }
+                }
+                // Check else branch
+                if let Some(else_branch) = &if_else.else_branch {
+                    for item in else_branch {
+                        if self.scan_for_on_appear(item) {
+                            return true;
+                        }
+                    }
+                }
+                false
+            }
+            Markup::ForLoop(for_loop) => {
+                for item in &for_loop.body {
+                    if self.scan_for_on_appear(item) {
+                        return true;
+                    }
+                }
+                false
+            }
+            Markup::Sequence(items) => {
+                for item in items {
+                    if self.scan_for_on_appear(item) {
+                        return true;
+                    }
+                }
+                false
+            }
+            _ => false,
+        }
     }
 
     fn collect_imports_recursive(
@@ -3776,6 +3868,11 @@ impl ComposeBackend {
         let mut modifiers = Vec::new();
         let mut handled = std::collections::HashSet::new();
 
+        // Always mark onAppear as handled - it's processed separately in children block
+        if comp.props.iter().any(|p| p.name == "onAppear") {
+            handled.insert("onAppear".to_string());
+        }
+
         // Handle fillMaxSize/fillMaxWidth/fillMaxHeight
         if config.handle_fill_max || config.handle_size {
             if let Some(fs) = comp.props.iter().find(|p| p.name == "fillMaxSize") {
@@ -5300,6 +5397,19 @@ impl ComposeBackend {
         let mut output = String::new();
         let viewmodel_name = format!("{}ViewModel", self.component_name);
 
+        // Pre-scan for onAppear usage to set the flag before import collection
+        if self.scan_for_on_appear(&file.markup) {
+            self.uses_on_appear = true;
+        }
+        // Also scan helper composable functions
+        for func in &file.functions {
+            if let Some(ref markup) = func.markup {
+                if self.scan_for_on_appear(markup) {
+                    self.uses_on_appear = true;
+                }
+            }
+        }
+
         // Package declaration
         output.push_str(&format!("package {}\n\n", self.package));
 
@@ -5330,6 +5440,11 @@ impl ComposeBackend {
         if has_derived_state {
             imports.push("androidx.compose.runtime.remember".to_string());
             imports.push("androidx.compose.runtime.derivedStateOf".to_string());
+        }
+
+        // Add LaunchedEffect import if onAppear is used
+        if self.uses_on_appear {
+            imports.push("androidx.compose.runtime.LaunchedEffect".to_string());
         }
 
         // User imports (resolve $ aliases)
