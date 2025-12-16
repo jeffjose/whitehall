@@ -446,6 +446,67 @@ val data: List<Photo> = httpClient.get("https://api.example.com/photos").body()
 - `io.ktor:ktor-serialization-kotlinx-json`
 - `org.jetbrains.kotlinx:kotlinx-serialization-json`
 
+### Log API
+
+The `$log()` function provides a simplified logging API that transforms to Android's `Log` class. Auto-tags with component name when only message is provided.
+
+**Syntax:**
+
+```whitehall
+// 1 arg: auto-tag with component name
+$log("message")           // → Log.i("ComponentName", "message")
+$log.d("debug msg")       // → Log.d("ComponentName", "debug msg")
+$log.e("error msg")       // → Log.e("ComponentName", "error msg")
+
+// 2 args: explicit tag
+$log("MyTag", "message")        // → Log.i("MyTag", "message")
+$log.d("Network", "fetching")   // → Log.d("Network", "fetching")
+```
+
+**Log Levels:**
+
+| Whitehall | Android | Description |
+|-----------|---------|-------------|
+| `$log()` | `Log.i()` | Info (default) |
+| `$log.v()` | `Log.v()` | Verbose |
+| `$log.d()` | `Log.d()` | Debug |
+| `$log.i()` | `Log.i()` | Info |
+| `$log.w()` | `Log.w()` | Warning |
+| `$log.e()` | `Log.e()` | Error |
+
+**Features:**
+- Auto-detects argument count: 1 arg uses component name as tag, 2+ args uses first as tag
+- `android.util.Log` import added automatically when $log() is used
+
+### OnAppear Prop
+
+The `onAppear` prop triggers code when a component becomes visible. Useful for infinite scroll / pagination.
+
+**Syntax:**
+
+```whitehall
+<Box onAppear={loadMore}>
+  <Text>Loading...</Text>
+</Box>
+```
+
+**Generated Kotlin:**
+
+```kotlin
+Box {
+    LaunchedEffect(Unit) {
+        viewModel.loadMore()
+    }
+    Text(text = "Loading...")
+}
+```
+
+**Features:**
+- Transforms to `LaunchedEffect(Unit) { expr }`
+- Function references (e.g., `loadMore`) become function calls (`loadMore()`)
+- In ViewModel context, prefixed with `viewModel.` (e.g., `viewModel.loadMore()`)
+- `LaunchedEffect` import added automatically
+
 ### Import Management
 
 **Process:**
@@ -462,6 +523,8 @@ val data: List<Photo> = httpClient.get("https://api.example.com/photos").body()
 |-------|--------------|
 | `@Serializable` | `kotlinx.serialization.Serializable` |
 | `$fetch()` | Ktor imports (HttpClient, body, OkHttp, etc.) |
+| `$log()` | `android.util.Log` |
+| `onAppear={...}` | `androidx.compose.runtime.LaunchedEffect` |
 | `Dispatchers.IO` | `kotlinx.coroutines.Dispatchers` |
 | `.launch {}` | `kotlinx.coroutines.launch` |
 | `rememberCoroutineScope()` | `androidx.compose.runtime.rememberCoroutineScope` |

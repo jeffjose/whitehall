@@ -20,6 +20,7 @@ pub struct ComposeBackend {
     uses_fetch: bool, // Track if $fetch() API is used (for Ktor imports)
     uses_routes: bool, // Track if $routes or $navigate is used (for Routes import)
     uses_on_appear: bool, // Track if onAppear prop is used (for LaunchedEffect import)
+    uses_log: bool, // Track if $log() API is used (for android.util.Log import)
     // Phase 1.1: ViewModel wrapper context
     in_viewmodel_wrapper: bool, // Are we generating markup inside a ViewModel wrapper?
     mutable_vars: std::collections::HashSet<String>, // Mutable vars (need uiState prefix)
@@ -104,6 +105,7 @@ impl ComposeBackend {
             uses_fetch: false, // Track $fetch() API usage
             uses_routes: false, // Track $routes/$navigate usage for Routes import
             uses_on_appear: false, // Track onAppear prop usage for LaunchedEffect import
+            uses_log: false, // Track $log() API usage for android.util.Log import
             in_viewmodel_wrapper: false, // Phase 1.1: Not in ViewModel wrapper by default
             mutable_vars: std::collections::HashSet::new(), // Phase 1.1: Track mutable vars
             derived_props: std::collections::HashSet::new(), // Phase 1.1: Track derived properties
@@ -222,6 +224,9 @@ impl ComposeBackend {
         // Pre-pass: Detect $fetch() API usage
         self.detect_fetch_usage(file);
 
+        // Pre-pass: Detect $log() API usage
+        self.detect_log_usage(file);
+
         // Pre-pass: Detect $routes/$navigate usage (for Routes import)
         self.detect_routes_usage(file);
 
@@ -331,6 +336,11 @@ impl ComposeBackend {
             // Extract base package (e.g., com.example.app.screens -> com.example.app)
             let base_package = self.get_base_package();
             imports.push(format!("{}.routes.Routes", base_package));
+        }
+
+        // Add android.util.Log import for $log() API usage
+        if self.uses_log {
+            imports.push("android.util.Log".to_string());
         }
 
         // Note: Dispatchers import is added later if needed (see end of generate function)
@@ -599,6 +609,11 @@ impl ComposeBackend {
                             transformed_line = self.transform_fetch_call(&transformed_line);
                         }
 
+                        // Transform $log() calls to Android Log calls
+                        if transformed_line.contains("$log(") || transformed_line.contains("$log.") {
+                            transformed_line = self.transform_log_call(&transformed_line);
+                        }
+
                         // For screens, transform $navigate() to navController.navigate()
                         if self.component_type.as_deref() == Some("screen") {
                             transformed_line = transformed_line.replace("$navigate(", "navController.navigate(");
@@ -669,6 +684,10 @@ impl ComposeBackend {
                     if transformed_line.contains("$fetch(") {
                         transformed_line = self.transform_fetch_call(&transformed_line);
                     }
+                    // Transform $log() calls to Android Log calls
+                    if transformed_line.contains("$log(") || transformed_line.contains("$log.") {
+                        transformed_line = self.transform_log_call(&transformed_line);
+                    }
                     if transformed_line.trim().starts_with("launch ") || transformed_line.trim().starts_with("launch{") {
                         output.push_str("coroutineScope.");
                         output.push_str(transformed_line.trim());
@@ -726,6 +745,10 @@ impl ComposeBackend {
                         // Transform $fetch() calls to Ktor HttpClient calls
                         if transformed_line.contains("$fetch(") {
                             transformed_line = self.transform_fetch_call(&transformed_line);
+                        }
+                        // Transform $log() calls to Android Log calls
+                        if transformed_line.contains("$log(") || transformed_line.contains("$log.") {
+                            transformed_line = self.transform_log_call(&transformed_line);
                         }
                         if transformed_line.trim().starts_with("launch ") || transformed_line.trim().starts_with("launch{") {
                             output.push_str("coroutineScope.");
@@ -792,6 +815,11 @@ impl ComposeBackend {
                         // Transform $fetch() calls to Ktor HttpClient calls
                         if transformed_line.contains("$fetch(") {
                             transformed_line = self.transform_fetch_call(&transformed_line);
+                        }
+
+                        // Transform $log() calls to Android Log calls
+                        if transformed_line.contains("$log(") || transformed_line.contains("$log.") {
+                            transformed_line = self.transform_log_call(&transformed_line);
                         }
 
                         // For screens, transform $navigate() to navController.navigate()
@@ -4109,6 +4137,24 @@ impl ComposeBackend {
         }
     }
 
+    /// Detect if a file uses the $log() API by scanning functions and lifecycle hooks
+    fn detect_log_usage(&mut self, file: &WhitehallFile) {
+        // Check lifecycle hooks
+        for hook in &file.lifecycle_hooks {
+            if hook.body.contains("$log(") || hook.body.contains("$log.") {
+                self.uses_log = true;
+                return;
+            }
+        }
+        // Check functions
+        for func in &file.functions {
+            if func.body.contains("$log(") || func.body.contains("$log.") {
+                self.uses_log = true;
+                return;
+            }
+        }
+    }
+
     /// Detect if a file uses $routes or $navigate (needs Routes import)
     fn detect_routes_usage(&mut self, file: &WhitehallFile) {
         // Check functions for $routes or $navigate
@@ -4203,6 +4249,93 @@ impl ComposeBackend {
 }
 
 "#.to_string()
+    }
+
+    /// Transform $log() calls to Android Log calls
+    /// Syntax:
+    ///   $log("message")           → Log.i("ComponentName", "message")
+    ///   $log.d("message")         → Log.d("ComponentName", "message")
+    ///   $log.e("message")         → Log.e("ComponentName", "message")
+    ///   $log("tag", "message")    → Log.i("tag", "message")
+    ///   $log.d("tag", "message")  → Log.d("tag", "message")
+    fn transform_log_call(&self, line: &str) -> String {
+        let mut result = line.to_string();
+
+        // Match patterns: $log(, $log.v(, $log.d(, $log.i(, $log.w(, $log.e(
+        let patterns = [
+            ("$log.v(", "v"),
+            ("$log.d(", "d"),
+            ("$log.i(", "i"),
+            ("$log.w(", "w"),
+            ("$log.e(", "e"),
+            ("$log(", "i"),  // Default to info level
+        ];
+
+        for (pattern, level) in patterns.iter() {
+            if let Some(start) = result.find(pattern) {
+                let after_log = &result[start + pattern.len()..];
+
+                // Find the matching closing paren
+                let mut depth = 1;
+                let mut end_pos = 0;
+                for (i, ch) in after_log.char_indices() {
+                    match ch {
+                        '(' => depth += 1,
+                        ')' => {
+                            depth -= 1;
+                            if depth == 0 {
+                                end_pos = i;
+                                break;
+                            }
+                        }
+                        _ => {}
+                    }
+                }
+
+                if depth == 0 {
+                    let args = &after_log[..end_pos];
+                    // Count arguments by looking for comma outside of strings
+                    let arg_count = self.count_log_args(args);
+
+                    let replacement = if arg_count >= 2 {
+                        // 2+ args: first is tag, rest is message
+                        format!("Log.{}({})", level, args)
+                    } else {
+                        // 1 arg: use component name as tag
+                        format!("Log.{}(\"{}\", {})", level, self.component_name, args)
+                    };
+
+                    result = format!("{}{}{}", &result[..start], replacement, &after_log[end_pos + 1..]);
+                    break; // Only transform one per line
+                }
+            }
+        }
+
+        result
+    }
+
+    /// Count arguments in a log call (handles strings with commas)
+    fn count_log_args(&self, args: &str) -> usize {
+        let mut count = 1;
+        let mut in_string = false;
+        let mut escape_next = false;
+        let mut depth = 0;
+
+        for ch in args.chars() {
+            if escape_next {
+                escape_next = false;
+                continue;
+            }
+            match ch {
+                '\\' => escape_next = true,
+                '"' => in_string = !in_string,
+                '(' | '{' | '[' if !in_string => depth += 1,
+                ')' | '}' | ']' if !in_string => depth -= 1,
+                ',' if !in_string && depth == 0 => count += 1,
+                _ => {}
+            }
+        }
+        count
     }
 
     /// Check if an expression references any mutable state variables
@@ -5211,6 +5344,13 @@ impl ComposeBackend {
             vm_imports.push("kotlinx.serialization.json.Json".to_string());
         }
 
+        // Check if $log() is used in lifecycle hooks or functions
+        let uses_log_in_vm = file.lifecycle_hooks.iter().any(|h| h.body.contains("$log(") || h.body.contains("$log."))
+            || file.functions.iter().any(|f| f.body.contains("$log(") || f.body.contains("$log."));
+        if uses_log_in_vm {
+            vm_imports.push("android.util.Log".to_string());
+        }
+
         // Add any user imports from the file
         for import in &file.imports {
             let import_path = self.resolve_import(&import.path);
@@ -5370,6 +5510,10 @@ impl ComposeBackend {
                         if transformed_line.contains("$fetch(") {
                             transformed_line = self.transform_fetch_call(&transformed_line);
                         }
+                        // Transform $log() calls to Android Log calls
+                        if transformed_line.contains("$log(") || transformed_line.contains("$log.") {
+                            transformed_line = self.transform_log_call(&transformed_line);
+                        }
                         output.push_str(&format!("            {}\n", transformed_line));
                     }
                 }
@@ -5414,6 +5558,10 @@ impl ComposeBackend {
                             let mut transformed_line = line.trim().to_string();
                             if transformed_line.contains("$fetch(") {
                                 transformed_line = self.transform_fetch_call(&transformed_line);
+                            }
+                            // Transform $log() calls to Android Log calls
+                            if transformed_line.contains("$log(") || transformed_line.contains("$log.") {
+                                transformed_line = self.transform_log_call(&transformed_line);
                             }
                             output.push_str(&format!("            {}\n", transformed_line));
                         }

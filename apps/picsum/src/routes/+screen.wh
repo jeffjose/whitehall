@@ -7,7 +7,7 @@ data class Photo(
 )
 
 var photos: List<Photo> = []
-var page = 1
+var page = 0
 var hasMore = true
 var isLoading: Boolean = true
 var query = ""
@@ -16,9 +16,10 @@ fun loadMore() {
   if (isLoading || !hasMore) return
 
   isLoading = true
-  val newPhotos: List<Photo> = $fetch("https://picsum.photos/v2/list?page=${page + 1}&limit=20")
-  photos += newPhotos
   page = page + 1
+  $log("https://picsum.photos/v2/list?page=${page}&limit=20")
+  val newPhotos: List<Photo> = $fetch("https://picsum.photos/v2/list?page=${page}&limit=20")
+  photos += newPhotos
   isLoading = false
 }
 
@@ -42,6 +43,7 @@ onMount {
 
       @if (hasMore) {
         <Box width="100%" py={16} contentAlignment="center" onAppear={loadMore}>
+        <Text>{page}</Text>
         @if (isLoading) {
         <CircularProgressIndicator />
         } @else {
