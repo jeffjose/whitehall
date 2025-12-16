@@ -54,7 +54,7 @@ import com.example.app.lib.api.ApiClient
 import com.example.app.models.User
 
 @Composable
-fun ProfileScreen(navController: NavController) {
+fun ProfileScreen(navController: NavController, id: String) {
     val viewModel = viewModel<ProfileScreenViewModel>()
     val uiState by viewModel.uiState.collectAsState()
 

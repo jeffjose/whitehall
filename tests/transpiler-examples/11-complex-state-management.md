@@ -85,8 +85,10 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextField
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
+import androidx.compose.runtime.remember
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -97,6 +99,16 @@ import com.example.app.models.User
 fun ComplexStateManagement() {
     val viewModel = viewModel<ComplexStateManagementViewModel>()
     val uiState by viewModel.uiState.collectAsState()
+    val selectedUser by remember {
+        uiState.users.firstOrNull { it.id == uiState.selectedUserId }
+    }
+    val filteredUsers by remember {
+        if (uiState.searchQuery.isBlank()) {
+    uiState.users
+  } else {
+    uiState.users.filter { it.name.contains(uiState.searchQuery, ignoreCase = true) }
+  }
+    }
 
     Column(
         verticalArrangement = Arrangement.spacedBy(16.dp)
@@ -110,13 +122,13 @@ fun ComplexStateManagement() {
         if (uiState.isLoading) {
             LoadingSpinner()
         } else {
-            if (viewModel.filteredUsers.isEmpty()) {
+            if (filteredUsers.isEmpty()) {
                 Text(
                     text = "No users found",
                     color = MaterialTheme.colorScheme.secondary
                 )
             } else {
-                viewModel.filteredUsers.forEach { user ->
+                filteredUsers.forEach { user ->
                     key(user.id) {
                         Card(
                             onClick = { viewModel.handleUserSelect(user.id) },
@@ -128,17 +140,17 @@ fun ComplexStateManagement() {
                 }
             }
         }
-        if (viewModel.selectedUser != null) {
+        if (selectedUser != null) {
             Card {
                 Column(
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     Text(
-                        text = "Selected: ${viewModel.selectedUser.name}",
+                        text = "Selected: ${selectedUser.name}",
                         fontSize = 20.sp
                     )
                     Text(
-                        text = "${viewModel.selectedUser.email}",
+                        text = "${selectedUser.email}",
                         color = MaterialTheme.colorScheme.secondary
                     )
                 }
