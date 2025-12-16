@@ -110,6 +110,7 @@ fn execute_single_file(file_path: &str, device_query: Option<&str>) -> Result<()
     // Continue with gradle, install, and launch
     build_with_gradle(&toolchain, &config, &result.output_dir)?;
     install_apk(&toolchain, &result.output_dir, &device.id)?;
+    clear_logcat(&toolchain, &device.id)?;
     launch_app(&toolchain, &config.android.package, &device.id)?;
 
     println!("  {} on {}", "Running".green().bold(), device.short_name());
@@ -188,7 +189,10 @@ fn execute_project(manifest_path: &str, device_query: Option<&str>) -> Result<()
     // 6. Install on device
     install_apk(&toolchain, &result.output_dir, &device.id)?;
 
-    // 7. Launch app
+    // 7. Clear logcat before launching to capture init logs
+    clear_logcat(&toolchain, &device.id)?;
+
+    // 8. Launch app
     launch_app(&toolchain, &config.android.package, &device.id)?;
 
     println!("  {} on {}", "Running".green().bold(), device.short_name());
@@ -299,12 +303,7 @@ fn stream_logcat(toolchain: &Toolchain, package: &str, device_id: &str) -> Resul
             });
     }).expect("Error setting Ctrl-C handler");
 
-    // Clear logcat first to only show new logs
-    let _ = toolchain
-        .adb_cmd()?
-        .args(["-s", device_id, "logcat", "-c"])
-        .output();
-
+    // Note: logcat is cleared before launch_app() so we capture init logs
     // Stream logcat with brief format - we'll filter in Rust
     let mut child = toolchain
         .adb_cmd()?
@@ -315,6 +314,7 @@ fn stream_logcat(toolchain: &Toolchain, package: &str, device_id: &str) -> Resul
 
     if let Some(stdout) = child.stdout.take() {
         let reader = BufReader::new(stdout);
+        let mut app_pids: std::collections::HashSet<String> = std::collections::HashSet::new();
 
         for line in reader.lines() {
             // Check if we should stop
@@ -324,8 +324,24 @@ fn stream_logcat(toolchain: &Toolchain, package: &str, device_id: &str) -> Resul
 
             match line {
                 Ok(line) => {
-                    // Filter: show line if it contains the package name OR mentions the app
-                    let relevant = line.contains(package)
+                    // Track our app's PID from ActivityManager logs
+                    // Format: "Start proc 15171:com.example.picsum/..."
+                    if line.contains("Start proc") && line.contains(package) {
+                        if let Some(pid_start) = line.find("Start proc ") {
+                            let after_proc = &line[pid_start + 11..];
+                            if let Some(colon_pos) = after_proc.find(':') {
+                                let pid = after_proc[..colon_pos].trim();
+                                app_pids.insert(pid.to_string());
+                            }
+                        }
+                    }
+
+                    // Extract PID from logcat line (brief format: "L/Tag( PID): Message")
+                    let line_pid = extract_pid_from_logcat(&line);
+
+                    // Filter: show line if it's from our app's PID, contains package name, or is a crash
+                    let relevant = line_pid.as_ref().map_or(false, |pid| app_pids.contains(pid))
+                        || line.contains(package)
                         || line.contains("AndroidRuntime")  // Runtime errors/crashes
                         || (line.contains("ActivityManager") && line.contains(package));
 
@@ -655,7 +671,10 @@ fn run_full_cycle(
     // 3. Install APK
     install_apk(toolchain, &result.output_dir, device_id)?;
 
-    // 4. Launch app
+    // 4. Clear logcat BEFORE launching so we capture init logs
+    clear_logcat(toolchain, device_id)?;
+
+    // 5. Launch app
     launch_app(toolchain, package, device_id)?;
 
     Ok(())
@@ -665,6 +684,29 @@ fn run_full_cycle(
 fn print_build_status(elapsed: Duration) {
     let ms = elapsed.as_millis();
     println!("   {} in {}ms", "Finished".green().bold(), format!("{}", ms).cyan());
+}
+
+/// Clear logcat buffer before launching app to capture init logs
+fn clear_logcat(toolchain: &Toolchain, device_id: &str) -> Result<()> {
+    let _ = toolchain
+        .adb_cmd()?
+        .args(["-s", device_id, "logcat", "-c"])
+        .output();
+    Ok(())
+}
+
+/// Extract PID from a logcat line in brief format: "L/Tag( PID): Message"
+fn extract_pid_from_logcat(line: &str) -> Option<String> {
+    // Brief format: "I/Tag( 1234): message" or "I/Tag(12345): message"
+    if let Some(paren_start) = line.find('(') {
+        if let Some(paren_end) = line[paren_start..].find(')') {
+            let pid = line[paren_start + 1..paren_start + paren_end].trim();
+            if pid.chars().all(|c| c.is_ascii_digit()) {
+                return Some(pid.to_string());
+            }
+        }
+    }
+    None
 }
 
 /// Load gitignore from the directory if it exists
@@ -719,12 +761,7 @@ fn start_logcat_background(
     package: &str,
     device_id: &str,
 ) -> Result<LogcatHandle> {
-    // Clear logcat first
-    let _ = toolchain
-        .adb_cmd()?
-        .args(["-s", device_id, "logcat", "-c"])
-        .output();
-
+    // Note: logcat is cleared before launch_app() in run_full_cycle so we capture init logs
     // Start logcat process
     let mut child = toolchain
         .adb_cmd()?
@@ -741,13 +778,31 @@ fn start_logcat_background(
     if let Some(stdout) = child.stdout.take() {
         thread::spawn(move || {
             let reader = BufReader::new(stdout);
+            let mut app_pids: std::collections::HashSet<String> = std::collections::HashSet::new();
+
             for line in reader.lines() {
                 if !running_clone.load(Ordering::SeqCst) {
                     break;
                 }
                 if let Ok(line) = line {
-                    // Filter relevant lines
-                    let relevant = line.contains(&package)
+                    // Track our app's PID from ActivityManager logs
+                    // Format: "Start proc 15171:com.example.picsum/..."
+                    if line.contains("Start proc") && line.contains(&package) {
+                        if let Some(pid_start) = line.find("Start proc ") {
+                            let after_proc = &line[pid_start + 11..];
+                            if let Some(colon_pos) = after_proc.find(':') {
+                                let pid = after_proc[..colon_pos].trim();
+                                app_pids.insert(pid.to_string());
+                            }
+                        }
+                    }
+
+                    // Extract PID from logcat line (brief format: "L/Tag( PID): Message")
+                    let line_pid = extract_pid_from_logcat(&line);
+
+                    // Filter: show line if it's from our app's PID, contains package name, or is a crash
+                    let relevant = line_pid.as_ref().map_or(false, |pid| app_pids.contains(pid))
+                        || line.contains(&package)
                         || line.contains("AndroidRuntime")
                         || (line.contains("ActivityManager") && line.contains(&package));
 
