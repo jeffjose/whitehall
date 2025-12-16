@@ -4136,9 +4136,26 @@ impl ComposeBackend {
     /// Input: photos = $fetch("https://api.example.com/data")
     /// Output: photos = httpClient.get("https://api.example.com/data").body()
     fn transform_fetch_call(&self, line: &str) -> String {
-        // Simple regex-like replacement for $fetch("url") -> httpClient.get("url").body()
-        // Handle: $fetch("url")
+        // Simple regex-like replacement for $fetch("url") -> httpClient.get("url").body<Type>()
+        // Handle: val x: Type = $fetch("url")
         let mut result = line.to_string();
+
+        // Try to extract type from assignment: val x: Type = $fetch(...)
+        let type_param = if let Some(colon_pos) = line.find(':') {
+            if let Some(eq_pos) = line.find('=') {
+                if colon_pos < eq_pos {
+                    // Extract type between : and =
+                    let type_str = line[colon_pos + 1..eq_pos].trim();
+                    Some(type_str.to_string())
+                } else {
+                    None
+                }
+            } else {
+                None
+            }
+        } else {
+            None
+        };
 
         // Find $fetch( and replace with httpClient.get(
         if let Some(start) = result.find("$fetch(") {
@@ -4164,8 +4181,12 @@ impl ComposeBackend {
             if depth == 0 {
                 // Extract the URL argument
                 let url_arg = &after_fetch[..end_pos];
-                // Replace fetch(...) with httpClient.get(...).body()
-                let replacement = format!("httpClient.get({}).body()", url_arg);
+                // Replace fetch(...) with httpClient.get(...).body<Type>() if type is known
+                let replacement = if let Some(ref t) = type_param {
+                    format!("httpClient.get({}).body<{}>()", url_arg, t)
+                } else {
+                    format!("httpClient.get({}).body()", url_arg)
+                };
                 result = format!("{}{}{}", &result[..start], replacement, &after_fetch[end_pos + 1..]);
             }
         }
@@ -5319,25 +5340,48 @@ impl ComposeBackend {
                 continue;
             }
 
+            // Check if function uses $fetch - if so, wrap in viewModelScope.launch
+            let uses_fetch = func.body.contains("$fetch(");
+
             output.push_str(&format!("    fun {}({})", func.name, func.params));
             if let Some(return_type) = &func.return_type {
                 output.push_str(&format!(": {}", return_type));
             }
             output.push_str(" {\n");
 
-            // Wrap suspend functions in viewModelScope.launch
-            if func.is_suspend {
+            // Wrap suspend functions or functions with $fetch in viewModelScope.launch
+            if func.is_suspend || uses_fetch {
                 output.push_str("        viewModelScope.launch {\n");
-                // Indent each line of the function body properly
+                // Indent each line of the function body properly and transform $fetch
                 for line in func.body.lines() {
                     let trimmed = line.trim();
                     if !trimmed.is_empty() {
-                        output.push_str(&format!("            {}\n", trimmed));
+                        let mut transformed_line = trimmed.to_string();
+                        // Transform bare `return` to `return@launch` inside lambda
+                        // Match: "return" not followed by @ (to avoid double-transforming)
+                        if transformed_line.contains("return") && !transformed_line.contains("return@") {
+                            transformed_line = transformed_line.replace(" return", " return@launch");
+                            // Also handle return at start of line
+                            if transformed_line.starts_with("return") && !transformed_line.starts_with("return@") {
+                                transformed_line = format!("return@launch{}", &transformed_line[6..]);
+                            }
+                        }
+                        // Transform $fetch() calls to Ktor HttpClient calls
+                        if transformed_line.contains("$fetch(") {
+                            transformed_line = self.transform_fetch_call(&transformed_line);
+                        }
+                        output.push_str(&format!("            {}\n", transformed_line));
                     }
                 }
                 output.push_str("        }\n");
             } else {
-                output.push_str(&format!("        {}\n", func.body.trim()));
+                // Non-suspend functions without $fetch - just output body
+                for line in func.body.lines() {
+                    let trimmed = line.trim();
+                    if !trimmed.is_empty() {
+                        output.push_str(&format!("        {}\n", trimmed));
+                    }
+                }
             }
 
             output.push_str("    }\n\n");
