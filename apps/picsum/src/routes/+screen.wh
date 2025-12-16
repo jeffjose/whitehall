@@ -9,15 +9,18 @@ data class Photo(
 var photos: List<Photo> = []
 var page = 0
 var hasMore = true
-var isLoading: Boolean = true
+var isLoading: Boolean = false
 var query = ""
 
 fun loadMore() {
+  $log("loadMore!")
   if (isLoading || !hasMore) return
 
   isLoading = true
   page = page + 1
+  $log("--------------------------")
   $log("https://picsum.photos/v2/list?page=${page}&limit=20")
+  $log("--------------------------")
   val newPhotos: List<Photo> = $fetch("https://picsum.photos/v2/list?page=${page}&limit=20")
   photos += newPhotos
   isLoading = false
@@ -26,6 +29,7 @@ fun loadMore() {
 var filteredPhotos: List<Photo> = $derived(photos.filter { it.author.contains(query, ignoreCase = true)})
 
 onMount {
+  $log("onMount!")
   loadMore()
 }
 
