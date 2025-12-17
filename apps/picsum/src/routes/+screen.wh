@@ -15,7 +15,7 @@ var isRefreshing: Boolean = false
 var query = ""
 
 fun loadMore() {
-  $log("loadMore!")
+  log("loadMore!")
   if (isLoading || !hasMore) return
 
   isLoading = true

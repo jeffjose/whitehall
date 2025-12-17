@@ -223,7 +223,7 @@ fn transpile_file(
         component_type,
         Some(global_store_registry),
     )
-    .map_err(|e| anyhow::anyhow!("Transpilation error: {}", e))?;
+    .map_err(|e| anyhow::anyhow!("Compilation error: {}", e))?;
 
     // Handle single or multiple output files
     match result {

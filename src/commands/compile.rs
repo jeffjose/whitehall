@@ -117,7 +117,7 @@ fn execute_single_file(file_path: &str, package: Option<&str>, no_package: bool)
 
     // Transpile to Kotlin
     let result = transpiler::transpile(&code, package_name, &component_name, None)
-        .map_err(|e| anyhow::anyhow!("Transpilation error: {}", e))?;
+        .map_err(|e| anyhow::anyhow!("Compilation error: {}", e))?;
 
     // Get all output files
     let files = result.files();

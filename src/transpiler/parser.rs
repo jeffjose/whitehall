@@ -43,13 +43,40 @@ impl Parser {
     /// Create an error message with position information
     fn error_at_pos(&self, message: &str) -> String {
         let (line, col) = self.pos_to_line_col(self.pos);
-        format!("[Line {}:{}] {}", line, col, message)
+        self.format_error(line, col, message, None)
+    }
+
+    /// Get a specific line from the source (1-indexed)
+    fn get_source_line(&self, line_num: usize) -> Option<String> {
+        self.input.lines().nth(line_num - 1).map(|s| s.to_string())
+    }
+
+    /// Format an error message in Cargo style
+    fn format_error(&self, line: usize, col: usize, message: &str, help: Option<&str>) -> String {
+        let mut error = format!("{}\n", message);
+        error.push_str(&format!(" --> line {}:{}\n", line, col));
+        error.push_str("  |\n");
+
+        if let Some(source_line) = self.get_source_line(line) {
+            error.push_str(&format!("{:>3} | {}\n", line, source_line));
+            // Add pointer line
+            let pointer = format!("{}^^^", " ".repeat(col - 1));
+            error.push_str(&format!("  | {}\n", pointer));
+        }
+
+        if let Some(help_text) = help {
+            error.push_str("  |\n");
+            error.push_str(&format!("  = help: {}\n", help_text));
+        }
+
+        error
     }
 
     /// Check for common typos and return a helpful error if found
     /// Returns Some(error_message) if a typo is detected, None otherwise
     fn check_for_typos(&self) -> Option<String> {
         let remaining = &self.input[self.pos..];
+        let (line, col) = self.pos_to_line_col(self.pos);
 
         // Common typos: missing $ prefix on magic functions
         let typo_suggestions = [
@@ -67,10 +94,9 @@ impl Parser {
                 // Make sure it's actually the keyword (not part of a larger identifier)
                 if after_typo.starts_with(' ') || after_typo.starts_with('{') ||
                    after_typo.starts_with('(') || after_typo.starts_with('\n') {
-                    return Some(self.error_at_pos(&format!(
-                        "Unknown identifier '{}'. Did you mean '{}'? ({} requires $ prefix)",
-                        typo, correct, description
-                    )));
+                    let msg = format!("unknown identifier '{}'", typo.trim_end_matches('('));
+                    let help = format!("did you mean '{}'? ({} requires $ prefix)", correct.trim_end_matches('('), description);
+                    return Some(self.format_error(line, col, &msg, Some(&help)));
                 }
             }
         }
@@ -87,12 +113,9 @@ impl Parser {
 
         for (typo, correct, description) in directive_typos {
             if remaining.starts_with(typo) {
-                // Only suggest if we're in a markup context (after some markup)
-                // This helps avoid false positives in pure Kotlin code
-                return Some(self.error_at_pos(&format!(
-                    "Found '{}' - did you mean '{}'? ({} requires @ prefix in markup)",
-                    typo.trim_end_matches('('), correct, description
-                )));
+                let msg = format!("unexpected '{}'", typo.trim());
+                let help = format!("did you mean '{}'? ({} requires @ prefix in markup)", correct, description);
+                return Some(self.format_error(line, col, &msg, Some(&help)));
             }
         }
 
@@ -145,10 +168,9 @@ impl Parser {
                     let (body_line, _) = self.pos_to_line_col(body_start_pos);
                     let actual_line = body_line + line - 1;
 
-                    return Some(format!(
-                        "[Line {}:{}] Found '{}' - did you mean '{}'? ({} requires $ prefix)",
-                        actual_line, col, typo.trim_end_matches('('), correct.trim_end_matches('('), description
-                    ));
+                    let msg = format!("unknown identifier '{}'", typo.trim_end_matches('('));
+                    let help = format!("did you mean '{}'? ({} requires $ prefix)", correct.trim_end_matches('('), description);
+                    return Some(self.format_error(actual_line, col, &msg, Some(&help)));
                 }
 
                 search_start = absolute_pos + 1;
