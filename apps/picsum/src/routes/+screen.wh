@@ -33,7 +33,11 @@ onMount {
   loadMore()
 }
 
-<Column spacing={8} padding={16} pt={48}>
+fun onRefresh() {
+  $log("refresh!!")
+}
+
+<Column spacing={8} padding={16} pt={48} onRefresh={onRefresh}>
 <TextField value={query} onValueChange={(v) => query = v} placeholder="Search by author..." width="100%"/>
   <Text>Photos</Text>
       <LazyColumn modifier={Modifier.weight(1f)}>
