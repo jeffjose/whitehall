@@ -1360,7 +1360,23 @@ impl Parser {
 
     fn parse_component_prop(&mut self) -> Result<ComponentProp, String> {
         // Parse: propName={expression} or propName="string" or propName={<Component />}
+        // Also supports shorthand: {foo} expands to foo={foo}
         // Prop names can include colons (for bind:value, on:click, etc.)
+
+        // Check for shorthand: {foo} expands to foo={foo}
+        if self.peek_char() == Some('{') {
+            self.expect_char('{')?;
+            self.skip_whitespace();
+            let name = self.parse_identifier()?;
+            self.skip_whitespace();
+            self.expect_char('}')?;
+
+            return Ok(ComponentProp {
+                name: name.clone(),
+                value: PropValue::Expression(name),
+            });
+        }
+
         let mut name = self.parse_identifier()?;
 
         // Check for colon (e.g., bind:value)
