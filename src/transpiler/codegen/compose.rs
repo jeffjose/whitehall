@@ -390,6 +390,8 @@ impl ComposeBackend {
 
         // For screens, add navController parameter
         let is_screen = self.component_type.as_deref() == Some("screen");
+        let is_layout = self.component_type.as_deref() == Some("layout");
+
         if is_screen {
             if !route_params.is_empty() || !file.props.is_empty() {
                 output.push('\n');
@@ -404,6 +406,16 @@ impl ComposeBackend {
                 }
             } else {
                 output.push_str("navController: NavController");
+            }
+        }
+
+        // For layouts, add content parameter for slot rendering
+        if is_layout {
+            if !file.props.is_empty() {
+                output.push('\n');
+                output.push_str("    content: @Composable () -> Unit,\n");
+            } else {
+                output.push_str("content: @Composable () -> Unit");
             }
         }
 
@@ -1136,6 +1148,13 @@ impl ComposeBackend {
             Markup::Component(comp) => {
                 let mut output = String::new();
                 let base_indent_str = "    ".repeat(indent);
+
+                // Handle <slot /> - renders the content() parameter in layouts
+                if comp.name == "slot" {
+                    output.push_str(&base_indent_str);
+                    output.push_str("content()\n");
+                    return Ok(output);
+                }
 
                 // Note: key(Unit) wrapping was previously attempted here to prevent
                 // recomposition of stable components, but it doesn't work as expected:

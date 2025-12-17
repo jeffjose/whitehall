@@ -16,7 +16,8 @@ pub struct WhitehallFile {
 pub enum FileType {
     Component,
     Screen,
-    Main,  // src/main.wh
+    Layout,  // src/routes/**/+layout.wh
+    Main,    // src/main.wh
 }
 
 /// Discover all .wh files in the src/ directory
@@ -72,9 +73,18 @@ fn classify_file(path: &Path, config: &Config) -> Result<WhitehallFile> {
     } else if is_under_directory(path, "src/stores") {
         (FileType::Component, Some("stores"), filename)
     } else if is_under_directory(path, "src/routes") {
-        // Handle route files: src/routes/**/+screen.wh
-        let screen_name = derive_screen_name_from_route(path)?;
-        (FileType::Screen, Some("screens"), screen_name)
+        // Handle route files: src/routes/**/+screen.wh or +layout.wh
+        if filename == "+layout" {
+            let layout_name = derive_layout_name_from_route(path)?;
+            (FileType::Layout, Some("layouts"), layout_name)
+        } else if filename.starts_with("+screen") {
+            // Handles +screen and +screen@xxx variants
+            let screen_name = derive_screen_name_from_route(path)?;
+            (FileType::Screen, Some("screens"), screen_name)
+        } else {
+            // Other files in routes (shouldn't happen)
+            (FileType::Component, Some("routes"), filename)
+        }
     } else {
         // Default: treat as component in base package
         (FileType::Component, None, filename)
@@ -119,7 +129,7 @@ fn derive_screen_name_from_route(path: &Path) -> Result<String> {
                 None
             }
         })
-        .filter(|s| *s != "+screen.wh")
+        .filter(|s| !s.starts_with("+screen"))  // Skip +screen.wh, +screen@.wh, +screen@root.wh, etc.
         .collect();
 
     // Generate screen name based on components
@@ -152,6 +162,62 @@ fn derive_screen_name_from_route(path: &Path) -> Result<String> {
     };
 
     Ok(screen_name)
+}
+
+/// Derive layout name from route file path
+/// Examples:
+/// - src/routes/+layout.wh → RootLayout
+/// - src/routes/admin/+layout.wh → AdminLayout
+/// - src/routes/admin/settings/+layout.wh → AdminSettingsLayout
+fn derive_layout_name_from_route(path: &Path) -> Result<String> {
+    // Strip src/routes/ prefix and +layout.wh suffix
+    let route_path = path
+        .strip_prefix("src/routes")
+        .or_else(|_| path.strip_prefix("src/routes/"))
+        .map_err(|_| anyhow::anyhow!("Invalid layout path: {}", path.display()))?;
+
+    // Get path components (directories before +layout.wh)
+    let components: Vec<&str> = route_path
+        .components()
+        .filter_map(|c| {
+            if let std::path::Component::Normal(os_str) = c {
+                os_str.to_str()
+            } else {
+                None
+            }
+        })
+        .filter(|s| *s != "+layout.wh")
+        .collect();
+
+    // Generate layout name based on components
+    let layout_name = if components.is_empty() {
+        // Root layout: src/routes/+layout.wh → RootLayout
+        "RootLayout".to_string()
+    } else {
+        // Build name from path segments, skipping param folders [id]
+        let name_parts: Vec<String> = components
+            .iter()
+            .filter(|c| !c.starts_with('['))  // Skip [id], [slug], etc.
+            .map(|c| {
+                // Capitalize first letter of each part
+                let mut chars = c.chars();
+                if let Some(first) = chars.next() {
+                    first.to_uppercase().chain(chars).collect::<String>()
+                } else {
+                    c.to_string()
+                }
+            })
+            .collect();
+
+        if name_parts.is_empty() {
+            // Edge case: path is only param folders
+            "Layout".to_string()
+        } else {
+            format!("{}Layout", name_parts.join(""))
+        }
+    };
+
+    Ok(layout_name)
 }
 
 /// Check if a path is under a specific directory

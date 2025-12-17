@@ -212,6 +212,7 @@ fn transpile_file(
     // Determine component type for transpiler
     let component_type = match file.file_type {
         FileType::Screen => Some("screen"),
+        FileType::Layout => Some("layout"),
         _ => None,
     };
 
@@ -430,9 +431,23 @@ fn generate_navhost_main_activity(config: &Config, routes: &[routes::Route], app
             format!("{}(navController, {})", route.screen_name, params_str)
         };
 
+        // Wrap screen with layout chain (outermost first)
+        // e.g., layouts = ["RootLayout", "AdminLayout"] becomes:
+        // RootLayout { AdminLayout { HomeScreen(navController) } }
+        let wrapped_screen = if route.layouts.is_empty() {
+            screen_call
+        } else {
+            let mut result = screen_call;
+            // Wrap from innermost to outermost
+            for layout in route.layouts.iter().rev() {
+                result = format!("{} {{ {} }}", layout, result);
+            }
+            result
+        };
+
         let composable = format!(
             "        composable<Routes.{}>{{ {} }}",
-            route.name, screen_call
+            route.name, wrapped_screen
         );
         composable_entries.push(composable);
     }
@@ -565,6 +580,7 @@ import androidx.navigation.compose.rememberNavController
 import androidx.navigation.toRoute
 import {}.routes.Routes
 import {}.screens.*
+import {}.layouts.*
 
 class MainActivity : ComponentActivity() {{
     override fun onCreate(savedInstanceState: Bundle?) {{
@@ -577,6 +593,7 @@ class MainActivity : ComponentActivity() {{
 "#,
         config.android.package,
         theme_imports,
+        config.android.package,
         config.android.package,
         config.android.package,
         set_content_body
