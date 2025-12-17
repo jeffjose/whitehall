@@ -15,7 +15,7 @@ var isRefreshing: Boolean = false
 var query = ""
 
 fun loadMore() {
-  log("loadMore!")
+  $log("loadMore!")
   if (isLoading || !hasMore) return
 
   isLoading = true
@@ -48,7 +48,7 @@ fun onRefresh() {
   $log("done")
 }
 
-<Column spacing={8} p={10} pt={48} onRefresh={onRefresh} isRefreshing={isRefreshing}>
+<Column spacing={8} p={10} pt={48} {onRefresh} {isRefreshing}>
 <TextField value={query} onValueChange={(v) => query = v} placeholder="Search by author..." width="100%"/>
   <Text>Photos {filteredPhotos.size} ({photos.size})</Text>
       <LazyColumn modifier={Modifier.weight(1f)}>
