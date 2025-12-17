@@ -99,6 +99,65 @@ impl Parser {
         None
     }
 
+    /// Check a code body (like lifecycle hook or function body) for common typos
+    /// Returns Some(error_message) if a typo is detected, None otherwise
+    fn check_body_for_typos(&self, body: &str, body_start_pos: usize) -> Option<String> {
+        // Magic functions that require $ prefix
+        let function_typos = [
+            ("fetch(", "$fetch(", "HTTP request function"),
+            ("log(", "$log(", "logging function"),
+            ("navigate(", "$navigate(", "navigation function"),
+        ];
+
+        for (typo, correct, description) in function_typos {
+            // Find all occurrences of the typo in the body
+            let mut search_start = 0;
+            while let Some(pos) = body[search_start..].find(typo) {
+                let absolute_pos = search_start + pos;
+
+                // Check it's not preceded by $ (which would make it correct)
+                let is_preceded_by_dollar = absolute_pos > 0 &&
+                    body.chars().nth(absolute_pos - 1) == Some('$');
+
+                // Check it's not part of a larger identifier (preceded by letter/underscore)
+                let is_part_of_identifier = absolute_pos > 0 && {
+                    let prev_char = body.chars().nth(absolute_pos - 1).unwrap_or(' ');
+                    prev_char.is_alphanumeric() || prev_char == '_'
+                };
+
+                if !is_preceded_by_dollar && !is_part_of_identifier {
+                    // Calculate line/column within the body
+                    let mut line = 1;
+                    let mut col = 1;
+                    for (i, ch) in body.chars().enumerate() {
+                        if i >= absolute_pos {
+                            break;
+                        }
+                        if ch == '\n' {
+                            line += 1;
+                            col = 1;
+                        } else {
+                            col += 1;
+                        }
+                    }
+
+                    // Get the line/col from the start of the body in the original file
+                    let (body_line, _) = self.pos_to_line_col(body_start_pos);
+                    let actual_line = body_line + line - 1;
+
+                    return Some(format!(
+                        "[Line {}:{}] Found '{}' - did you mean '{}'? ({} requires $ prefix)",
+                        actual_line, col, typo.trim_end_matches('('), correct.trim_end_matches('('), description
+                    ));
+                }
+
+                search_start = absolute_pos + 1;
+            }
+        }
+
+        None
+    }
+
     pub fn parse(&mut self) -> Result<WhitehallFile, String> {
         let mut imports = Vec::new();
         let mut props = Vec::new();
@@ -678,6 +737,9 @@ impl Parser {
         self.skip_whitespace();
         self.expect_char('{')?;
 
+        // Save position where body starts for error reporting
+        let body_start_pos = self.pos;
+
         let mut body = String::new();
         let mut depth = 1;
 
@@ -701,6 +763,11 @@ impl Parser {
                 }
                 None => return Err("Unexpected EOF in lifecycle hook body".to_string()),
             }
+        }
+
+        // Check for common typos in the body BEFORE trimming (to preserve line numbers)
+        if let Some(error) = self.check_body_for_typos(&body, body_start_pos) {
+            return Err(error);
         }
 
         Ok(LifecycleHook {
