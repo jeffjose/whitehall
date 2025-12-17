@@ -7,9 +7,11 @@ data class Photo(
 )
 
 var photos: List<Photo> = []
+var newPhotos: List<Photo> = []
 var page = 0
 var hasMore = true
 var isLoading: Boolean = false
+var isRefreshing: Boolean = false
 var query = ""
 
 fun loadMore() {
@@ -21,8 +23,8 @@ fun loadMore() {
   $log("--------------------------")
   $log("https://picsum.photos/v2/list?page=${page}&limit=20")
   $log("--------------------------")
-  val newPhotos: List<Photo> = $fetch("https://picsum.photos/v2/list?page=${page}&limit=20")
-  photos += newPhotos
+  newPhotos = $fetch("https://picsum.photos/v2/list?page=${page}&limit=20")
+  photos += newPhotos.shuffled()
   isLoading = false
 }
 
@@ -35,14 +37,20 @@ onMount {
 
 fun onRefresh() {
   $log("refresh!!")
+  isRefreshing = true
+  newPhotos = $fetch("https://picsum.photos/v2/list?page=1&limit=20")
+  photos = newPhotos.shuffled()
+  isRefreshing = false
+  $log("done")
 }
 
-<Column spacing={8} padding={16} pt={48} onRefresh={onRefresh}>
+<Column spacing={8} padding={16} pt={48} onRefresh={onRefresh} isRefreshing={isRefreshing}>
 <TextField value={query} onValueChange={(v) => query = v} placeholder="Search by author..." width="100%"/>
-  <Text>Photos</Text>
+  <Text>Photos {filteredPhotos.size} ({photos.size})</Text>
       <LazyColumn modifier={Modifier.weight(1f)}>
-      @for (photo in filteredPhotos, key = {it.id}) {
+      @for (i, photo in filteredPhotos) {
         <Card onClick={() => $navigate($routes.photo(id = photo.id))} p={8}>
+          <Text>{i}</Text>
           <Image src={"https://picsum.photos/id/${photo.id}/300/200"} alt={photo.author} fit="cover" width="100%" height="200dp" />
           <Text p={12}>{photo.author}</Text>
         </Card>

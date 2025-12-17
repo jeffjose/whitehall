@@ -1454,16 +1454,50 @@ impl Parser {
 
     fn parse_for_loop(&mut self) -> Result<Markup, String> {
         // Parse: @for (item in collection, key = { expr }) { ... } [empty { ... }]
+        // Or:    @for (index, item in collection, key = { expr }) { ... } [empty { ... }]
         self.skip_whitespace();
         self.expect_char('(')?;
 
-        // Parse item name
-        let item = self.parse_identifier()?;
+        // Parse first identifier (could be index or item)
+        let first_ident = self.parse_identifier()?;
 
         self.skip_whitespace();
-        if !self.consume_word("in") {
-            return Err("Expected 'in' after loop variable".to_string());
-        }
+
+        // Check if this is indexed form: (index, item in collection)
+        let (index, item) = if self.peek_char() == Some(',') {
+            // Look ahead to see if next token after comma is an identifier followed by 'in'
+            let saved_pos = self.pos;
+            self.advance_char(); // consume ','
+            self.skip_whitespace();
+
+            // Try to parse second identifier
+            if let Ok(second_ident) = self.parse_identifier() {
+                self.skip_whitespace();
+                if self.consume_word("in") {
+                    // This is indexed form: (index, item in ...)
+                    (Some(first_ident), second_ident)
+                } else {
+                    // Not indexed form, restore position
+                    self.pos = saved_pos;
+                    if !self.consume_word("in") {
+                        return Err("Expected 'in' after loop variable".to_string());
+                    }
+                    (None, first_ident)
+                }
+            } else {
+                // Couldn't parse second identifier, restore and try normal form
+                self.pos = saved_pos;
+                if !self.consume_word("in") {
+                    return Err("Expected 'in' after loop variable".to_string());
+                }
+                (None, first_ident)
+            }
+        } else if self.consume_word("in") {
+            // Normal form: (item in collection)
+            (None, first_ident)
+        } else {
+            return Err("Expected ',' or 'in' after loop variable".to_string());
+        };
 
         self.skip_whitespace();
         // Parse collection name (up to comma or closing paren)
@@ -1518,6 +1552,7 @@ impl Parser {
         }
 
         Ok(Markup::ForLoop(ForLoopBlock {
+            index,
             item,
             collection,
             key_expr,

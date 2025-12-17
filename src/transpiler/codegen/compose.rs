@@ -985,25 +985,40 @@ impl ComposeBackend {
                 let mut output = String::new();
                 let indent_str = "    ".repeat(indent);
 
-                // Special handling for LazyColumn: use items() instead of forEach
+                // Special handling for LazyColumn: use items() or itemsIndexed()
                 // IMPORTANT: Check this BEFORE RecyclerView optimization
                 // LazyColumn should always use Compose items(), never RecyclerView
-                if parent == Some("LazyColumn") {
-                    // items(collection, key = { expr }) { item ->
+                if parent == Some("LazyColumn") || parent == Some("LazyRow") {
                     let transformed_collection = self.transform_viewmodel_expression(&for_loop.collection);
-                    output.push_str(&format!("{}items({}", indent_str, transformed_collection));
 
-                    if let Some(key_expr) = &for_loop.key_expr {
-                        // Ensure key expression has braces
-                        let formatted_key = if key_expr.trim().starts_with('{') {
-                            key_expr.to_string()
-                        } else {
-                            format!("{{ {} }}", key_expr)
-                        };
-                        output.push_str(&format!(", key = {}", formatted_key));
+                    // Use itemsIndexed when index variable is present
+                    if let Some(ref index_var) = for_loop.index {
+                        // itemsIndexed(collection, key = { i, _ -> i }) { i, item ->
+                        output.push_str(&format!("{}itemsIndexed({}", indent_str, transformed_collection));
+
+                        if let Some(key_expr) = &for_loop.key_expr {
+                            // For indexed form, key lambda takes (index, item)
+                            let formatted_key = format!("{{ {}, {} -> {} }}", index_var, for_loop.item, key_expr);
+                            output.push_str(&format!(", key = {}", formatted_key));
+                        }
+
+                        output.push_str(&format!(") {{ {}, {} ->\n", index_var, for_loop.item));
+                    } else {
+                        // items(collection, key = { expr }) { item ->
+                        output.push_str(&format!("{}items({}", indent_str, transformed_collection));
+
+                        if let Some(key_expr) = &for_loop.key_expr {
+                            // Ensure key expression has braces
+                            let formatted_key = if key_expr.trim().starts_with('{') {
+                                key_expr.to_string()
+                            } else {
+                                format!("{{ {} }}", key_expr)
+                            };
+                            output.push_str(&format!(", key = {}", formatted_key));
+                        }
+
+                        output.push_str(&format!(") {{ {} ->\n", for_loop.item));
                     }
-
-                    output.push_str(&format!(") {{ {} ->\n", for_loop.item));
 
                     for child in &for_loop.body {
                         output.push_str(&self.generate_markup_with_context(child, indent + 1, None)?);
@@ -2779,12 +2794,22 @@ impl ComposeBackend {
                         if !component_imports.contains(&import) {
                             component_imports.push(import);
                         }
-                        // LazyColumn with ForLoop children needs items import
-                        let has_for_loop = comp.children.iter().any(|child| matches!(child, Markup::ForLoop(_)));
-                        if has_for_loop {
-                            let items_import = "androidx.compose.foundation.lazy.items".to_string();
-                            if !prop_imports.contains(&items_import) {
-                                prop_imports.push(items_import);
+                        // LazyColumn with ForLoop children needs items/itemsIndexed import
+                        for child in &comp.children {
+                            if let Markup::ForLoop(for_loop) = child {
+                                if for_loop.index.is_some() {
+                                    // Indexed form needs itemsIndexed
+                                    let import = "androidx.compose.foundation.lazy.itemsIndexed".to_string();
+                                    if !prop_imports.contains(&import) {
+                                        prop_imports.push(import);
+                                    }
+                                } else {
+                                    // Non-indexed form needs items
+                                    let import = "androidx.compose.foundation.lazy.items".to_string();
+                                    if !prop_imports.contains(&import) {
+                                        prop_imports.push(import);
+                                    }
+                                }
                             }
                         }
                     }

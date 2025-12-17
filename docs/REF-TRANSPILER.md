@@ -368,6 +368,13 @@ if (condition) {
 }
 ```
 
+**For Loop with Index:**
+```whitehall
+@for (i, item in items, key = { i }) {
+  <Text>{i}: {item.name}</Text>
+}
+```
+
 **When (Pattern Matching):**
 ```whitehall
 @when (status) {
@@ -692,6 +699,26 @@ The code generator tracks parent component context to make smart decisions:
 LazyColumn {
     items(items, key = { it.id }) { item ->
         ItemCard(item = item)
+    }
+}
+```
+
+**Indexed Form (uses `itemsIndexed`):**
+
+```whitehall
+<LazyColumn>
+  @for (i, item in items, key = { i }) {
+    <Text>{i}: {item.name}</Text>
+  }
+</LazyColumn>
+```
+
+**Generates:**
+
+```kotlin
+LazyColumn {
+    itemsIndexed(items, key = { i, item -> i }) { i, item ->
+        Text(text = "$i: ${item.name}")
     }
 }
 ```

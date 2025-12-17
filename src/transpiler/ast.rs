@@ -135,6 +135,7 @@ pub struct ElseIfBranch {
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct ForLoopBlock {
+    pub index: Option<String>, // e.g., "i" for @for (i, item in list)
     pub item: String,         // e.g., "post"
     pub collection: String,   // e.g., "posts"
     pub key_expr: Option<String>, // e.g., "it.id" or "post.id"
