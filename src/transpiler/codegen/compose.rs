@@ -1792,7 +1792,7 @@ impl ComposeBackend {
                 }
                 else if comp.name == "Box" {
                     // Box uses unified modifier builder for size/padding/background
-                    let (modifiers, mut handled) = self.build_modifiers_for_component(comp, ModifierConfig {
+                    let (mut modifiers, mut handled) = self.build_modifiers_for_component(comp, ModifierConfig {
                         handle_size: true,
                         handle_padding: true,
                         handle_background: true,
@@ -1800,15 +1800,14 @@ impl ComposeBackend {
                         ..Default::default()
                     })?;
 
-                    // Handle alignment/contentAlignment/align as contentAlignment parameter (not modifier)
-                    // "align" is a Tailwind-style shortcut
-                    let alignment = comp.props.iter()
-                        .find(|p| p.name == "alignment" || p.name == "contentAlignment" || p.name == "align")
-                        .map(|p| (p.name.clone(), self.get_prop_expr(&p.value)));
-                    if let Some((prop_name, align)) = &alignment {
-                        let align_str = if align.starts_with('"') && align.ends_with('"') {
+                    // Handle alignment props - two semantic meanings:
+                    // 1. "contentAlignment" → contentAlignment parameter (aligns children inside this Box)
+                    // 2. "alignment"/"align" → .align() modifier (positions this Box within parent BoxScope)
+
+                    // Helper to map alignment string to Alignment.X
+                    let map_alignment = |align: &str| -> String {
+                        if align.starts_with('"') && align.ends_with('"') {
                             let a = &align[1..align.len()-1];
-                            // Support Tailwind-style values: center, topStart, bottomEnd, etc.
                             let mapped = match a {
                                 "center" => "Center",
                                 "topStart" | "top-start" => "TopStart",
@@ -1819,14 +1818,35 @@ impl ComposeBackend {
                                 "bottomStart" | "bottom-start" => "BottomStart",
                                 "bottomCenter" | "bottom-center" | "bottom" => "BottomCenter",
                                 "bottomEnd" | "bottom-end" => "BottomEnd",
-                                _ => a, // Pass through other values as-is (e.g., "Center")
+                                _ => a,
                             };
                             format!("Alignment.{}", mapped)
                         } else {
                             align.to_string()
-                        };
-                        params.push(format!("contentAlignment = {}", align_str));
-                        handled.insert(prop_name.clone());
+                        }
+                    };
+
+                    // Handle contentAlignment (always for aligning children)
+                    if let Some(prop) = comp.props.iter().find(|p| p.name == "contentAlignment") {
+                        let align = self.get_prop_expr(&prop.value);
+                        params.push(format!("contentAlignment = {}", map_alignment(&align)));
+                        handled.insert("contentAlignment".to_string());
+                    }
+
+                    // Handle alignment/align - semantics depend on whether Box has children
+                    // With children: contentAlignment (user wants to align children)
+                    // Without children (self-closing): .align() modifier (position within parent BoxScope)
+                    if let Some(prop) = comp.props.iter().find(|p| p.name == "alignment" || p.name == "align") {
+                        let align = self.get_prop_expr(&prop.value);
+                        let has_children = !comp.children.is_empty();
+                        if has_children {
+                            // Box has children - use contentAlignment to center them
+                            params.push(format!("contentAlignment = {}", map_alignment(&align)));
+                        } else {
+                            // Self-closing Box - use .align() modifier for positioning within parent
+                            modifiers.insert(0, format!(".align({})", map_alignment(&align)));
+                        }
+                        handled.insert(prop.name.clone());
                     }
 
                     // Output combined modifier if we have any

@@ -59,8 +59,7 @@ fun AvatarWithStatus(
         )
         if (isOnline) {
             Box(
-                contentAlignment = Alignment.BottomEnd,
-                modifier = Modifier.width(16.dp).height(16.dp).background(Color.Green)
+                modifier = Modifier.align(Alignment.BottomEnd).width(16.dp).height(16.dp).background(Color.Green)
             )
         }
     }
