@@ -507,6 +507,38 @@ Box {
 - In ViewModel context, prefixed with `viewModel.` (e.g., `viewModel.loadMore()`)
 - `LaunchedEffect` import added automatically
 
+### OnRefresh Prop (Pull-to-Refresh)
+
+The `onRefresh` prop enables pull-to-refresh on any component. The component is automatically wrapped in `PullToRefreshBox`.
+
+**Syntax:**
+
+```whitehall
+<Column onRefresh={refresh} isRefreshing={isRefreshing}>
+  <Text>Content</Text>
+</Column>
+```
+
+**Generated Kotlin:**
+
+```kotlin
+PullToRefreshBox(
+    isRefreshing = uiState.isRefreshing,
+    onRefresh = { viewModel.refresh() }
+) {
+    Column {
+        Text(text = "Content")
+    }
+}
+```
+
+**Features:**
+- Works on any component (Column, LazyColumn, Box, etc.)
+- `isRefreshing` prop is optional (defaults to `false`)
+- Function references become function calls with `viewModel.` prefix
+- Adds `@OptIn(ExperimentalMaterial3Api::class)` annotation
+- `PullToRefreshBox` and `ExperimentalMaterial3Api` imports added automatically
+
 ### Import Management
 
 **Process:**
@@ -525,6 +557,7 @@ Box {
 | `$fetch()` | Ktor imports (HttpClient, body, OkHttp, etc.) |
 | `$log()` | `android.util.Log` |
 | `onAppear={...}` | `androidx.compose.runtime.LaunchedEffect` |
+| `onRefresh={...}` | `PullToRefreshBox`, `ExperimentalMaterial3Api` |
 | `Dispatchers.IO` | `kotlinx.coroutines.Dispatchers` |
 | `.launch {}` | `kotlinx.coroutines.launch` |
 | `rememberCoroutineScope()` | `androidx.compose.runtime.rememberCoroutineScope` |

@@ -21,6 +21,7 @@ pub struct ComposeBackend {
     uses_routes: bool, // Track if $routes or $navigate is used (for Routes import)
     uses_on_appear: bool, // Track if onAppear prop is used (for LaunchedEffect import)
     uses_log: bool, // Track if $log() API is used (for android.util.Log import)
+    uses_pull_to_refresh: bool, // Track if onRefresh prop is used (for PullToRefreshBox)
     // Phase 1.1: ViewModel wrapper context
     in_viewmodel_wrapper: bool, // Are we generating markup inside a ViewModel wrapper?
     mutable_vars: std::collections::HashSet<String>, // Mutable vars (need uiState prefix)
@@ -106,6 +107,7 @@ impl ComposeBackend {
             uses_routes: false, // Track $routes/$navigate usage for Routes import
             uses_on_appear: false, // Track onAppear prop usage for LaunchedEffect import
             uses_log: false, // Track $log() API usage for android.util.Log import
+            uses_pull_to_refresh: false, // Track onRefresh prop usage for PullToRefreshBox
             in_viewmodel_wrapper: false, // Phase 1.1: Not in ViewModel wrapper by default
             mutable_vars: std::collections::HashSet::new(), // Phase 1.1: Track mutable vars
             derived_props: std::collections::HashSet::new(), // Phase 1.1: Track derived properties
@@ -315,9 +317,14 @@ impl ComposeBackend {
             imports.push("androidx.lifecycle.viewmodel.compose.hiltViewModel".to_string());
         }
 
-        // Add ExperimentalMaterial3Api import if using experimental APIs (DropdownMenu, etc.)
-        if self.uses_experimental_material3 {
+        // Add ExperimentalMaterial3Api import if using experimental APIs (DropdownMenu, PullToRefresh, etc.)
+        if self.uses_experimental_material3 || self.uses_pull_to_refresh {
             imports.push("androidx.compose.material3.ExperimentalMaterial3Api".to_string());
+        }
+
+        // Add PullToRefreshBox import for onRefresh prop
+        if self.uses_pull_to_refresh {
+            imports.push("androidx.compose.material3.pulltorefresh.PullToRefreshBox".to_string());
         }
 
         // Add Ktor imports for $fetch() API usage
@@ -362,8 +369,8 @@ impl ComposeBackend {
         }
 
         // Component function
-        // Add @OptIn if using experimental Material3 APIs
-        if self.uses_experimental_material3 {
+        // Add @OptIn if using experimental Material3 APIs (DropdownMenu, PullToRefresh, etc.)
+        if self.uses_experimental_material3 || self.uses_pull_to_refresh {
             output.push_str("@OptIn(ExperimentalMaterial3Api::class)\n");
         }
         output.push_str("@Composable\n");
@@ -1115,9 +1122,48 @@ impl ComposeBackend {
                 // - Using derivedStateOf for computed values
                 let should_wrap_stable = false; // Disabled - key(Unit) doesn't help
 
+                // Check for onRefresh prop - wrap in PullToRefreshBox
+                let on_refresh_prop = comp.props.iter().find(|p| p.name == "onRefresh");
+                let is_refreshing_prop = comp.props.iter().find(|p| p.name == "isRefreshing");
+                let has_pull_to_refresh = on_refresh_prop.is_some();
+
+                if has_pull_to_refresh {
+                    self.uses_pull_to_refresh = true;
+
+                    // Get prop values
+                    let on_refresh_expr = on_refresh_prop
+                        .map(|p| self.get_prop_expr(&p.value))
+                        .unwrap_or_default();
+                    let is_refreshing_expr = is_refreshing_prop
+                        .map(|p| self.get_prop_expr(&p.value))
+                        .unwrap_or("false");
+
+                    // Transform onRefresh - if it's a function reference, make it a call
+                    let mut on_refresh_call = on_refresh_expr.to_string();
+                    if self.in_viewmodel_wrapper {
+                        let expr_trimmed = on_refresh_expr.trim();
+                        // If it's a known function name without (), add () to call it
+                        if self.function_names.contains(&expr_trimmed.to_string()) && !expr_trimmed.contains('(') {
+                            on_refresh_call = format!("{}()", expr_trimmed);
+                        }
+                    }
+                    let transformed_on_refresh = self.transform_viewmodel_expression(&on_refresh_call);
+                    let transformed_is_refreshing = self.transform_viewmodel_expression(&is_refreshing_expr);
+
+                    // Generate PullToRefreshBox wrapper
+                    output.push_str(&base_indent_str);
+                    output.push_str("PullToRefreshBox(\n");
+                    output.push_str(&format!("{}    isRefreshing = {},\n", base_indent_str, transformed_is_refreshing));
+                    output.push_str(&format!("{}    onRefresh = {{ {} }}\n", base_indent_str, transformed_on_refresh));
+                    output.push_str(&format!("{}) {{\n", base_indent_str));
+                }
+
                 let (effective_indent, indent_str) = if should_wrap_stable {
                     output.push_str(&base_indent_str);
                     output.push_str("key(Unit) {\n");
+                    (indent + 1, "    ".repeat(indent + 1))
+                } else if has_pull_to_refresh {
+                    // Indent component inside PullToRefreshBox
                     (indent + 1, "    ".repeat(indent + 1))
                 } else {
                     (indent, base_indent_str.clone())
@@ -1675,7 +1721,8 @@ impl ComposeBackend {
 
                     // Add other props (excluding the ones we handled)
                     for prop in &comp.props {
-                        if handled.contains(&prop.name) {
+                        // Skip props handled by PullToRefreshBox wrapper
+                        if handled.contains(&prop.name) || prop.name == "onRefresh" || prop.name == "isRefreshing" {
                             continue;
                         }
                         let prop_expr = self.get_prop_expr(&prop.value);
@@ -1706,7 +1753,8 @@ impl ComposeBackend {
 
                     // Process other props, skipping handled ones
                     for prop in &comp.props {
-                        if handled.contains(&prop.name) {
+                        // Skip props handled by PullToRefreshBox wrapper
+                        if handled.contains(&prop.name) || prop.name == "onRefresh" || prop.name == "isRefreshing" {
                             continue;
                         }
                         let prop_expr = self.get_prop_expr(&prop.value);
@@ -1746,7 +1794,8 @@ impl ComposeBackend {
 
                     // Process other props
                     for prop in &comp.props {
-                        if handled.contains(&prop.name) {
+                        // Skip props handled by PullToRefreshBox wrapper
+                        if handled.contains(&prop.name) || prop.name == "onRefresh" || prop.name == "isRefreshing" {
                             continue;
                         }
                         let prop_expr = self.get_prop_expr(&prop.value);
@@ -1886,7 +1935,8 @@ impl ComposeBackend {
 
                     // Regular prop handling for other components (excluding handled props)
                     for prop in &comp.props {
-                        if handled.contains(&prop.name) {
+                        // Skip props handled by PullToRefreshBox wrapper
+                        if handled.contains(&prop.name) || prop.name == "onRefresh" || prop.name == "isRefreshing" {
                             continue;
                         }
 
@@ -1993,6 +2043,12 @@ impl ComposeBackend {
 
                 // Close the key(Unit) wrapper if we opened one
                 if should_wrap_stable {
+                    output.push_str(&base_indent_str);
+                    output.push_str("}\n");
+                }
+
+                // Close the PullToRefreshBox wrapper if we opened one
+                if has_pull_to_refresh {
                     output.push_str(&base_indent_str);
                     output.push_str("}\n");
                 }
@@ -2199,6 +2255,64 @@ impl ComposeBackend {
             Markup::Sequence(items) => {
                 for item in items {
                     if self.scan_for_on_appear(item) {
+                        return true;
+                    }
+                }
+                false
+            }
+            _ => false,
+        }
+    }
+
+    /// Scan markup tree for onRefresh prop usage (for PullToRefreshBox)
+    fn scan_for_on_refresh(&self, markup: &Markup) -> bool {
+        match markup {
+            Markup::Component(comp) => {
+                // Check if this component has onRefresh prop
+                if comp.props.iter().any(|p| p.name == "onRefresh") {
+                    return true;
+                }
+                // Check children
+                for child in &comp.children {
+                    if self.scan_for_on_refresh(child) {
+                        return true;
+                    }
+                }
+                false
+            }
+            Markup::IfElse(if_else) => {
+                for item in &if_else.then_branch {
+                    if self.scan_for_on_refresh(item) {
+                        return true;
+                    }
+                }
+                for else_if in &if_else.else_ifs {
+                    for item in &else_if.body {
+                        if self.scan_for_on_refresh(item) {
+                            return true;
+                        }
+                    }
+                }
+                if let Some(else_branch) = &if_else.else_branch {
+                    for item in else_branch {
+                        if self.scan_for_on_refresh(item) {
+                            return true;
+                        }
+                    }
+                }
+                false
+            }
+            Markup::ForLoop(for_loop) => {
+                for item in &for_loop.body {
+                    if self.scan_for_on_refresh(item) {
+                        return true;
+                    }
+                }
+                false
+            }
+            Markup::Sequence(items) => {
+                for item in items {
+                    if self.scan_for_on_refresh(item) {
                         return true;
                     }
                 }
@@ -5541,11 +5655,16 @@ impl ComposeBackend {
                 }
                 output.push_str("        }\n");
             } else {
-                // Non-suspend functions without $fetch - just output body
+                // Non-suspend functions without $fetch - output body with $log transformation
                 for line in func.body.lines() {
                     let trimmed = line.trim();
                     if !trimmed.is_empty() {
-                        output.push_str(&format!("        {}\n", trimmed));
+                        let mut transformed_line = trimmed.to_string();
+                        // Transform $log() calls to Android Log calls
+                        if transformed_line.contains("$log(") || transformed_line.contains("$log.") {
+                            transformed_line = self.transform_log_call(&transformed_line);
+                        }
+                        output.push_str(&format!("        {}\n", transformed_line));
                     }
                 }
             }
@@ -5624,6 +5743,18 @@ impl ComposeBackend {
             }
         }
 
+        // Pre-scan for onRefresh usage (PullToRefreshBox)
+        if self.scan_for_on_refresh(&file.markup) {
+            self.uses_pull_to_refresh = true;
+        }
+        for func in &file.functions {
+            if let Some(ref markup) = func.markup {
+                if self.scan_for_on_refresh(markup) {
+                    self.uses_pull_to_refresh = true;
+                }
+            }
+        }
+
         // Package declaration
         output.push_str(&format!("package {}\n\n", self.package));
 
@@ -5659,6 +5790,12 @@ impl ComposeBackend {
         // Add LaunchedEffect import if onAppear is used
         if self.uses_on_appear {
             imports.push("androidx.compose.runtime.LaunchedEffect".to_string());
+        }
+
+        // Add PullToRefreshBox imports if onRefresh is used
+        if self.uses_pull_to_refresh {
+            imports.push("androidx.compose.material3.ExperimentalMaterial3Api".to_string());
+            imports.push("androidx.compose.material3.pulltorefresh.PullToRefreshBox".to_string());
         }
 
         // User imports (resolve $ aliases)
@@ -5732,6 +5869,10 @@ impl ComposeBackend {
 
         let props_list = params.join(", ");
 
+        // Add @OptIn if using experimental Material3 APIs (PullToRefresh, etc.)
+        if self.uses_pull_to_refresh {
+            output.push_str("@OptIn(ExperimentalMaterial3Api::class)\n");
+        }
         output.push_str("@Composable\n");
         output.push_str(&format!("fun {}({}) {{\n", self.component_name, props_list));
 
