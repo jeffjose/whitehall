@@ -46,6 +46,59 @@ impl Parser {
         format!("[Line {}:{}] {}", line, col, message)
     }
 
+    /// Check for common typos and return a helpful error if found
+    /// Returns Some(error_message) if a typo is detected, None otherwise
+    fn check_for_typos(&self) -> Option<String> {
+        let remaining = &self.input[self.pos..];
+
+        // Common typos: missing $ prefix on magic functions
+        let typo_suggestions = [
+            ("onMount", "$onMount", "lifecycle hook"),
+            ("onDispose", "$onDispose", "lifecycle hook"),
+            ("fetch(", "$fetch(", "HTTP request function"),
+            ("log(", "$log(", "logging function"),
+            ("navigate(", "$navigate(", "navigation function"),
+        ];
+
+        for (typo, correct, description) in typo_suggestions {
+            // Check if remaining starts with the typo followed by whitespace or {
+            if remaining.starts_with(typo) {
+                let after_typo = &remaining[typo.len()..];
+                // Make sure it's actually the keyword (not part of a larger identifier)
+                if after_typo.starts_with(' ') || after_typo.starts_with('{') ||
+                   after_typo.starts_with('(') || after_typo.starts_with('\n') {
+                    return Some(self.error_at_pos(&format!(
+                        "Unknown identifier '{}'. Did you mean '{}'? ({} requires $ prefix)",
+                        typo, correct, description
+                    )));
+                }
+            }
+        }
+
+        // Check for old @if/@for/@when without @ prefix (unlikely but possible)
+        let directive_typos = [
+            ("if (", "@if", "conditional directive"),
+            ("if(", "@if", "conditional directive"),
+            ("for (", "@for", "loop directive"),
+            ("for(", "@for", "loop directive"),
+            ("when (", "@when", "when directive"),
+            ("when(", "@when", "when directive"),
+        ];
+
+        for (typo, correct, description) in directive_typos {
+            if remaining.starts_with(typo) {
+                // Only suggest if we're in a markup context (after some markup)
+                // This helps avoid false positives in pure Kotlin code
+                return Some(self.error_at_pos(&format!(
+                    "Found '{}' - did you mean '{}'? ({} requires @ prefix in markup)",
+                    typo.trim_end_matches('('), correct, description
+                )));
+            }
+        }
+
+        None
+    }
+
     pub fn parse(&mut self) -> Result<WhitehallFile, String> {
         let mut imports = Vec::new();
         let mut props = Vec::new();
@@ -139,6 +192,10 @@ impl Parser {
                 // Not a script tag, break to parse markup
                 break;
             } else {
+                // Before breaking, check for common typos
+                if let Some(error) = self.check_for_typos() {
+                    return Err(error);
+                }
                 break;
             }
         }
