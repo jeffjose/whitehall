@@ -109,16 +109,9 @@ fn execute_single_file(file_path: &str, device_query: Option<&str>) -> Result<()
 
     // Continue with gradle, install, and launch
     build_with_gradle(&toolchain, &config, &result.output_dir)?;
-    let install_skipped = install_apk(&toolchain, &result.output_dir, &device.id, &config.android.package)?;
-
-    // Skip launch if APK unchanged AND app is already running
-    let app_running = is_app_running(&toolchain, &device.id, &config.android.package)?;
-    if install_skipped && app_running {
-        println!("  {} (app already running)", "Skipped launch".dimmed());
-    } else {
-        clear_logcat(&toolchain, &device.id)?;
-        launch_app(&toolchain, &config.android.package, &device.id)?;
-    }
+    install_apk(&toolchain, &result.output_dir, &device.id, &config.android.package)?;
+    clear_logcat(&toolchain, &device.id)?;
+    launch_app(&toolchain, &config.android.package, &device.id)?;
 
     println!("  {} on {}", "Running".green().bold(), device.short_name());
     println!();
@@ -193,17 +186,12 @@ fn execute_project(manifest_path: &str, device_query: Option<&str>) -> Result<()
     // 5. Build APK with Gradle
     build_with_gradle(&toolchain, &config, &result.output_dir)?;
 
-    // 6. Install on device
-    let install_skipped = install_apk(&toolchain, &result.output_dir, &device.id, &config.android.package)?;
+    // 6. Install on device (skipped if APK unchanged)
+    install_apk(&toolchain, &result.output_dir, &device.id, &config.android.package)?;
 
-    // 7. Skip launch if APK unchanged AND app is already running
-    let app_running = is_app_running(&toolchain, &device.id, &config.android.package)?;
-    if install_skipped && app_running {
-        println!("  {} (app already running)", "Skipped launch".dimmed());
-    } else {
-        clear_logcat(&toolchain, &device.id)?;
-        launch_app(&toolchain, &config.android.package, &device.id)?;
-    }
+    // 7. Clear logcat and launch app
+    clear_logcat(&toolchain, &device.id)?;
+    launch_app(&toolchain, &config.android.package, &device.id)?;
 
     println!("  {} on {}", "Running".green().bold(), device.short_name());
     println!();
@@ -249,8 +237,7 @@ fn build_with_gradle(toolchain: &Toolchain, config: &crate::config::Config, outp
     Ok(())
 }
 
-/// Returns true if install was skipped (APK unchanged)
-fn install_apk(toolchain: &Toolchain, output_dir: &Path, device_id: &str, package: &str) -> Result<bool> {
+fn install_apk(toolchain: &Toolchain, output_dir: &Path, device_id: &str, package: &str) -> Result<()> {
     let apk_path = output_dir.join("app/build/outputs/apk/debug/app-debug.apk");
 
     if !apk_path.exists() {
@@ -273,7 +260,7 @@ fn install_apk(toolchain: &Toolchain, output_dir: &Path, device_id: &str, packag
             if stored_hash.trim() == apk_hash {
                 // APK unchanged and app is installed, skip installation
                 println!("  {} (APK unchanged)", "Skipped install".dimmed());
-                return Ok(true); // Skipped
+                return Ok(());
             }
         }
     }
@@ -291,7 +278,7 @@ fn install_apk(toolchain: &Toolchain, output_dir: &Path, device_id: &str, packag
     // Store hash for next comparison
     let _ = fs::write(&hash_file, &apk_hash);
 
-    Ok(false) // Not skipped, installed
+    Ok(())
 }
 
 /// Check if an app is installed on the device
@@ -305,18 +292,6 @@ fn is_app_installed(toolchain: &Toolchain, device_id: &str, package: &str) -> Re
     let stdout = String::from_utf8_lossy(&output.stdout);
     // pm list packages returns "package:com.example.app" if installed
     Ok(stdout.contains(&format!("package:{}", package)))
-}
-
-/// Check if an app is currently running on the device
-fn is_app_running(toolchain: &Toolchain, device_id: &str, package: &str) -> Result<bool> {
-    let output = toolchain
-        .adb_cmd()?
-        .args(["-s", device_id, "shell", "pidof", package])
-        .output()
-        .context("Failed to check if app is running")?;
-
-    // pidof returns the PID if running, empty if not
-    Ok(!output.stdout.is_empty())
 }
 
 /// Calculate SHA256 hash of a file
@@ -748,17 +723,12 @@ fn run_full_cycle(
     // 2. Build APK with Gradle
     build_with_gradle(toolchain, config, &result.output_dir)?;
 
-    // 3. Install APK
-    let install_skipped = install_apk(toolchain, &result.output_dir, device_id, package)?;
+    // 3. Install APK (skipped if APK unchanged)
+    install_apk(toolchain, &result.output_dir, device_id, package)?;
 
-    // 4. Skip launch if APK unchanged AND app is already running
-    let app_running = is_app_running(toolchain, device_id, package)?;
-    if install_skipped && app_running {
-        println!("  {} (app already running)", "Skipped launch".dimmed());
-    } else {
-        clear_logcat(toolchain, device_id)?;
-        launch_app(toolchain, package, device_id)?;
-    }
+    // 4. Clear logcat and launch app
+    clear_logcat(toolchain, device_id)?;
+    launch_app(toolchain, package, device_id)?;
 
     Ok(())
 }
