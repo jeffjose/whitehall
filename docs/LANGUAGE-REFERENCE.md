@@ -61,7 +61,7 @@ class UserStore {
 - 🔄 Automatic state management (var → StateFlow)
 - 🎯 Data binding shortcuts (`bind:value`, `bind:checked`)
 - 🎨 UI conveniences (padding shortcuts, color helpers)
-- ⚡ Lifecycle hooks (`onMount`, `onDispose`)
+- ⚡ Lifecycle hooks (`$onMount`, `$onDispose`)
 - 🚀 ViewModel auto-generation
 
 **What stays pure Kotlin:**
@@ -117,7 +117,7 @@ var count = 0
 
 suspend fun loadData() { }
 
-onMount { loadData() }
+$onMount { loadData() }
 ```
 → Generates `ViewModel` + wrapper (auto-detects: suspend fns, lifecycle hooks, or 3+ functions)
 
@@ -342,11 +342,11 @@ class UserProfile @Inject constructor(
 ```whitehall
 var data = []
 
-onMount {
+$onMount {
   launch { data = api.fetch() }
 }
 
-onDispose {
+$onDispose {
   cleanup()
 }
 ```
@@ -686,7 +686,7 @@ val isValid = email.isNotEmpty() && password.length >= 8
 var items = []
 var isLoading = true
 
-onMount {
+$onMount {
   launch {
     items = api.fetch()
     isLoading = false

@@ -1061,7 +1061,7 @@ var newTaskTitle = ""
 var newTaskDescription = ""
 var showAddDialog = false
 
-onMount {
+$onMount {
   launch { store.loadTasks() }
 }
 

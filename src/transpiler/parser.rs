@@ -125,9 +125,9 @@ impl Parser {
                 // Parse plain functions as component functions (before store class only)
                 // After store class, is_kotlin_syntax() will catch these and pass through
                 functions.push(self.parse_function_declaration(false)?);
-            } else if self.consume_word("onMount") {
+            } else if self.consume_word("$onMount") {
                 lifecycle_hooks.push(self.parse_lifecycle_hook("onMount")?);
-            } else if self.consume_word("onDispose") {
+            } else if self.consume_word("$onDispose") {
                 lifecycle_hooks.push(self.parse_lifecycle_hook("onDispose")?);
             } else if self.peek_char() == Some('<') {
                 // Check for <script> tags
@@ -617,7 +617,7 @@ impl Parser {
     }
 
     fn parse_lifecycle_hook(&mut self, hook_type: &str) -> Result<LifecycleHook, String> {
-        // Parse: onMount { body }
+        // Parse: $onMount { body } or $onDispose { body }
         self.skip_whitespace();
         self.expect_char('{')?;
 
@@ -1903,10 +1903,10 @@ impl Parser {
             Some("constructor")
         } else if remaining.starts_with("get") {
             Some("get")
-        } else if remaining.starts_with("onMount") {
-            Some("onMount")
-        } else if remaining.starts_with("onDispose") {
-            Some("onDispose")
+        } else if remaining.starts_with("$onMount") {
+            Some("$onMount")
+        } else if remaining.starts_with("$onDispose") {
+            Some("$onDispose")
         } else {
             None
         }

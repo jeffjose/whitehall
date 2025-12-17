@@ -90,7 +90,7 @@ whitehall build
 
   var result = 0
 
-  onMount {
+  $onMount {
     result = Math.add(5, 3)  // Calls C++!
   }
 </script>
@@ -159,7 +159,7 @@ whitehall build
 
   var result = 0
 
-  onMount {
+  $onMount {
     result = Math.add(10, 7)  // Calls Rust!
   }
 </script>
@@ -476,7 +476,7 @@ pub fn double_array(arr: Vec<i32>) -> Vec<i32> {
 <script>
   import $ffi.cpp.Math
 
-  onMount {
+  $onMount {
     val sum = Math.addInts(5, 3)              // 8
     val dsum = Math.addDoubles(1.5, 2.5)      // 4.0
     val pos = Math.isPositive(-3)             // false
@@ -663,7 +663,7 @@ fun detectFaces(bitmap: Bitmap): List<Face> {
     isProcessing = false
   }
 
-  onMount {
+  $onMount {
     launch { detectFaces() }
   }
 </script>
@@ -814,7 +814,7 @@ fun openVideo(path: String): VideoDecoder? {
   var currentFrame: Bitmap? = null
   var frameIndex = 0
 
-  onMount {
+  $onMount {
     // Open once, keep decoder loaded
     decoder = openVideo(videoPath)
   }
@@ -993,7 +993,7 @@ void unloadModel(int64_t handle) { /* ... */ }
 <script>
   var modelHandle: Long? = null
 
-  onMount {
+  $onMount {
     // Load expensive model once (handle)
     modelHandle = ML.loadModel("/path/to/model.tflite")
   }
@@ -1383,7 +1383,7 @@ std::vector<int32_t> fibonacci(int n) {
     fibNumbers = Math.fibonacci(10)  // [0, 1, 1, 2, 3, 5, 8, 13, 21, 34]
   }
 
-  onMount {
+  $onMount {
     calculate()
   }
 </script>
@@ -1629,7 +1629,7 @@ int getFrameCount(const std::string& videoPath) {
     }
   }
 
-  onMount {
+  $onMount {
     totalFrames = VideoDecoder.getFrameCount(videoPath)
     launch { loadFrame(0) }
   }
@@ -2688,7 +2688,7 @@ int multiply(int a, int b) {
 
   var result = 0
 
-  onMount {
+  $onMount {
     result = Math.add(5, 3)  // Should equal 8
   }
 </script>

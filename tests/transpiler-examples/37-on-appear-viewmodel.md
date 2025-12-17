@@ -15,7 +15,7 @@ fun loadMore() {
   page = page + 1
 }
 
-onMount {
+$onMount {
   loadMore()
 }
 

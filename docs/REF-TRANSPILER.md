@@ -50,7 +50,7 @@ Parser (parser.rs) - Hybrid Strategy
     │   ├─ Parse state: var/val declarations
     │   ├─ Parse classes: @store class MyStore { ... }
     │   ├─ Parse functions: fun name() { body }
-    │   ├─ Parse lifecycle: onMount { }, onDispose { }
+    │   ├─ Parse lifecycle: $onMount { }, $onDispose { }
     │   └─ Parse markup: <Component>...</Component>
     │
     └─ Pure Kotlin Syntax (Passed Through):
@@ -784,7 +784,7 @@ Scaffold(
 - For loops with keys
 - When expressions
 - Data binding (bind:value)
-- Lifecycle hooks (onMount)
+- Lifecycle hooks ($onMount)
 
 **Routing (07-08):** 2 tests
 - Simple navigation
@@ -800,7 +800,7 @@ Scaffold(
 - Box layout
 - AsyncImage
 - Modifier chains
-- Lifecycle cleanup (onDispose)
+- Lifecycle cleanup ($onDispose)
 - Error handling
 
 **Advanced Features (18-26):** 9 tests

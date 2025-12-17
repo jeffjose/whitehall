@@ -30,9 +30,13 @@ fun loadMore() {
 
 var filteredPhotos: List<Photo> = $derived(photos.filter { it.author.contains(query, ignoreCase = true)})
 
-onMount {
+$onMount {
   $log("onMount!")
   loadMore()
+}
+
+$onDispose {
+  $log("onDispose!")
 }
 
 fun onRefresh() {
@@ -44,12 +48,12 @@ fun onRefresh() {
   $log("done")
 }
 
-<Column spacing={8} padding={16} pt={48} onRefresh={onRefresh} isRefreshing={isRefreshing}>
+<Column spacing={8} p={10} pt={48} onRefresh={onRefresh} isRefreshing={isRefreshing}>
 <TextField value={query} onValueChange={(v) => query = v} placeholder="Search by author..." width="100%"/>
   <Text>Photos {filteredPhotos.size} ({photos.size})</Text>
       <LazyColumn modifier={Modifier.weight(1f)}>
       @for (i, photo in filteredPhotos) {
-        <Card onClick={() => $navigate($routes.photo(id = photo.id))} p={8}>
+        <Card onClick={() => $navigate($routes.photo(id = photo.id))} py={8}>
           <Text>{i}</Text>
           <Image src={"https://picsum.photos/id/${photo.id}/300/200"} alt={photo.author} fit="cover" width="100%" height="200dp" />
           <Text p={12}>{photo.author}</Text>

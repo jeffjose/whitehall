@@ -48,7 +48,7 @@ Tests are organized by feature:
 - `03-control-flow-for.md` - @for loops with keys
 - `04-control-flow-when.md` - @when expressions
 - `05-data-binding.md` - bind:value syntax
-- `06-lifecycle-hooks.md` - onMount and other hooks
+- `06-lifecycle-hooks.md` - $onMount and other hooks
 - `07-routing-simple.md` - Basic screen with navigation
 - `08-routing-params.md` - Route parameters
 - `09-imports.md` - Import aliases ($lib, $models, etc.)

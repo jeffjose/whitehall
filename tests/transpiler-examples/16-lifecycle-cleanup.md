@@ -1,6 +1,6 @@
-# Lifecycle Cleanup with onDispose
+# Lifecycle Cleanup with $onDispose
 
-Tests onDispose hook for cleanup when component leaves composition.
+Tests $onDispose hook for cleanup when component leaves composition.
 
 ## Input
 
@@ -10,14 +10,14 @@ import $lib.websocket.WebSocketClient
   var messages: List<String> = emptyList()
   var connection: WebSocketClient? = null
 
-  onMount {
+  $onMount {
     connection = WebSocketClient.connect("ws://api.example.com")
     connection?.onMessage { msg ->
       messages = messages + msg
     }
   }
 
-  onDispose {
+  $onDispose {
     connection?.disconnect()
     connection = null
   }

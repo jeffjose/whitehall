@@ -68,7 +68,7 @@ whitehall publish               # Publish to Play Store
 - ✅ **Component transpilation** - `.wh` → idiomatic Kotlin/Compose
 - ✅ **Control flow** - `@if`, `@for`, `@when` directives
 - ✅ **Data binding** - `bind:value`, `bind:checked`
-- ✅ **Lifecycle hooks** - `onMount`, `onDispose` with smart combination
+- ✅ **Lifecycle hooks** - `$onMount`, `$onDispose` with smart combination
 - ✅ **String resources** - i18n support with `R.string.*`
 - ✅ **Advanced patterns** - LazyColumn, AsyncImage, modifier chains
 

@@ -26,7 +26,7 @@ Whitehall provides multiple state management patterns inspired by Svelte and mod
 | ViewModels (class with var) | `class UserProfile { var ... }` | ✅ Complete | Screen-scoped state with rotation survival |
 | Suspend functions | `suspend fun save()` | ✅ Complete | Async operations |
 | Coroutine dispatchers | `io { }`, `cpu { }`, `main { }` | ✅ Complete | Thread control |
-| Lifecycle hooks | `onMount`, `onDispose` | ✅ Complete | Side effects and cleanup |
+| Lifecycle hooks | `$onMount`, `$onDispose` | ✅ Complete | Side effects and cleanup |
 | Hilt integration | `@Inject` or `@hilt` | ✅ Complete | Dependency injection |
 
 ---
@@ -118,7 +118,7 @@ suspend fun loadData() {
   isLoading = false
 }
 
-onMount {
+$onMount {
   loadData()
 }
 
@@ -135,7 +135,7 @@ onMount {
 Component generates ViewModel if it has:
 - Suspend functions (needs viewModelScope)
 - >= 3 functions (complex state logic)
-- Lifecycle hooks (onMount/onDispose)
+- Lifecycle hooks ($onMount/$onDispose)
 
 **Generated Kotlin (Multi-File Output):**
 
@@ -591,7 +591,7 @@ suspend fun save() {
 
 **Auto-inference rules:**
 - Component with `var` → Uses `viewModelScope.launch`
-- Inside `onMount` → Already in `LaunchedEffect` scope
+- Inside `$onMount` → Already in `LaunchedEffect` scope
 - Component without `var` → Uses `rememberCoroutineScope()`
 - Singleton (`@store object`) → Keep as `suspend`, caller provides scope
 
@@ -735,14 +735,14 @@ fun UploadScreen() {
 
 **Use case:** Side effects on component mount/unmount
 
-### onMount
+### $onMount
 
 **Syntax:**
 
 ```whitehall
 var posts = []
 
-onMount {
+$onMount {
   launch {
     posts = api.fetchPosts()
   }
@@ -777,18 +777,18 @@ fun FeedScreen() {
 }
 ```
 
-### onDispose
+### $onDispose
 
 **Syntax:**
 
 ```whitehall
 var messages = []
 
-onMount {
+$onMount {
   websocket.connect()
 }
 
-onDispose {
+$onDispose {
   websocket.disconnect()
 }
 
@@ -808,7 +808,7 @@ fun ChatScreen() {
 
     DisposableEffect(Unit) {
         websocket.connect()
-        onDispose {
+        $onDispose {
             websocket.disconnect()
         }
     }
@@ -822,8 +822,8 @@ fun ChatScreen() {
 ```
 
 **Smart Hook Combination:**
-- **onMount only** → `LaunchedEffect`
-- **onMount + onDispose** → `DisposableEffect`
+- **$onMount only** → `LaunchedEffect`
+- **$onMount + $onDispose** → `DisposableEffect`
 - **Auto-generates coroutineScope** when `launch` calls detected
 
 ---

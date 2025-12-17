@@ -398,7 +398,7 @@ window.addEventListener('load', () => {
 
 **What doesn't work:**
 - ❌ Real interactivity (button clicks, state changes)
-- ❌ Lifecycle hooks (onMount, onDispose)
+- ❌ Lifecycle hooks ($onMount, $onDispose)
 - ❌ Data binding (bind:value)
 
 **Estimated effort:** 4-6 hours

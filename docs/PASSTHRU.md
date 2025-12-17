@@ -79,7 +79,7 @@ pub fn parse(&mut self) -> Result<WhitehallFile, String> {
         else if peek == "class" -> parse_class()
         else if peek == "var"/"val" -> parse_state()
         else if peek == "fun" -> parse_function()
-        else if peek == "onMount" -> parse_lifecycle()
+        else if peek == "$onMount" -> parse_lifecycle()
         else if peek == '<' -> break  // Start markup parsing
         else -> break  // Unknown, stop parsing ⚠️
     }
@@ -143,8 +143,8 @@ This aligns with:
    - `import $models.User` → Resolve to full package path
 
 4. **Lifecycle Hooks:**
-   - `onMount { }` → LaunchedEffect
-   - `onDispose { }` → DisposableEffect
+   - `$onMount { }` → LaunchedEffect
+   - `$onDispose { }` → DisposableEffect
 
 5. **State Declarations (top-level):**
    - `var count = 0` → Detect if needs ViewModel
@@ -237,7 +237,7 @@ pub enum KotlinBlockType {
 | `class Foo { var x = 0 }` | ✅ Yes | Might need ViewModel (has var) |
 | `data class Bar(...)` | ❌ No | No transformation needed |
 | `<Button>` | ✅ Yes | Transform to Compose call |
-| `onMount { }` | ✅ Yes | Transform to LaunchedEffect |
+| `$onMount { }` | ✅ Yes | Transform to LaunchedEffect |
 | `fun helper() { }` | ❌ No | No transformation needed |
 
 ### Decision 2: How to Capture Pass-Through Blocks?

@@ -28,7 +28,7 @@ import $lib.api.ApiClient
     selectedUserId = userId
   }
 
-  onMount {
+  $onMount {
     launch {
       isLoading = true
       val result = ApiClient.getUsers()

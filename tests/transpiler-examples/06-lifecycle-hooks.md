@@ -1,6 +1,6 @@
-# Lifecycle Hooks: onMount
+# Lifecycle Hooks: $onMount
 
-Tests onMount lifecycle hook transpilation to LaunchedEffect. Component has lifecycle hook, which triggers ViewModel generation.
+Tests $onMount lifecycle hook transpilation to LaunchedEffect. Component has lifecycle hook, which triggers ViewModel generation.
 
 ## Input
 
@@ -11,7 +11,7 @@ import $models.Post
   var posts: List<Post> = emptyList()
   var isLoading = true
 
-  onMount {
+  $onMount {
     launch {
       ApiClient.getFeed()
         .onSuccess {

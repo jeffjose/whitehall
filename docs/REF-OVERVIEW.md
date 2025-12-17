@@ -22,7 +22,7 @@ Whitehall is a **Kotlin superset for Android development** - it's Kotlin with er
    - Automatic state management (var → StateFlow)
    - Data binding shortcuts (`bind:value`, `bind:checked`)
    - UI conveniences (padding shortcuts, color helpers)
-   - Lifecycle hooks (`onMount`, `onDispose`)
+   - Lifecycle hooks (`$onMount`, `$onDispose`)
 
 3. **Toolchain Philosophy** - "cargo for Android"
    - Opinionated defaults with project-level control when needed
@@ -170,7 +170,7 @@ Whitehall provides multiple state management patterns:
 | Screen-level stores | `@store class UserProfile { ... }` | ✅ Complete (Phases 0-5) |
 | Suspend functions | `suspend fun save()` | ✅ Complete (auto-wrap in viewModelScope) |
 | Coroutine dispatchers | `io { }`, `cpu { }`, `main { }` | ✅ Complete |
-| Lifecycle hooks | `onMount`, `onDispose` | ✅ Complete |
+| Lifecycle hooks | `$onMount`, `$onDispose` | ✅ Complete |
 | Hilt integration | `@Inject` or `@hilt` | ✅ Complete (hybrid auto-detection) |
 
 **Learn more:** [REF-STATE-MANAGEMENT.md](./REF-STATE-MANAGEMENT.md)

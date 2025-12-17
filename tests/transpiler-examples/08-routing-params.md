@@ -11,7 +11,7 @@ import $models.User
   var user: User? = null
   var isLoading = true
 
-  onMount {
+  $onMount {
     launch {
       val result = ApiClient.getUser($screen.params.id)
       user = result.getOrNull()

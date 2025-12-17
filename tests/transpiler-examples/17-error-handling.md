@@ -12,7 +12,7 @@ import $models.User
   var isLoading = true
   var error: String? = null
 
-  onMount {
+  $onMount {
     launch {
       try {
         isLoading = true
