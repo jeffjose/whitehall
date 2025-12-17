@@ -919,13 +919,23 @@ impl ComposeBackend {
                 let mut output = String::new();
                 let indent_str = "    ".repeat(indent);
 
+                // Inside LazyColumn/LazyRow, wrap @if blocks in item { } since they're not ForLoops
+                let in_lazy_scope = parent == Some("LazyColumn") || parent == Some("LazyRow");
+
                 // Phase 1.1: Transform condition for ViewModel wrapper
                 let condition = self.transform_viewmodel_expression(&if_block.condition);
 
                 // if block
                 output.push_str(&format!("{}if ({}) {{\n", indent_str, condition));
+                if in_lazy_scope {
+                    output.push_str(&format!("{}    item {{\n", indent_str));
+                }
+                let child_indent = if in_lazy_scope { indent + 2 } else { indent + 1 };
                 for child in &if_block.then_branch {
-                    output.push_str(&self.generate_markup_with_indent(child, indent + 1)?);
+                    output.push_str(&self.generate_markup_with_indent(child, child_indent)?);
+                }
+                if in_lazy_scope {
+                    output.push_str(&format!("{}    }}\n", indent_str));
                 }
                 output.push_str(&format!("{}}}", indent_str));
 
@@ -934,8 +944,14 @@ impl ComposeBackend {
                     // Phase 1.1: Transform else-if condition for ViewModel wrapper
                     let else_if_condition = self.transform_viewmodel_expression(&else_if.condition);
                     output.push_str(&format!(" else if ({}) {{\n", else_if_condition));
+                    if in_lazy_scope {
+                        output.push_str(&format!("{}    item {{\n", indent_str));
+                    }
                     for child in &else_if.body {
-                        output.push_str(&self.generate_markup_with_indent(child, indent + 1)?);
+                        output.push_str(&self.generate_markup_with_indent(child, child_indent)?);
+                    }
+                    if in_lazy_scope {
+                        output.push_str(&format!("{}    }}\n", indent_str));
                     }
                     output.push_str(&format!("{}}}", indent_str));
                 }
@@ -943,8 +959,14 @@ impl ComposeBackend {
                 // else block
                 if let Some(else_body) = &if_block.else_branch {
                     output.push_str(" else {\n");
+                    if in_lazy_scope {
+                        output.push_str(&format!("{}    item {{\n", indent_str));
+                    }
                     for child in else_body {
-                        output.push_str(&self.generate_markup_with_indent(child, indent + 1)?);
+                        output.push_str(&self.generate_markup_with_indent(child, child_indent)?);
+                    }
+                    if in_lazy_scope {
+                        output.push_str(&format!("{}    }}\n", indent_str));
                     }
                     output.push_str(&format!("{}}}", indent_str));
                 }

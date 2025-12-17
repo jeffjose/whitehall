@@ -43,8 +43,6 @@ onMount {
           <Text p={12}>{photo.author}</Text>
         </Card>
       }
-      </LazyColumn>
-
       @if (hasMore) {
         <Box width="100%" py={16} contentAlignment="center" onAppear={loadMore}>
         <Text>{page}</Text>
@@ -55,4 +53,5 @@ onMount {
         }
         </Box>
       }
+      </LazyColumn>
 </Column>
