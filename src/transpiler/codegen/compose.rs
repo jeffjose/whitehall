@@ -1800,14 +1800,28 @@ impl ComposeBackend {
                         ..Default::default()
                     })?;
 
-                    // Handle alignment/contentAlignment as contentAlignment parameter (not modifier)
+                    // Handle alignment/contentAlignment/align as contentAlignment parameter (not modifier)
+                    // "align" is a Tailwind-style shortcut
                     let alignment = comp.props.iter()
-                        .find(|p| p.name == "alignment" || p.name == "contentAlignment")
+                        .find(|p| p.name == "alignment" || p.name == "contentAlignment" || p.name == "align")
                         .map(|p| (p.name.clone(), self.get_prop_expr(&p.value)));
                     if let Some((prop_name, align)) = &alignment {
                         let align_str = if align.starts_with('"') && align.ends_with('"') {
                             let a = &align[1..align.len()-1];
-                            format!("Alignment.{}", a.chars().next().unwrap().to_uppercase().collect::<String>() + &a[1..])
+                            // Support Tailwind-style values: center, topStart, bottomEnd, etc.
+                            let mapped = match a {
+                                "center" => "Center",
+                                "topStart" | "top-start" => "TopStart",
+                                "topCenter" | "top-center" | "top" => "TopCenter",
+                                "topEnd" | "top-end" => "TopEnd",
+                                "centerStart" | "center-start" | "start" => "CenterStart",
+                                "centerEnd" | "center-end" | "end" => "CenterEnd",
+                                "bottomStart" | "bottom-start" => "BottomStart",
+                                "bottomCenter" | "bottom-center" | "bottom" => "BottomCenter",
+                                "bottomEnd" | "bottom-end" => "BottomEnd",
+                                _ => a, // Pass through other values as-is (e.g., "Center")
+                            };
+                            format!("Alignment.{}", mapped)
                         } else {
                             align.to_string()
                         };
@@ -2498,6 +2512,14 @@ impl ComposeBackend {
                             self.add_import_if_missing(prop_imports, "androidx.compose.foundation.layout.padding");
                             self.add_import_if_missing(prop_imports, "androidx.compose.ui.unit.dp");
                         }
+                        ("Column", "items") => {
+                            // items → horizontalAlignment = Alignment.X
+                            self.add_import_if_missing(prop_imports, "androidx.compose.ui.Alignment");
+                        }
+                        ("Column", "justify") => {
+                            // justify → verticalArrangement = Arrangement.X
+                            self.add_import_if_missing(prop_imports, "androidx.compose.foundation.layout.Arrangement");
+                        }
                         ("Column", "backgroundColor") | ("Row", "backgroundColor") => {
                             // backgroundColor → modifier = Modifier.background(Color)
                             self.add_import_if_missing(prop_imports, "androidx.compose.ui.Modifier");
@@ -2514,6 +2536,14 @@ impl ComposeBackend {
                             self.add_import_if_missing(prop_imports, "androidx.compose.ui.Modifier");
                             self.add_import_if_missing(prop_imports, "androidx.compose.foundation.layout.padding");
                             self.add_import_if_missing(prop_imports, "androidx.compose.ui.unit.dp");
+                        }
+                        ("Row", "items") => {
+                            // items → verticalAlignment = Alignment.X
+                            self.add_import_if_missing(prop_imports, "androidx.compose.ui.Alignment");
+                        }
+                        ("Row", "justify") => {
+                            // justify → horizontalArrangement = Arrangement.X
+                            self.add_import_if_missing(prop_imports, "androidx.compose.foundation.layout.Arrangement");
                         }
                         ("Text", "fontSize") => {
                             // fontSize → fontSize = N.sp
@@ -2569,8 +2599,8 @@ impl ComposeBackend {
                             self.add_import_if_missing(prop_imports, "androidx.compose.ui.Modifier");
                             self.add_import_if_missing(prop_imports, "androidx.compose.foundation.layout.fillMaxSize");
                         }
-                        ("Box", "alignment") | ("Box", "contentAlignment") => {
-                            // alignment/contentAlignment → contentAlignment = Alignment.X
+                        ("Box", "alignment") | ("Box", "contentAlignment") | ("Box", "align") => {
+                            // alignment/contentAlignment/align → contentAlignment = Alignment.X
                             self.add_import_if_missing(prop_imports, "androidx.compose.ui.Alignment");
                         }
                         ("AsyncImage", "url") | ("AsyncImage", "width") | ("AsyncImage", "height") => {
@@ -3435,6 +3465,39 @@ impl ComposeBackend {
                 let padding_value = if value.ends_with(".dp") { value.to_string() } else { format!("{}.dp", value) };
                 Ok(vec![format!("modifier = Modifier.padding({})", padding_value)])
             }
+            // Column items (Tailwind-style) → horizontalAlignment
+            ("Column", "items") => {
+                let align = if value.starts_with('"') && value.ends_with('"') {
+                    &value[1..value.len()-1]
+                } else {
+                    &value
+                };
+                let alignment = match align {
+                    "center" => "Alignment.CenterHorizontally",
+                    "start" => "Alignment.Start",
+                    "end" => "Alignment.End",
+                    _ => return Err(format!("Unknown alignment value '{}'. Use: center, start, end", align)),
+                };
+                Ok(vec![format!("horizontalAlignment = {}", alignment)])
+            }
+            // Column justify (Tailwind-style) → verticalArrangement
+            ("Column", "justify") => {
+                let arrange = if value.starts_with('"') && value.ends_with('"') {
+                    &value[1..value.len()-1]
+                } else {
+                    &value
+                };
+                let arrangement = match arrange {
+                    "center" => "Arrangement.Center",
+                    "start" | "top" => "Arrangement.Top",
+                    "end" | "bottom" => "Arrangement.Bottom",
+                    "between" => "Arrangement.SpaceBetween",
+                    "around" => "Arrangement.SpaceAround",
+                    "evenly" => "Arrangement.SpaceEvenly",
+                    _ => return Err(format!("Unknown arrangement value '{}'. Use: center, start, end, between, around, evenly", arrange)),
+                };
+                Ok(vec![format!("verticalArrangement = {}", arrangement)])
+            }
             // Column/Row backgroundColor → modifier = Modifier.background(Color)
             ("Column", "backgroundColor") | ("Row", "backgroundColor") => {
                 let color = if value.starts_with('"') && value.ends_with('"') {
@@ -3468,6 +3531,39 @@ impl ComposeBackend {
             ("Row", "padding") => {
                 let padding_value = if value.ends_with(".dp") { value.to_string() } else { format!("{}.dp", value) };
                 Ok(vec![format!("modifier = Modifier.padding({})", padding_value)])
+            }
+            // Row items (Tailwind-style) → verticalAlignment
+            ("Row", "items") => {
+                let align = if value.starts_with('"') && value.ends_with('"') {
+                    &value[1..value.len()-1]
+                } else {
+                    &value
+                };
+                let alignment = match align {
+                    "center" => "Alignment.CenterVertically",
+                    "start" | "top" => "Alignment.Top",
+                    "end" | "bottom" => "Alignment.Bottom",
+                    _ => return Err(format!("Unknown alignment value '{}'. Use: center, start/top, end/bottom", align)),
+                };
+                Ok(vec![format!("verticalAlignment = {}", alignment)])
+            }
+            // Row justify (Tailwind-style) → horizontalArrangement
+            ("Row", "justify") => {
+                let arrange = if value.starts_with('"') && value.ends_with('"') {
+                    &value[1..value.len()-1]
+                } else {
+                    &value
+                };
+                let arrangement = match arrange {
+                    "center" => "Arrangement.Center",
+                    "start" => "Arrangement.Start",
+                    "end" => "Arrangement.End",
+                    "between" => "Arrangement.SpaceBetween",
+                    "around" => "Arrangement.SpaceAround",
+                    "evenly" => "Arrangement.SpaceEvenly",
+                    _ => return Err(format!("Unknown arrangement value '{}'. Use: center, start, end, between, around, evenly", arrange)),
+                };
+                Ok(vec![format!("horizontalArrangement = {}", arrangement)])
             }
             // Text fontSize → fontSize = N.sp
             ("Text", "fontSize") => {
