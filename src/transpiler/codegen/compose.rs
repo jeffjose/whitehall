@@ -74,7 +74,6 @@ fn convert_hex_to_color(hex: &str) -> Result<String, String> {
 }
 
 /// Configuration for which modifiers to build in the unified modifier builder
-#[derive(Default)]
 struct ModifierConfig {
     /// Handle width/height props (100% → fillMax*, fixed → .width()/.height())
     handle_size: bool,
@@ -83,9 +82,22 @@ struct ModifierConfig {
     /// Handle backgroundColor prop
     handle_background: bool,
     /// Handle onClick as clickable modifier (for components without native onClick)
+    /// Defaults to true - most components should support onClick via .clickable
     handle_click_as_modifier: bool,
     /// Handle fillMaxWidth/fillMaxHeight/fillMaxSize props
     handle_fill_max: bool,
+}
+
+impl Default for ModifierConfig {
+    fn default() -> Self {
+        ModifierConfig {
+            handle_size: false,
+            handle_padding: false,
+            handle_background: false,
+            handle_click_as_modifier: true, // Enable by default - onClick works on any component
+            handle_fill_max: false,
+        }
+    }
 }
 
 impl ComposeBackend {
@@ -1686,11 +1698,12 @@ impl ComposeBackend {
                 }
                 // Special handling for Text, Card, and Button with modifier props
                 else if comp.name == "Text" || comp.name == "Card" || comp.name == "Button" {
-                    // Use unified builder for padding and onClick (Text only)
+                    // Use unified builder for padding and onClick
+                    // Card and Button have native onClick, so disable clickable modifier for them
                     let (mut modifiers, mut handled) = self.build_modifiers_for_component(comp, ModifierConfig {
                         handle_padding: true,
                         handle_fill_max: true,
-                        handle_click_as_modifier: comp.name == "Text", // Text uses clickable modifier
+                        handle_click_as_modifier: comp.name == "Text", // Card/Button have native onClick
                         ..Default::default()
                     })?;
 
