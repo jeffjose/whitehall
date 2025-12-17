@@ -567,6 +567,14 @@ import androidx.compose.material3.lightColorScheme"#,
         )
     };
 
+    // Only include layouts import if any route uses layouts
+    let has_layouts = routes.iter().any(|r| !r.layouts.is_empty());
+    let layouts_import = if has_layouts {
+        format!("import {}.layouts.*\n", config.android.package)
+    } else {
+        String::new()
+    };
+
     format!(
         r#"package {}
 
@@ -580,8 +588,7 @@ import androidx.navigation.compose.rememberNavController
 import androidx.navigation.toRoute
 import {}.routes.Routes
 import {}.screens.*
-import {}.layouts.*
-
+{}
 class MainActivity : ComponentActivity() {{
     override fun onCreate(savedInstanceState: Bundle?) {{
         super.onCreate(savedInstanceState)
@@ -595,7 +602,7 @@ class MainActivity : ComponentActivity() {{
         theme_imports,
         config.android.package,
         config.android.package,
-        config.android.package,
+        layouts_import,
         set_content_body
     )
 }

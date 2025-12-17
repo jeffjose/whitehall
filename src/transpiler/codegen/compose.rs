@@ -262,8 +262,8 @@ impl ComposeBackend {
         let mut component_imports = Vec::new();
         self.collect_imports_recursive(&file.markup, &mut prop_imports, &mut component_imports);
 
-        // Check if experimental Material3 APIs are used (DropdownMenu → ExposedDropdownMenuBox)
-        if component_imports.iter().any(|imp| imp.contains("ExposedDropdownMenuBox")) {
+        // Check if experimental Material3 APIs are used (DropdownMenu → ExposedDropdownMenuBox, TopAppBar)
+        if component_imports.iter().any(|imp| imp.contains("ExposedDropdownMenuBox") || imp.contains("TopAppBar")) {
             self.uses_experimental_material3 = true;
         }
 
@@ -2176,10 +2176,10 @@ impl ComposeBackend {
 
                 // Generate children if any (but not for Text, which uses children for text parameter)
                 if has_children {
-                    // Scaffold children need paddingValues lambda parameter only if first child is layout component
+                    // Scaffold children need paddingValues lambda parameter only if first child is layout component or slot
                     let scaffold_needs_padding = comp.name == "Scaffold" &&
                         comp.children.first().map_or(false, |child| {
-                            matches!(child, Markup::Component(c) if c.name == "Column" || c.name == "Row" || c.name == "Box")
+                            matches!(child, Markup::Component(c) if c.name == "Column" || c.name == "Row" || c.name == "Box" || c.name == "slot")
                         });
 
                     if scaffold_needs_padding {
@@ -2969,11 +2969,33 @@ impl ComposeBackend {
                         if !component_imports.contains(&import) {
                             component_imports.push(import);
                         }
+                        // If Scaffold has slot child, we'll generate Box(modifier = Modifier.padding(paddingValues))
+                        if comp.children.iter().any(|c| matches!(c, Markup::Component(ch) if ch.name == "slot")) {
+                            let box_import = "androidx.compose.foundation.layout.Box".to_string();
+                            if !component_imports.contains(&box_import) {
+                                component_imports.push(box_import);
+                            }
+                            let modifier_import = "androidx.compose.ui.Modifier".to_string();
+                            if !prop_imports.contains(&modifier_import) {
+                                prop_imports.push(modifier_import);
+                            }
+                            let padding_import = "androidx.compose.foundation.layout.padding".to_string();
+                            if !prop_imports.contains(&padding_import) {
+                                prop_imports.push(padding_import);
+                            }
+                        }
                     }
                     "TopAppBar" => {
                         let import = "androidx.compose.material3.TopAppBar".to_string();
                         if !component_imports.contains(&import) {
                             component_imports.push(import);
+                        }
+                        // TopAppBar title prop generates Text() - need to import it
+                        if comp.props.iter().any(|p| p.name == "title") {
+                            let text_import = "androidx.compose.material3.Text".to_string();
+                            if !component_imports.contains(&text_import) {
+                                component_imports.push(text_import);
+                            }
                         }
                     }
                     "Row" => {
@@ -5234,8 +5256,16 @@ impl ComposeBackend {
 
     /// Generate Scaffold's first child with .padding(paddingValues) prepended to modifier
     fn generate_scaffold_child(&mut self, markup: &Markup, indent: usize) -> Result<String, String> {
-        // Only layout containers (Column, Row, Box) should get paddingValues
+        // Only layout containers (Column, Row, Box) and slot should get paddingValues
         if let Markup::Component(comp) = markup {
+            // Handle slot - wrap content() in Box with paddingValues
+            if comp.name == "slot" {
+                let indent_str = "    ".repeat(indent);
+                return Ok(format!(
+                    "{}Box(modifier = Modifier.padding(paddingValues)) {{\n{}    content()\n{}}}\n",
+                    indent_str, indent_str, indent_str
+                ));
+            }
             if comp.name == "Column" || comp.name == "Row" || comp.name == "Box" {
                 // Generate the component but with paddingValues prepended to modifier
                 // This requires special handling - we'll temporarily modify component
