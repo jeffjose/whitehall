@@ -52,7 +52,7 @@ fun PostFeed(
     onPostClick: (String) -> Unit
 ) {
     LazyColumn(
-        modifier = Modifier.padding(16.dp),
+        contentPadding = PaddingValues(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         items(posts, key = { it.id }) { post ->

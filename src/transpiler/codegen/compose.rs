@@ -1981,6 +1981,126 @@ impl ComposeBackend {
                         let transformed = self.transform_prop(&comp.name, &prop.name, prop_expr);
                         params.extend(transformed?);
                     }
+                }
+                // Special handling for LazyColumn - padding → contentPadding
+                else if comp.name == "LazyColumn" || comp.name == "LazyRow" {
+                    let mut handled = std::collections::HashSet::new();
+
+                    // Build contentPadding from padding shortcuts
+                    let padding_prop = comp.props.iter().find(|p| p.name == "padding");
+                    let padding_shortcuts: Vec<_> = comp.props.iter()
+                        .filter(|p| matches!(p.name.as_str(), "p" | "px" | "py" | "pt" | "pb" | "pl" | "pr"))
+                        .collect();
+
+                    if padding_prop.is_some() || !padding_shortcuts.is_empty() {
+                        // Collect padding values with priority
+                        let mut top: Option<(String, u8)> = None;
+                        let mut bottom: Option<(String, u8)> = None;
+                        let mut start: Option<(String, u8)> = None;
+                        let mut end: Option<(String, u8)> = None;
+
+                        // Priority 1: base padding
+                        if let Some(pad) = padding_prop {
+                            let pad_val = self.get_prop_expr(&pad.value);
+                            let value = if pad_val.ends_with(".dp") { pad_val.to_string() } else { format!("{}.dp", pad_val) };
+                            top = Some((value.clone(), 1));
+                            bottom = Some((value.clone(), 1));
+                            start = Some((value.clone(), 1));
+                            end = Some((value.clone(), 1));
+                            handled.insert("padding".to_string());
+                        }
+
+                        // Priority 2: p shorthand
+                        for prop in &padding_shortcuts {
+                            let val = self.get_prop_expr(&prop.value);
+                            let value = if val.ends_with(".dp") { val.to_string() } else { format!("{}.dp", val) };
+                            match prop.name.as_str() {
+                                "p" => {
+                                    if top.as_ref().map(|(_, p)| *p < 2).unwrap_or(true) {
+                                        top = Some((value.clone(), 2));
+                                    }
+                                    if bottom.as_ref().map(|(_, p)| *p < 2).unwrap_or(true) {
+                                        bottom = Some((value.clone(), 2));
+                                    }
+                                    if start.as_ref().map(|(_, p)| *p < 2).unwrap_or(true) {
+                                        start = Some((value.clone(), 2));
+                                    }
+                                    if end.as_ref().map(|(_, p)| *p < 2).unwrap_or(true) {
+                                        end = Some((value.clone(), 2));
+                                    }
+                                }
+                                "px" => {
+                                    if start.as_ref().map(|(_, p)| *p < 3).unwrap_or(true) {
+                                        start = Some((value.clone(), 3));
+                                    }
+                                    if end.as_ref().map(|(_, p)| *p < 3).unwrap_or(true) {
+                                        end = Some((value.clone(), 3));
+                                    }
+                                }
+                                "py" => {
+                                    if top.as_ref().map(|(_, p)| *p < 3).unwrap_or(true) {
+                                        top = Some((value.clone(), 3));
+                                    }
+                                    if bottom.as_ref().map(|(_, p)| *p < 3).unwrap_or(true) {
+                                        bottom = Some((value.clone(), 3));
+                                    }
+                                }
+                                "pt" => {
+                                    if top.as_ref().map(|(_, p)| *p < 4).unwrap_or(true) {
+                                        top = Some((value.clone(), 4));
+                                    }
+                                }
+                                "pb" => {
+                                    if bottom.as_ref().map(|(_, p)| *p < 4).unwrap_or(true) {
+                                        bottom = Some((value.clone(), 4));
+                                    }
+                                }
+                                "pl" => {
+                                    if start.as_ref().map(|(_, p)| *p < 4).unwrap_or(true) {
+                                        start = Some((value.clone(), 4));
+                                    }
+                                }
+                                "pr" => {
+                                    if end.as_ref().map(|(_, p)| *p < 4).unwrap_or(true) {
+                                        end = Some((value.clone(), 4));
+                                    }
+                                }
+                                _ => {}
+                            }
+                            handled.insert(prop.name.clone());
+                        }
+
+                        // Build PaddingValues
+                        let t = top.map(|(v, _)| v);
+                        let b = bottom.map(|(v, _)| v);
+                        let s = start.map(|(v, _)| v);
+                        let e = end.map(|(v, _)| v);
+
+                        // Check if all same value
+                        if t == b && b == s && s == e && t.is_some() {
+                            params.push(format!("contentPadding = PaddingValues({})", t.unwrap()));
+                        } else if t == b && s == e && t.is_some() && s.is_some() {
+                            params.push(format!("contentPadding = PaddingValues(horizontal = {}, vertical = {})", s.unwrap(), t.unwrap()));
+                        } else {
+                            let parts: Vec<String> = [
+                                t.map(|v| format!("top = {}", v)),
+                                b.map(|v| format!("bottom = {}", v)),
+                                s.map(|v| format!("start = {}", v)),
+                                e.map(|v| format!("end = {}", v)),
+                            ].into_iter().flatten().collect();
+                            params.push(format!("contentPadding = PaddingValues({})", parts.join(", ")));
+                        }
+                    }
+
+                    // Process other props
+                    for prop in &comp.props {
+                        if handled.contains(&prop.name) {
+                            continue;
+                        }
+                        let prop_expr = self.get_prop_expr(&prop.value);
+                        let transformed = self.transform_prop(&comp.name, &prop.name, prop_expr);
+                        params.extend(transformed?);
+                    }
                 } else {
                     // Generic component handling with unified modifier builder
                     let (modifiers, handled) = self.build_modifiers_for_component(comp, ModifierConfig {
@@ -2656,7 +2776,10 @@ impl ComposeBackend {
                             self.add_import_if_missing(prop_imports, "androidx.compose.foundation.layout.Arrangement");
                             self.add_import_if_missing(prop_imports, "androidx.compose.ui.unit.dp");
                         }
-                        ("LazyColumn", "padding") => {
+                        ("LazyColumn", "padding") | ("LazyColumn", "p") | ("LazyColumn", "px") | ("LazyColumn", "py") |
+                        ("LazyColumn", "pt") | ("LazyColumn", "pb") | ("LazyColumn", "pl") | ("LazyColumn", "pr") |
+                        ("LazyRow", "padding") | ("LazyRow", "p") | ("LazyRow", "px") | ("LazyRow", "py") |
+                        ("LazyRow", "pt") | ("LazyRow", "pb") | ("LazyRow", "pl") | ("LazyRow", "pr") => {
                             // padding → contentPadding = PaddingValues(N.dp)
                             self.add_import_if_missing(prop_imports, "androidx.compose.foundation.layout.PaddingValues");
                             self.add_import_if_missing(prop_imports, "androidx.compose.ui.unit.dp");
