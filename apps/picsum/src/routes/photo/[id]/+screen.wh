@@ -10,7 +10,7 @@ data class PhotoInfo(
 
 var photo: PhotoInfo? = null
 
-onMount {
+$onMount {
   photo = $fetch("https://picsum.photos/id/${$screen.params.id}/info")
 }
 
