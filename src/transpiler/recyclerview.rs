@@ -218,6 +218,7 @@ mod tests {
         let generator = RecyclerViewGenerator::new("contacts", "contact", "com.example.app");
 
         let for_loop = ForLoopBlock {
+            index: None,
             item: "contact".to_string(),
             collection: "contacts".to_string(),
             key_expr: Some("it.id".to_string()),
@@ -258,6 +259,7 @@ mod tests {
         let generator = RecyclerViewGenerator::new("items", "item", "com.example.app");
 
         let for_loop = ForLoopBlock {
+            index: None,
             item: "item".to_string(),
             collection: "items".to_string(),
             key_expr: None,

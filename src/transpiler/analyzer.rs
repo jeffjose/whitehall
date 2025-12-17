@@ -1069,6 +1069,7 @@ mod tests {
                 is_derived_state: false,
             }],
             markup: Markup::ForLoop(ForLoopBlock {
+                index: None,
                 item: "item".to_string(),
                 collection: "items".to_string(),
                 key_expr: None,
@@ -1109,6 +1110,7 @@ mod tests {
                 },
             ],
             markup: Markup::ForLoop(ForLoopBlock {
+                index: None,
                 item: "post".to_string(),
                 collection: "posts".to_string(),
                 key_expr: None,
@@ -1157,6 +1159,7 @@ mod tests {
                 is_derived_state: false,
             }],
             markup: Markup::ForLoop(ForLoopBlock {
+                index: None,
                 item: "contact".to_string(),
                 collection: "contacts".to_string(),
                 key_expr: Some("contact.email".to_string()), // 'contact' is loop variable, not tracked
@@ -1351,6 +1354,7 @@ mod tests {
                 is_derived_state: false,
             }],
             markup: Markup::ForLoop(ForLoopBlock {
+                index: None,
                 item: "item".to_string(),
                 collection: "items".to_string(),
                 key_expr: Some("item".to_string()),
@@ -1395,6 +1399,7 @@ mod tests {
                 is_derived_state: false,
             }],
             markup: Markup::ForLoop(ForLoopBlock {
+                index: None,
                 item: "item".to_string(),
                 collection: "items".to_string(),
                 key_expr: None,
@@ -1438,6 +1443,7 @@ mod tests {
                 default_value: None,
             }],
             markup: Markup::ForLoop(ForLoopBlock {
+                index: None,
                 item: "item".to_string(),
                 collection: "items".to_string(),
                 key_expr: None,
@@ -1477,6 +1483,7 @@ mod tests {
                 is_derived_state: false,
             }],
             markup: Markup::ForLoop(ForLoopBlock {
+                index: None,
                 item: "item".to_string(),
                 collection: "items".to_string(),
                 key_expr: None,
@@ -1529,6 +1536,7 @@ mod tests {
                 is_derived_state: false,
             }],
             markup: Markup::ForLoop(ForLoopBlock {
+                index: None,
                 item: "item".to_string(),
                 collection: "items".to_string(),
                 key_expr: None,
@@ -1583,6 +1591,7 @@ mod tests {
             ],
             markup: Markup::Sequence(vec![
                 Markup::ForLoop(ForLoopBlock {
+                    index: None,
                     item: "item".to_string(),
                     collection: "items1".to_string(),
                     key_expr: None,
@@ -1595,6 +1604,7 @@ mod tests {
                     empty_block: None,
                 }),
                 Markup::ForLoop(ForLoopBlock {
+                    index: None,
                     item: "item".to_string(),
                     collection: "items2".to_string(),
                     key_expr: None,
@@ -1650,10 +1660,12 @@ mod tests {
                 },
             ],
             markup: Markup::ForLoop(ForLoopBlock {
+                index: None,
                 item: "group".to_string(),
                 collection: "outer".to_string(),
                 key_expr: None,
                 body: vec![Markup::ForLoop(ForLoopBlock {
+                    index: None,
                     item: "item".to_string(),
                     collection: "inner".to_string(),
                     key_expr: None,
