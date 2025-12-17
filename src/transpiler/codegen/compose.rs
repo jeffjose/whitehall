@@ -2583,10 +2583,16 @@ impl ComposeBackend {
                             self.add_import_if_missing(prop_imports, "androidx.compose.material3.CardDefaults");
                             self.add_import_if_missing(prop_imports, "androidx.compose.ui.unit.dp");
                         }
-                        ("Box", "width") | ("Box", "height") => {
-                            // width/height → Modifier.size()
+                        ("Box", "width") => {
+                            // width → Modifier.width()
                             self.add_import_if_missing(prop_imports, "androidx.compose.ui.Modifier");
-                            self.add_import_if_missing(prop_imports, "androidx.compose.foundation.layout.size");
+                            self.add_import_if_missing(prop_imports, "androidx.compose.foundation.layout.width");
+                            self.add_import_if_missing(prop_imports, "androidx.compose.ui.unit.dp");
+                        }
+                        ("Box", "height") => {
+                            // height → Modifier.height()
+                            self.add_import_if_missing(prop_imports, "androidx.compose.ui.Modifier");
+                            self.add_import_if_missing(prop_imports, "androidx.compose.foundation.layout.height");
                             self.add_import_if_missing(prop_imports, "androidx.compose.ui.unit.dp");
                         }
                         ("Box", "backgroundColor") => {
