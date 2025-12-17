@@ -72,6 +72,54 @@ Spacer(modifier = Modifier.width(24.dp))
 Spacer(modifier = Modifier.height(8.dp))  // default
 ```
 
+### Prop Shorthand (Svelte-style)
+```kotlin
+// When prop name equals variable name, use shorthand
+var name = "World"
+var onClick = { doSomething() }
+
+<Text {name} />           // → Text(name = name)
+<Button {onClick} />      // → Button(onClick = onClick)
+```
+
+### onClick on Any Component
+```kotlin
+// onClick works on any component, auto-wraps in .clickable modifier
+<Column onClick={handleClick}>...</Column>
+<Row onClick={() => count++}>...</Row>
+<Box onClick={doSomething}>...</Box>
+<Text onClick={handleTap}>Tap me</Text>
+
+// Button and Card use native onClick (no modifier wrapper)
+<Button onClick={submit}>Submit</Button>
+<Card onClick={openDetail}>...</Card>
+```
+
+### Alignment Shortcuts (Tailwind-style)
+```kotlin
+// Column: items = horizontal, justify = vertical
+<Column items="center" justify="between">
+  // → horizontalAlignment = Alignment.CenterHorizontally
+  // → verticalArrangement = Arrangement.SpaceBetween
+</Column>
+
+// Row: items = vertical, justify = horizontal
+<Row items="center" justify="end">
+  // → verticalAlignment = Alignment.CenterVertically
+  // → horizontalArrangement = Arrangement.End
+</Row>
+
+// Box: align = contentAlignment
+<Box align="center">      // → contentAlignment = Alignment.Center
+<Box align="topStart">    // → contentAlignment = Alignment.TopStart
+<Box align="bottomEnd">   // → contentAlignment = Alignment.BottomEnd
+
+// Supported values:
+// items: center, start, end, top, bottom
+// justify: center, start, end, between, around, evenly
+// align: center, top, bottom, start, end, topStart, topEnd, bottomStart, bottomEnd
+```
+
 ## Implemented ✅
 
 ### Numeric Range Literals
@@ -163,44 +211,13 @@ val reversed = 10..1:-1
 
 ---
 
-### 6. Alignment Shortcuts ⭐
-**Impact: High | Complexity: Low**
-
-```kotlin
-// Current (verbose)
-<Column horizontalAlignment="CenterHorizontally">
-<Row verticalAlignment="CenterVertically">
-
-// Proposed
-<Column align="center">
-<Column align="start" justify="spaceBetween">
-<Row align="center" justify="end">
-
-// Maps to:
-// align → horizontal/vertical alignment depending on container
-// justify → arrangement (main axis distribution)
-```
-
-**Why:** Much shorter, more intuitive names, familiar to web developers.
+### 6. Alignment Shortcuts ⭐ ✅ IMPLEMENTED
+See "Implemented" section above.
 
 ---
 
-### 6. Click Shorthand ⭐
-**Impact: High | Complexity: Medium**
-
-Auto-wrap any component in clickable modifier.
-
-```kotlin
-// Current
-<Text modifier={Modifier.clickable { doSomething() }}>Click me</Text>
-
-// Proposed - works on any component
-<Text onClick={doSomething}>Click me</Text>
-<Card onClick={handleClick}>...</Card>
-<Row onClick={...}>...</Row>
-```
-
-**Why:** Very common pattern, current approach is verbose.
+### 6. Click Shorthand ⭐ ✅ IMPLEMENTED
+See "Implemented" section above.
 
 ---
 
