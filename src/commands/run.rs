@@ -553,7 +553,7 @@ fn execute_single_file_watch(file_path: &str, device_query: Option<&str>) -> Res
             Ok(event) => {
                 if should_rebuild(&event, &gitignore) {
                     // Debounce - wait for file saves to settle
-                    if last_build.elapsed() < Duration::from_millis(1000) {
+                    if last_build.elapsed() < Duration::from_millis(500) {
                         continue;
                     }
                     while rx.try_recv().is_ok() {}
@@ -588,7 +588,15 @@ fn execute_single_file_watch(file_path: &str, device_query: Option<&str>) -> Res
                     }
 
                     env::set_current_dir(&original_dir)?;
-                    last_build = Instant::now();
+
+                    // Check if more changes came in during build
+                    // If so, don't reset timer - allow immediate rebuild
+                    if rx.try_recv().is_err() {
+                        last_build = Instant::now();
+                    } else {
+                        // Drain remaining events, will rebuild on next iteration
+                        while rx.try_recv().is_ok() {}
+                    }
                 }
             }
             Err(_) => {}
@@ -670,7 +678,7 @@ fn execute_project_watch(manifest_path: &str, device_query: Option<&str>) -> Res
             Ok(event) => {
                 if should_rebuild(&event, &gitignore) {
                     // Debounce - wait for file saves to settle
-                    if last_build.elapsed() < Duration::from_millis(1000) {
+                    if last_build.elapsed() < Duration::from_millis(500) {
                         continue;
                     }
                     while rx.try_recv().is_ok() {}
@@ -695,7 +703,15 @@ fn execute_project_watch(manifest_path: &str, device_query: Option<&str>) -> Res
                             eprintln!("{} {}", "error:".red().bold(), e);
                         }
                     }
-                    last_build = Instant::now();
+
+                    // Check if more changes came in during build
+                    // If so, don't reset timer - allow immediate rebuild
+                    if rx.try_recv().is_err() {
+                        last_build = Instant::now();
+                    } else {
+                        // Drain remaining events, will rebuild on next iteration
+                        while rx.try_recv().is_ok() {}
+                    }
                 }
             }
             Err(_) => {}
