@@ -80,7 +80,7 @@ fn execute_single_file(file_path: &str, device_query: Option<&str>) -> Result<()
         .context("Failed to load generated whitehall.toml")?;
 
     // Build project
-    let result = build_pipeline::execute_build(&config, true)?;
+    let result = build_pipeline::execute_build(&config, false)?;
 
     if !result.errors.is_empty() {
         env::set_current_dir(&original_dir)?;
@@ -109,7 +109,7 @@ fn execute_single_file(file_path: &str, device_query: Option<&str>) -> Result<()
 
     // Continue with gradle, install, and launch
     build_with_gradle(&toolchain, &config, &result.output_dir)?;
-    install_apk(&toolchain, &result.output_dir, &device.id)?;
+    install_apk(&toolchain, &result.output_dir, &device.id, &config.android.package)?;
     clear_logcat(&toolchain, &device.id)?;
     launch_app(&toolchain, &config.android.package, &device.id)?;
 
@@ -156,7 +156,7 @@ fn execute_project(manifest_path: &str, device_query: Option<&str>) -> Result<()
     let config = config::load_config(manifest_file)?;
 
     // 3. Build project
-    let result = build_pipeline::execute_build(&config, true)?;
+    let result = build_pipeline::execute_build(&config, false)?;
 
     if !result.errors.is_empty() {
         eprintln!("{} build failed with {} error(s)", "error:".red().bold(), result.errors.len());
@@ -187,7 +187,7 @@ fn execute_project(manifest_path: &str, device_query: Option<&str>) -> Result<()
     build_with_gradle(&toolchain, &config, &result.output_dir)?;
 
     // 6. Install on device
-    install_apk(&toolchain, &result.output_dir, &device.id)?;
+    install_apk(&toolchain, &result.output_dir, &device.id, &config.android.package)?;
 
     // 7. Clear logcat before launching to capture init logs
     clear_logcat(&toolchain, &device.id)?;
@@ -239,11 +239,32 @@ fn build_with_gradle(toolchain: &Toolchain, config: &crate::config::Config, outp
     Ok(())
 }
 
-fn install_apk(toolchain: &Toolchain, output_dir: &Path, device_id: &str) -> Result<()> {
+fn install_apk(toolchain: &Toolchain, output_dir: &Path, device_id: &str, package: &str) -> Result<()> {
     let apk_path = output_dir.join("app/build/outputs/apk/debug/app-debug.apk");
 
     if !apk_path.exists() {
         anyhow::bail!("APK not found at {}", apk_path.display());
+    }
+
+    // Check if app is installed on device
+    let is_installed = is_app_installed(toolchain, device_id, package)?;
+
+    // Calculate APK hash to check if install is needed
+    let apk_hash = calculate_file_hash(&apk_path)?;
+    // Store hash in .whitehall directory (not in gradle's build output which may be cleaned)
+    let whitehall_dir = output_dir.join(".whitehall");
+    let _ = fs::create_dir_all(&whitehall_dir);
+    let hash_file = whitehall_dir.join(format!("installed-{}.hash", device_id));
+
+    // Skip install if: app is installed AND hash matches
+    if is_installed {
+        if let Ok(stored_hash) = fs::read_to_string(&hash_file) {
+            if stored_hash.trim() == apk_hash {
+                // APK unchanged and app is installed, skip installation
+                println!("  {} (APK unchanged)", "Skipped install".dimmed());
+                return Ok(());
+            }
+        }
     }
 
     let status = toolchain
@@ -256,7 +277,43 @@ fn install_apk(toolchain: &Toolchain, output_dir: &Path, device_id: &str) -> Res
         anyhow::bail!("APK installation failed");
     }
 
+    // Store hash for next comparison
+    let _ = fs::write(&hash_file, &apk_hash);
+
     Ok(())
+}
+
+/// Check if an app is installed on the device
+fn is_app_installed(toolchain: &Toolchain, device_id: &str, package: &str) -> Result<bool> {
+    let output = toolchain
+        .adb_cmd()?
+        .args(["-s", device_id, "shell", "pm", "list", "packages", package])
+        .output()
+        .context("Failed to check installed packages")?;
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    // pm list packages returns "package:com.example.app" if installed
+    Ok(stdout.contains(&format!("package:{}", package)))
+}
+
+/// Calculate SHA256 hash of a file
+fn calculate_file_hash(path: &Path) -> Result<String> {
+    use std::io::Read;
+    use sha2::{Sha256, Digest};
+
+    let mut file = fs::File::open(path)?;
+    let mut hasher = Sha256::new();
+    let mut buffer = [0u8; 8192];
+
+    loop {
+        let bytes_read = file.read(&mut buffer)?;
+        if bytes_read == 0 {
+            break;
+        }
+        hasher.update(&buffer[..bytes_read]);
+    }
+
+    Ok(format!("{:x}", hasher.finalize()))
 }
 
 fn launch_app(toolchain: &Toolchain, package: &str, device_id: &str) -> Result<()> {
@@ -669,7 +726,7 @@ fn run_full_cycle(
     build_with_gradle(toolchain, config, &result.output_dir)?;
 
     // 3. Install APK
-    install_apk(toolchain, &result.output_dir, device_id)?;
+    install_apk(toolchain, &result.output_dir, device_id, package)?;
 
     // 4. Clear logcat BEFORE launching so we capture init logs
     clear_logcat(toolchain, device_id)?;
