@@ -552,8 +552,8 @@ fn execute_single_file_watch(file_path: &str, device_query: Option<&str>) -> Res
         match rx.recv_timeout(Duration::from_millis(100)) {
             Ok(event) => {
                 if should_rebuild(&event, &gitignore) {
-                    // Debounce
-                    if last_build.elapsed() < Duration::from_millis(100) {
+                    // Debounce - wait for file saves to settle
+                    if last_build.elapsed() < Duration::from_millis(1000) {
                         continue;
                     }
                     while rx.try_recv().is_ok() {}
@@ -669,8 +669,8 @@ fn execute_project_watch(manifest_path: &str, device_query: Option<&str>) -> Res
         match rx.recv_timeout(Duration::from_millis(100)) {
             Ok(event) => {
                 if should_rebuild(&event, &gitignore) {
-                    // Debounce
-                    if last_build.elapsed() < Duration::from_millis(100) {
+                    // Debounce - wait for file saves to settle
+                    if last_build.elapsed() < Duration::from_millis(1000) {
                         continue;
                     }
                     while rx.try_recv().is_ok() {}
