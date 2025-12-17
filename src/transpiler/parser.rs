@@ -697,6 +697,10 @@ impl Parser {
 
         // Parse body (everything between { and })
         self.expect_char('{')?;
+
+        // Save position where body starts for error reporting
+        let body_start_pos = self.pos;
+
         let mut body = String::new();
         let mut depth = 1;
 
@@ -720,6 +724,11 @@ impl Parser {
                 }
                 None => return Err("Unexpected EOF in function body".to_string()),
             }
+        }
+
+        // Check for common typos in the body BEFORE trimming (to preserve line numbers)
+        if let Some(error) = self.check_body_for_typos(&body, body_start_pos) {
+            return Err(error);
         }
 
         Ok(FunctionDeclaration {
