@@ -412,19 +412,118 @@ src/routes/admin/+screen@.wh     # Admin screen with NO layouts (fullscreen)
 src/routes/admin/+screen@root.wh # Admin screen with only RootLayout (skip AdminLayout)
 ```
 
-**Current Limitations:**
-- Layouts don't automatically receive `navController` (screens do)
-- To navigate from a layout, extract navigation logic to a component and pass callbacks
+**Navigation in Layouts:**
 
-**Workaround for navigation in layouts:**
+Use `$navigate` for navigation from layouts (see [Navigation ($navigate)](#navigation-navigate)):
+
 ```whitehall
 // +layout.wh
 <Scaffold
-  topBar={<AppTopBar onSettingsClick={onSettingsClick} />}
+  topBar={
+    <TopAppBar
+      title="My App"
+      actions={
+        <IconButton onClick={() => $navigate("/settings")}>
+          <Icon name="Settings" />
+        </IconButton>
+      }
+    />
+  }
 >
   <slot />
 </Scaffold>
 ```
+
+### Navigation ($navigate)
+
+Whitehall provides transparent navigation via the `$navigate` API. Navigation works from any component, layout, or screen without prop drilling.
+
+**Basic Navigation:**
+```whitehall
+// Navigate to a route
+$navigate("/settings")
+$navigate("/profile/123")
+
+// Go back
+$navigate.back()
+
+// Replace current (no back history entry)
+$navigate.replace("/login")
+
+// Pop stack up to a route
+$navigate.popUpTo("/home")
+```
+
+**Generated Kotlin:**
+```kotlin
+// $navigate("/settings") becomes:
+LocalNavController.current.navigate("settings")
+
+// $navigate.back() becomes:
+LocalNavController.current.popBackStack()
+```
+
+**How It Works:**
+
+Whitehall uses Compose's `CompositionLocal` to make navigation available everywhere:
+
+```kotlin
+// Generated in main.wh / App
+val LocalNavController = staticCompositionLocalOf<NavController> {
+    error("NavController not provided")
+}
+
+CompositionLocalProvider(LocalNavController provides navController) {
+    // All children can access LocalNavController.current
+}
+```
+
+This enables SvelteKit-like navigation from anywhere without passing `navController` as props.
+
+**Multi-NavHost Apps (Advanced):**
+
+For apps with multiple navigation stacks (bottom tabs, modals, split views), use the `@navhost` prefix:
+
+```whitehall
+// Default NavHost
+$navigate("/settings")
+
+// Named NavHost
+$navigate("@profile/edit")      // "profile" NavHost
+$navigate("@modal/login")       // "modal" NavHost
+
+// Back on specific NavHost
+$navigate.back()                // default (context-aware)
+$navigate.back("@modal")        // explicit NavHost
+```
+
+**Directory Convention for Named NavHosts:**
+```
+src/routes/
+  +screen.wh                    # / (default NavHost)
+  settings/+screen.wh           # /settings (default NavHost)
+
+  @modal/                       # "modal" NavHost
+    login/+screen.wh            # @modal/login
+    signup/+screen.wh           # @modal/signup
+
+  @tabs/                        # "tabs" NavHost
+    home/+screen.wh             # @tabs/home
+    search/+screen.wh           # @tabs/search
+```
+
+**Navigation API Summary:**
+
+| Syntax | Description |
+|--------|-------------|
+| `$navigate("/path")` | Navigate to path on default NavHost |
+| `$navigate("@name/path")` | Navigate to path on named NavHost |
+| `$navigate.back()` | Go back (context-aware) |
+| `$navigate.back("@name")` | Go back on named NavHost |
+| `$navigate.replace("/path")` | Replace without history entry |
+| `$navigate.popUpTo("/path")` | Pop stack up to path |
+
+**Note:** Multi-NavHost support (`@navhost` prefix) is for advanced use cases like bottom tabs with separate back stacks. Most apps only need the default NavHost.
 
 ### Control Flow Syntax
 
