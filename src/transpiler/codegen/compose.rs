@@ -4386,7 +4386,7 @@ impl ComposeBackend {
             }
         }
 
-        // Transform $navigate("/path") → navController.navigateSafe("path") for string routes
+        // Transform $navigate("/path") → navController.navigate(Routes.Path) for type-safe navigation
         // Transform $navigate(Routes.X) → navController.navigate(Routes.X) for typed routes
         // Also handles $navigate("@navhost/path") for multi-navhost (TODO: implement properly)
         while let Some(start) = result.find("$navigate(") {
@@ -4395,35 +4395,70 @@ impl ComposeBackend {
             if let Some(end) = after_call.find(')') {
                 let path_with_quotes = &after_call[..end];
                 // Check if it's a string literal (starts with ") or a typed route (Routes.*)
-                let (path, use_safe) = if path_with_quotes.starts_with('"') && path_with_quotes.len() > 2 {
-                    // String route - use navigateSafe for runtime error handling
+                let route_expr = if path_with_quotes.starts_with('"') && path_with_quotes.len() > 2 {
+                    // String route - convert to typed route for type-safe navigation
                     let inner = &path_with_quotes[1..path_with_quotes.len()-1];
                     if inner.starts_with('/') {
-                        (format!("\"{}\"", &inner[1..]), true)
+                        // Convert path to route type: "/settings" → Routes.Settings, "/" → Routes.Home
+                        let path_part = &inner[1..]; // Remove leading /
+                        if path_part.is_empty() {
+                            "Routes.Home".to_string()
+                        } else {
+                            // Convert first segment to PascalCase route name
+                            // e.g., "settings" → "Settings", "user-profile" → "UserProfile"
+                            let route_name = path_part
+                                .split('/')
+                                .next()
+                                .unwrap_or("")
+                                .split('-')
+                                .map(|s| {
+                                    let mut chars = s.chars();
+                                    match chars.next() {
+                                        Some(c) => c.to_uppercase().chain(chars).collect::<String>(),
+                                        None => String::new(),
+                                    }
+                                })
+                                .collect::<String>();
+                            format!("Routes.{}", route_name)
+                        }
                     } else if inner.starts_with('@') {
                         // TODO: Multi-navhost support - for now strip @navhost/ prefix
                         if let Some(slash_pos) = inner.find('/') {
-                            (format!("\"{}\"", &inner[slash_pos + 1..]), true)
+                            let path_part = &inner[slash_pos + 1..];
+                            if path_part.is_empty() {
+                                "Routes.Home".to_string()
+                            } else {
+                                let route_name = path_part
+                                    .split('/')
+                                    .next()
+                                    .unwrap_or("")
+                                    .split('-')
+                                    .map(|s| {
+                                        let mut chars = s.chars();
+                                        match chars.next() {
+                                            Some(c) => c.to_uppercase().chain(chars).collect::<String>(),
+                                            None => String::new(),
+                                        }
+                                    })
+                                    .collect::<String>();
+                                format!("Routes.{}", route_name)
+                            }
                         } else {
-                            (path_with_quotes.to_string(), true)
+                            path_with_quotes.to_string()
                         }
                     } else {
                         // Invalid route path - must start with / or @
                         // Generate a compile error by creating invalid Kotlin
                         eprintln!("{} Invalid route in $navigate(\"{}\")", "error:".red().bold(), inner);
                         eprintln!("       {} routes must start with '/' (e.g., $navigate(\"/settings\")) or '@' for named navhosts", "-->".blue().bold());
-                        (format!("/* ERROR: Invalid route '{}' - must start with / or @ */ INVALID_ROUTE", inner), true)
+                        format!("/* ERROR: Invalid route '{}' - must start with / or @ */ INVALID_ROUTE", inner)
                     }
                 } else {
-                    // Typed route (e.g., Routes.Photo(id = ...)) - use regular navigate
-                    // These are compile-time checked so don't need runtime safety
-                    (path_with_quotes.to_string(), false)
+                    // Typed route (e.g., Routes.Photo(id = ...)) - use as-is
+                    // These are compile-time checked
+                    path_with_quotes.to_string()
                 };
-                let replacement = if use_safe {
-                    format!("{}.navigateSafe({})", nav_ref, path)
-                } else {
-                    format!("{}.navigate({})", nav_ref, path)
-                };
+                let replacement = format!("{}.navigate({})", nav_ref, route_expr);
                 result = format!("{}{}{}", &result[..start], replacement, &result[start + 11 + end..]);
             } else {
                 break;
