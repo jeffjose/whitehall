@@ -237,7 +237,9 @@ match (component, prop_name) {
     // Text shortcuts
     ("Text", "fontSize") => "fontSize = {value}.sp",
     ("Text", "fontWeight") => "fontWeight = FontWeight.{Capitalized}",
+    ("Text", "fontFamily") => "fontFamily = FontFamily.{Capitalized}",
     ("Text", "color") => "color = MaterialTheme.colorScheme.{value}" or "Color(0x...)",
+    ("Text", "style") => "style = MaterialTheme.typography.{typographyName}",
 
     // Button shortcuts
     ("Button", "text") => "(child) Text(\"{value}\")",
@@ -294,6 +296,47 @@ match (component, prop_name) {
 - **String resources:** `R.string.app_name` → `stringResource(R.string.app_name)`
 - **String resources with args:** `R.string.greeting(name)` → `stringResource(R.string.greeting, name)`
 - **Escape braces:** `\{literal\}` → `{literal}` (not interpolated)
+- **Typography style:** `"headline-md"` → `MaterialTheme.typography.headlineMedium`
+
+### Typography Shorthand
+
+The `style` prop on `<Text>` supports a shorthand notation for Material Design 3 typography tokens:
+
+**Format:** `{group}-{size}` where:
+- **group:** `display`, `headline`, `title`, `body`, `label`
+- **size:** `lg` (Large), `md` (Medium), `sm` (Small)
+
+**Full mapping:**
+
+| Shorthand | Generated Kotlin |
+|-----------|-----------------|
+| `display-lg` | `MaterialTheme.typography.displayLarge` |
+| `display-md` | `MaterialTheme.typography.displayMedium` |
+| `display-sm` | `MaterialTheme.typography.displaySmall` |
+| `headline-lg` | `MaterialTheme.typography.headlineLarge` |
+| `headline-md` | `MaterialTheme.typography.headlineMedium` |
+| `headline-sm` | `MaterialTheme.typography.headlineSmall` |
+| `title-lg` | `MaterialTheme.typography.titleLarge` |
+| `title-md` | `MaterialTheme.typography.titleMedium` |
+| `title-sm` | `MaterialTheme.typography.titleSmall` |
+| `body-lg` | `MaterialTheme.typography.bodyLarge` |
+| `body-md` | `MaterialTheme.typography.bodyMedium` |
+| `body-sm` | `MaterialTheme.typography.bodySmall` |
+| `label-lg` | `MaterialTheme.typography.labelLarge` |
+| `label-md` | `MaterialTheme.typography.labelMedium` |
+| `label-sm` | `MaterialTheme.typography.labelSmall` |
+
+**Example:**
+```whitehall
+<Text style="headline-md">Page Title</Text>
+<Text style="body-lg">Body text content</Text>
+<Text style="label-sm">Caption</Text>
+```
+
+**Fallback:** You can also use the full Material Design name directly:
+```whitehall
+<Text style="headlineMedium">Page Title</Text>
+```
 
 ### App Configuration (main.wh)
 

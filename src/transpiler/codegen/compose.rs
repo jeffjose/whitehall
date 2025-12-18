@@ -2996,6 +2996,10 @@ impl ComposeBackend {
                             // fontSize → fontSize = N.sp
                             self.add_import_if_missing(prop_imports, "androidx.compose.ui.unit.sp");
                         }
+                        ("Text", "style") => {
+                            // style="headline-md" → MaterialTheme.typography.headlineMedium
+                            self.add_import_if_missing(prop_imports, "androidx.compose.material3.MaterialTheme");
+                        }
                         ("Text", "fontWeight") => {
                             // fontWeight → FontWeight.Bold
                             self.add_import_if_missing(prop_imports, "androidx.compose.ui.text.font.FontWeight");
@@ -4160,6 +4164,37 @@ impl ComposeBackend {
                     value.to_string()
                 };
                 Ok(vec![format!("color = {}", color)])
+            }
+            // Text style → MaterialTheme.typography.{styleName}
+            // Shorthand: "headline-md" → headlineMedium, "body-lg" → bodyLarge, etc.
+            ("Text", "style") => {
+                let style_value = if value.starts_with('"') && value.ends_with('"') {
+                    let s = &value[1..value.len()-1];
+                    // Parse shorthand format: group-size (e.g., "headline-md")
+                    if let Some((group, size)) = s.split_once('-') {
+                        // Map size abbreviation to full name
+                        let size_name = match size {
+                            "lg" => "Large",
+                            "md" => "Medium",
+                            "sm" => "Small",
+                            _ => return Err(format!("Unknown typography size '{}'. Use: lg, md, sm", size)),
+                        };
+                        // Validate group name
+                        match group {
+                            "display" | "headline" | "title" | "body" | "label" => {
+                                format!("MaterialTheme.typography.{}{}", group, size_name)
+                            }
+                            _ => return Err(format!("Unknown typography group '{}'. Use: display, headline, title, body, label", group)),
+                        }
+                    } else {
+                        // Fallback: assume it's already a valid typography name like "headlineMedium"
+                        format!("MaterialTheme.typography.{}", s)
+                    }
+                } else {
+                    // Expression or variable - use as-is
+                    value.to_string()
+                };
+                Ok(vec![format!("style = {}", style_value)])
             }
             // Card onClick → Card has native onClick parameter (Material3)
             ("Card", "onClick") => {
