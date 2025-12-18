@@ -1,0 +1,7 @@
+<Scaffold
+  topBar={
+    <TopAppBar title="Picsum Photos" />
+  }
+>
+  <slot />
+</Scaffold>
