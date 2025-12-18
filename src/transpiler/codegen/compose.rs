@@ -215,9 +215,18 @@ impl ComposeBackend {
         });
 
         if let Some(class) = store_class {
-            // Generate ViewModel or singleton code based on registry info
-            let kotlin_code = self.generate_store_class(file, class)?;
-            return Ok(crate::transpiler::TranspileResult::Single(kotlin_code));
+            // Check if file also has markup (screen with inline store)
+            let has_markup = match &file.markup {
+                crate::transpiler::ast::Markup::Sequence(items) => !items.is_empty(),
+                _ => true, // Any other variant means there's content
+            };
+
+            if !has_markup {
+                // No markup - just generate the store class only
+                let kotlin_code = self.generate_store_class(file, class)?;
+                return Ok(crate::transpiler::TranspileResult::Single(kotlin_code));
+            }
+            // If has markup, continue below to generate screen + inline store
         }
 
         // Check if this component has inline vars (ComponentInline in registry)
@@ -357,6 +366,23 @@ impl ComposeBackend {
             imports.push("kotlinx.serialization.json.Json".to_string());
         }
 
+        // Add StateFlow imports for inline @store objects
+        let has_inline_store = file.classes.iter().any(|c| {
+            if let Some(registry) = &self.store_registry {
+                registry.get(&c.name)
+                    .map(|info| info.source == crate::transpiler::analyzer::StoreSource::Singleton)
+                    .unwrap_or(false)
+            } else {
+                false
+            }
+        });
+        if has_inline_store {
+            imports.push("kotlinx.coroutines.flow.MutableStateFlow".to_string());
+            imports.push("kotlinx.coroutines.flow.StateFlow".to_string());
+            imports.push("kotlinx.coroutines.flow.asStateFlow".to_string());
+            imports.push("kotlinx.coroutines.flow.update".to_string());
+        }
+
         // Add Routes import if $routes or $navigate is used
         // For screens: uses_routes is set by route aliases ($routes.xxx)
         // For all components: uses_navigate is set by $navigate() calls
@@ -410,6 +436,20 @@ impl ComposeBackend {
         // Generate HttpClient singleton if $fetch() is used
         if self.uses_fetch {
             output.push_str(&self.generate_http_client());
+        }
+
+        // Generate inline @store object if file has both store and markup
+        for class in &file.classes {
+            if let Some(registry) = &self.store_registry {
+                if let Some(store_info) = registry.get(&class.name) {
+                    if store_info.source == crate::transpiler::analyzer::StoreSource::Singleton {
+                        // Generate the store object inline before the screen
+                        let store_code = self.generate_singleton_store_object(class);
+                        output.push_str(&store_code);
+                        output.push_str("\n");
+                    }
+                }
+            }
         }
 
         // Component function
@@ -5945,6 +5985,78 @@ impl ComposeBackend {
         }
 
         Ok(output)
+    }
+
+    /// Generate just the singleton store object code (no package/imports)
+    /// Used when embedding store in a screen file that also has markup
+    fn generate_singleton_store_object(&self, class: &ClassDeclaration) -> String {
+        let mut output = String::new();
+
+        // Object declaration (not class!)
+        output.push_str(&format!("object {} {{\n", class.name));
+
+        // Generate State data class
+        let var_properties: Vec<_> = class.properties.iter().filter(|p| p.mutable).collect();
+
+        if !var_properties.is_empty() {
+            output.push_str("    data class State(\n");
+            for (i, prop) in var_properties.iter().enumerate() {
+                let type_annotation = prop.type_annotation.as_ref()
+                    .map(|t| format!(": {}", t))
+                    .unwrap_or_else(|| String::from(": Any"));
+                let initial_value = prop.initial_value.as_ref()
+                    .map(|v| format!(" = {}", v))
+                    .unwrap_or_default();
+
+                let comma = if i < var_properties.len() - 1 { "," } else { "" };
+                output.push_str(&format!("        val {}{}{}{}\n",
+                    prop.name, type_annotation, initial_value, comma));
+            }
+            output.push_str("    )\n\n");
+
+            // StateFlow setup (no viewModelScope - it's a singleton)
+            output.push_str("    private val _state = MutableStateFlow(State())\n");
+            output.push_str("    val state: StateFlow<State> = _state.asStateFlow()\n\n");
+
+            // Property accessors
+            for prop in &var_properties {
+                output.push_str(&format!("    var {}: {}\n",
+                    prop.name,
+                    prop.type_annotation.as_ref().unwrap_or(&"Any".to_string())));
+                output.push_str(&format!("        get() = _state.value.{}\n", prop.name));
+                output.push_str(&format!("        set(value) {{ _state.update {{ it.copy({} = value) }} }}\n\n",
+                    prop.name));
+            }
+        }
+
+        // Derived properties (val with getter)
+        for prop in &class.properties {
+            if !prop.mutable {
+                if let Some(getter) = &prop.getter {
+                    let type_annotation = prop.type_annotation.as_ref()
+                        .map(|t| format!(": {}", t))
+                        .unwrap_or_default();
+                    output.push_str(&format!("    val {}{}\n", prop.name, type_annotation));
+                    output.push_str(&format!("        get() = {}\n\n", getter));
+                }
+            }
+        }
+
+        // Functions (no viewModelScope for singletons)
+        for func in &class.functions {
+            let suspend_keyword = if func.is_suspend { "suspend " } else { "" };
+            output.push_str(&format!("    {}fun {}({})", suspend_keyword, func.name, func.params));
+            if let Some(return_type) = &func.return_type {
+                output.push_str(&format!(": {}", return_type));
+            }
+            output.push_str(" {\n");
+            output.push_str(&format!("        {}\n", func.body.trim()));
+            output.push_str("    }\n\n");
+        }
+
+        output.push_str("}\n");
+
+        output
     }
 
     /// Generate ViewModel code for reactive class
