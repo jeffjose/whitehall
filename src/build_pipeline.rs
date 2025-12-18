@@ -295,7 +295,7 @@ fn generate_main_activity(
         // Parse main.wh for <App> configuration (theme, dark mode, etc.)
         let app_config = parse_app_config(main_file);
         // Generate MainActivity with NavHost for routing + theme from main.wh
-        generate_navhost_main_activity(config, &discovered_routes, &app_config, global_store_registry)
+        generate_navhost_main_activity(config, &discovered_routes, &app_config)
     } else if let Some(main_file) = main_file {
         // No routes - use transpiled main.wh content as the App composable
         let source = fs::read_to_string(&main_file.path)?;
@@ -411,14 +411,7 @@ class MainActivity : ComponentActivity() {{
 }
 
 /// Generate MainActivity with NavHost for routing
-fn generate_navhost_main_activity(
-    config: &Config,
-    routes: &[routes::Route],
-    app_config: &AppConfig,
-    store_registry: &transpiler::StoreRegistry,
-) -> String {
-    // Check if SettingsStore exists (for theme switching support)
-    let has_settings_store = store_registry.contains("SettingsStore");
+fn generate_navhost_main_activity(config: &Config, routes: &[routes::Route], app_config: &AppConfig) -> String {
     // Generate composable calls for each route
     let mut composable_entries = Vec::new();
 
@@ -468,49 +461,32 @@ fn generate_navhost_main_activity(
         .map(|r| format!("Routes.{}", r.name))
         .unwrap_or_else(|| format!("Routes.{}", routes[0].name));
 
-    // Generate imports based on color scheme and SettingsStore presence
-    let settings_store_import = if has_settings_store {
-        format!("\nimport {}.screens.SettingsStore\nimport androidx.compose.runtime.collectAsState\nimport androidx.compose.runtime.getValue", config.android.package)
-    } else {
-        String::new()
-    };
-
+    // Generate imports based on color scheme
     let theme_imports = match &app_config.color_scheme {
-        ColorScheme::Dynamic => format!(r#"import android.os.Build
+        ColorScheme::Dynamic => r#"import android.os.Build
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.dynamicDarkColorScheme
 import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.material3.lightColorScheme
-import androidx.compose.ui.platform.LocalContext{}"#, settings_store_import),
+import androidx.compose.ui.platform.LocalContext"#,
         ColorScheme::Default | ColorScheme::Custom { .. } => {
             match &app_config.dark_mode {
-                DarkMode::System => format!(r#"import androidx.compose.foundation.isSystemInDarkTheme
+                DarkMode::System => r#"import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
-import androidx.compose.material3.lightColorScheme{}"#, settings_store_import),
-                _ => format!("import androidx.compose.material3.MaterialTheme{}", settings_store_import),
+import androidx.compose.material3.lightColorScheme"#,
+                _ => "import androidx.compose.material3.MaterialTheme",
             }
         }
     };
 
-    // Generate dark theme check based on dark_mode setting and SettingsStore
-    let dark_theme_check = if has_settings_store {
-        // Use SettingsStore.theme to determine dark mode
-        r#"val settingsState by SettingsStore.state.collectAsState()
-            val systemDarkTheme = isSystemInDarkTheme()
-            val darkTheme = when (settingsState.theme) {
-                "light" -> false
-                "dark" -> true
-                else -> systemDarkTheme // "system" or any other value
-            }"#
-    } else {
-        match &app_config.dark_mode {
-            DarkMode::System => "val darkTheme = isSystemInDarkTheme()",
-            DarkMode::Light => "val darkTheme = false",
-            DarkMode::Dark => "val darkTheme = true",
-        }
+    // Generate dark theme check based on dark_mode setting
+    let dark_theme_check = match &app_config.dark_mode {
+        DarkMode::System => "val darkTheme = isSystemInDarkTheme()",
+        DarkMode::Light => "val darkTheme = false",
+        DarkMode::Dark => "val darkTheme = true",
     };
 
     // Generate color scheme setup based on color_scheme setting
@@ -527,25 +503,14 @@ import androidx.compose.material3.lightColorScheme{}"#, settings_store_import),
             }}"#,
             dark_theme_check
         ),
-        ColorScheme::Default => {
-            // When SettingsStore exists, always include dark_theme_check for dynamic theming
-            if has_settings_store {
-                format!(
-                    r#"{}
+        ColorScheme::Default => match &app_config.dark_mode {
+            DarkMode::System => format!(
+                r#"{}
             val colorScheme = if (darkTheme) darkColorScheme() else lightColorScheme()"#,
-                    dark_theme_check
-                )
-            } else {
-                match &app_config.dark_mode {
-                    DarkMode::System => format!(
-                        r#"{}
-            val colorScheme = if (darkTheme) darkColorScheme() else lightColorScheme()"#,
-                        dark_theme_check
-                    ),
-                    DarkMode::Light => "val colorScheme = lightColorScheme()".to_string(),
-                    DarkMode::Dark => "val colorScheme = darkColorScheme()".to_string(),
-                }
-            }
+                dark_theme_check
+            ),
+            DarkMode::Light => "val colorScheme = lightColorScheme()".to_string(),
+            DarkMode::Dark => "val colorScheme = darkColorScheme()".to_string(),
         },
         ColorScheme::Custom { .. } => {
             // TODO: Support custom colors
@@ -554,19 +519,17 @@ import androidx.compose.material3.lightColorScheme{}"#, settings_store_import),
     };
 
     // Generate MaterialTheme wrapper - use colorScheme param if we computed one
-    let material_theme_start = if !has_settings_store
-        && matches!(app_config.color_scheme, ColorScheme::Default)
+    let material_theme_start = if matches!(app_config.color_scheme, ColorScheme::Default)
         && matches!(app_config.dark_mode, DarkMode::System)
         && !matches!(app_config.color_scheme, ColorScheme::Dynamic) {
-        // Simple case: default theme with system dark mode and no SettingsStore - just use MaterialTheme {}
+        // Simple case: default theme with system dark mode - just use MaterialTheme {}
         "MaterialTheme {".to_string()
     } else {
         "MaterialTheme(colorScheme = colorScheme) {".to_string()
     };
 
     // For simple default case, skip the color scheme setup entirely
-    // But if SettingsStore exists, we always need color scheme setup for dynamic theming
-    let needs_color_scheme_setup = has_settings_store || !matches!(
+    let needs_color_scheme_setup = !matches!(
         (&app_config.color_scheme, &app_config.dark_mode),
         (ColorScheme::Default, DarkMode::System)
     );
