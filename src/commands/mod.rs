@@ -94,16 +94,22 @@ pub fn build_with_gradle(
     let mut gradle = toolchain.gradle_cmd(&config.toolchain.java, &config.toolchain.gradle)?;
 
     let task = if release { "assembleRelease" } else { "assembleDebug" };
-    let status = gradle
+    let output = gradle
         .current_dir(output_dir)
         .args([task, "--console=plain", "--quiet"])
-        .status()
+        .output()
         .context("Failed to run Gradle")?;
 
     // Clear the progress bar
     pb.finish_and_clear();
 
-    if !status.success() {
+    if !output.status.success() {
+        // Print gradle output with proper \r\n for raw mode compatibility
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        for line in stdout.lines().chain(stderr.lines()) {
+            eprint!("{}\r\n", line);
+        }
         anyhow::bail!("Gradle build failed");
     }
 
