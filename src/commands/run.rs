@@ -316,6 +316,15 @@ fn calculate_file_hash(path: &Path) -> Result<String> {
     Ok(format!("{:x}", hasher.finalize()))
 }
 
+/// Force stop the app if running
+fn stop_app(toolchain: &Toolchain, package: &str, device_id: &str) -> Result<()> {
+    let _ = toolchain
+        .adb_cmd()?
+        .args(["-s", device_id, "shell", "am", "force-stop", package])
+        .output();
+    Ok(())
+}
+
 fn launch_app(toolchain: &Toolchain, package: &str, device_id: &str) -> Result<()> {
     let activity = format!("{}/.MainActivity", package);
 
@@ -813,7 +822,8 @@ fn run_full_cycle(
     // 3. Install APK (skipped if APK unchanged)
     install_apk(toolchain, &result.output_dir, device_id, package)?;
 
-    // 4. Clear logcat and launch app
+    // 4. Stop app, clear logcat, and launch fresh
+    stop_app(toolchain, package, device_id)?;
     clear_logcat(toolchain, device_id)?;
     launch_app(toolchain, package, device_id)?;
 
