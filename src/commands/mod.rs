@@ -65,6 +65,7 @@ pub fn detect_target(target: &str) -> Target {
 ///
 /// Deletes existing APK first to force gradle to re-package,
 /// fixing gradle's incremental build not detecting new dex files.
+/// Also clears installed hash files to ensure reinstall after rebuild.
 pub fn build_with_gradle(
     toolchain: &Toolchain,
     config: &crate::config::Config,
