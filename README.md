@@ -19,11 +19,11 @@ fun increment() {
 
 ## Pillars
 
-- **Reduce line noise** — Write less boilerplate, focus on what matters
-- **Developer experience first** — Intuitive syntax, helpful errors, fast iteration
-- **Fast by default** — Native performance without configuration
-- **Complex things are possible** — Escape hatches when you need them
-- **Batteries included** — Routing, state, toolchain—all built in
+- **Minimal** — Less boilerplate, more clarity
+- **Intuitive** — Helpful errors, fast iteration
+- **Fast** — Native performance by default
+- **Powerful** — Full control when you need it
+- **Complete** — Routing, state, toolchain built in
 
 ## Quick Start
 
