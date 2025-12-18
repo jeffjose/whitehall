@@ -1,0 +1,14 @@
+<Scaffold
+  topBar={
+    <TopAppBar
+      title="Settings"
+      navigationIcon={
+        <IconButton onClick={() => $navigate.back()}>
+          <Icon name="ArrowBack" />
+        </IconButton>
+      }
+    />
+  }
+>
+  <slot />
+</Scaffold>

@@ -524,8 +524,9 @@ impl ComposeBackend {
         output.push_str(") {\n");
         self.indent_level += 1;
 
-        // For non-screen, non-layout components that use $navigate, add navController from LocalNavController
-        if self.uses_navigate && !is_screen && !is_layout {
+        // For non-screen components that use $navigate, add navController from LocalNavController
+        // (Screens get navController as a parameter, but layouts and other components don't)
+        if self.uses_navigate && !is_screen {
             output.push_str(&self.indent());
             output.push_str("val navController = LocalNavController.current\n");
         }

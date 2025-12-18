@@ -5,6 +5,5 @@
 }
 
 <Column p={16} spacing={16}>
-<Text style="headline-md">Settings</Text>
-<Text style="title-md" > Theme </Text>
+  <Text style="title-md">Theme</Text>
 </Column>

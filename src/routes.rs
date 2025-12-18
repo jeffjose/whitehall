@@ -13,8 +13,10 @@ pub struct Layout {
     pub dir_path: String,
     /// Source file path
     pub source_path: PathBuf,
-    /// Parent layout name (None for root layout)
+    /// Parent layout name (None for root layout or when using @ to break inheritance)
     pub parent: Option<String>,
+    /// Layout override from @ syntax (None = inherit all, Some("") = no parent, Some("root") = only root)
+    pub layout_override: Option<String>,
 }
 
 /// Represents a route in the application
@@ -60,10 +62,10 @@ pub fn discover_layouts() -> Result<Vec<Layout>> {
     {
         let path = entry.path();
 
-        // Only process +layout.wh files (not @-prefixed ones for now)
+        // Process +layout.wh and +layout@*.wh files
         if path.is_file() {
             if let Some(filename) = path.file_name().and_then(|n| n.to_str()) {
-                if filename == "+layout.wh" {
+                if filename == "+layout.wh" || (filename.starts_with("+layout@") && filename.ends_with(".wh")) {
                     let layout = parse_layout_from_path(path)?;
                     layouts.push(layout);
                 }
@@ -74,13 +76,28 @@ pub fn discover_layouts() -> Result<Vec<Layout>> {
     // Sort by dir_path length (root first, then nested)
     layouts.sort_by(|a, b| a.dir_path.len().cmp(&b.dir_path.len()));
 
-    // Compute parent relationships
+    // Compute parent relationships (respecting @ override syntax)
     let layout_names: Vec<(String, String)> = layouts.iter()
         .map(|l| (l.dir_path.clone(), l.name.clone()))
         .collect();
 
     for layout in &mut layouts {
-        layout.parent = find_parent_layout(&layout.dir_path, &layout_names);
+        // Handle @ override syntax for layouts
+        if let Some(ref override_val) = layout.layout_override {
+            if override_val.is_empty() {
+                // +layout@.wh = no parent layout (breaks all inheritance)
+                layout.parent = None;
+            } else {
+                // +layout@root.wh = only inherit from specified layout
+                let target = override_val.to_lowercase();
+                layout.parent = layout_names.iter()
+                    .find(|(_, name)| name.to_lowercase() == target)
+                    .map(|(_, name)| name.clone());
+            }
+        } else {
+            // Normal case: find parent by walking up directory tree
+            layout.parent = find_parent_layout(&layout.dir_path, &layout_names);
+        }
     }
 
     Ok(layouts)
@@ -114,14 +131,32 @@ fn find_parent_layout(dir_path: &str, layouts: &[(String, String)]) -> Option<St
 }
 
 /// Parse layout information from file path
+/// Examples:
+/// - src/routes/+layout.wh → Layout { name: "Root", parent: (computed) }
+/// - src/routes/admin/+layout.wh → Layout { name: "Admin", parent: Some("Root") }
+/// - src/routes/settings/+layout@.wh → Layout { name: "Settings", parent: None (breaks all) }
+/// - src/routes/settings/+layout@root.wh → Layout { name: "Settings", parent: Some("Root") (only root) }
 fn parse_layout_from_path(path: &Path) -> Result<Layout> {
-    // Strip src/routes/ prefix and +layout.wh suffix
+    // Extract filename to check for @ syntax
+    let filename = path.file_name()
+        .and_then(|n| n.to_str())
+        .unwrap_or("+layout.wh");
+
+    // Parse @ syntax: +layout@.wh or +layout@root.wh
+    let layout_override = if filename.starts_with("+layout@") && filename.ends_with(".wh") {
+        let middle = &filename[8..filename.len()-3]; // Extract between @ and .wh
+        Some(middle.to_string())
+    } else {
+        None
+    };
+
+    // Strip src/routes/ prefix and +layout*.wh suffix
     let relative = path
         .strip_prefix("src/routes")
         .or_else(|_| path.strip_prefix("src/routes/"))
         .map_err(|_| anyhow::anyhow!("Invalid layout path: {}", path.display()))?;
 
-    // Get directory path (everything except +layout.wh)
+    // Get directory path (everything except +layout*.wh)
     let dir_path = relative
         .parent()
         .map(|p| p.to_string_lossy().to_string())
@@ -152,7 +187,8 @@ fn parse_layout_from_path(path: &Path) -> Result<Layout> {
         composable_name,
         dir_path,
         source_path: path.to_path_buf(),
-        parent: None, // Set later after all layouts discovered
+        parent: None, // Set later after all layouts discovered (respects layout_override)
+        layout_override,
     })
 }
 
@@ -303,7 +339,7 @@ fn parse_route_from_path_with_layouts(path: &Path, layouts: &[Layout]) -> Result
 /// Compute the layout chain for a route based on its directory path
 /// Returns composable names in order from outermost to innermost
 fn compute_layout_chain(dir_path: &str, layouts: &[Layout], layout_override: &Option<String>) -> Vec<String> {
-    // Handle @ override syntax
+    // Handle @ override syntax on the SCREEN (e.g., +screen@.wh)
     if let Some(override_val) = layout_override {
         if override_val.is_empty() {
             // +screen@.wh = no layouts at all
@@ -322,15 +358,19 @@ fn compute_layout_chain(dir_path: &str, layouts: &[Layout], layout_override: &Op
     }
 
     // Normal case: collect all layouts from root to this directory
+    // But respect layout_override on layouts themselves (e.g., +layout@.wh)
     let mut chain = Vec::new();
     let mut current_path = String::new();
 
-    // Always check for root layout first
+    // First pass: find all layouts in the path and check for @ breaks
+    let mut layouts_in_path: Vec<&Layout> = Vec::new();
+
+    // Check root layout
     if let Some(root) = layouts.iter().find(|l| l.dir_path.is_empty()) {
-        chain.push(root.composable_name.clone());
+        layouts_in_path.push(root);
     }
 
-    // Then check each path segment
+    // Check each path segment
     if !dir_path.is_empty() {
         for segment in dir_path.split('/') {
             if current_path.is_empty() {
@@ -340,9 +380,21 @@ fn compute_layout_chain(dir_path: &str, layouts: &[Layout], layout_override: &Op
             }
 
             if let Some(layout) = layouts.iter().find(|l| l.dir_path == current_path) {
-                chain.push(layout.composable_name.clone());
+                layouts_in_path.push(layout);
             }
         }
+    }
+
+    // Second pass: build chain, respecting @ breaks on layouts
+    // If a layout has layout_override = Some(""), it breaks inheritance
+    // Start chain from the last layout that has @ break (or from root if none)
+    let break_index = layouts_in_path.iter().rposition(|l| {
+        l.layout_override.as_ref().map_or(false, |v| v.is_empty())
+    });
+
+    let start_index = break_index.unwrap_or(0);
+    for layout in &layouts_in_path[start_index..] {
+        chain.push(layout.composable_name.clone());
     }
 
     chain
@@ -545,6 +597,7 @@ mod tests {
                 dir_path: "".to_string(),
                 source_path: PathBuf::from("src/routes/+layout.wh"),
                 parent: None,
+                layout_override: None,
             },
             Layout {
                 name: "Admin".to_string(),
@@ -552,6 +605,7 @@ mod tests {
                 dir_path: "admin".to_string(),
                 source_path: PathBuf::from("src/routes/admin/+layout.wh"),
                 parent: Some("Root".to_string()),
+                layout_override: None,
             },
         ];
 

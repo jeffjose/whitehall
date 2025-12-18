@@ -74,7 +74,8 @@ fn classify_file(path: &Path, config: &Config) -> Result<WhitehallFile> {
         (FileType::Component, Some("stores"), filename)
     } else if is_under_directory(path, "src/routes") {
         // Handle route files: src/routes/**/+screen.wh or +layout.wh
-        if filename == "+layout" {
+        if filename == "+layout" || filename.starts_with("+layout@") {
+            // Handles +layout and +layout@xxx variants
             let layout_name = derive_layout_name_from_route(path)?;
             (FileType::Layout, Some("layouts"), layout_name)
         } else if filename.starts_with("+screen") {
@@ -169,14 +170,15 @@ fn derive_screen_name_from_route(path: &Path) -> Result<String> {
 /// - src/routes/+layout.wh → RootLayout
 /// - src/routes/admin/+layout.wh → AdminLayout
 /// - src/routes/admin/settings/+layout.wh → AdminSettingsLayout
+/// - src/routes/settings/+layout@.wh → SettingsLayout (@ variants supported)
 fn derive_layout_name_from_route(path: &Path) -> Result<String> {
-    // Strip src/routes/ prefix and +layout.wh suffix
+    // Strip src/routes/ prefix and +layout*.wh suffix
     let route_path = path
         .strip_prefix("src/routes")
         .or_else(|_| path.strip_prefix("src/routes/"))
         .map_err(|_| anyhow::anyhow!("Invalid layout path: {}", path.display()))?;
 
-    // Get path components (directories before +layout.wh)
+    // Get path components (directories before +layout*.wh)
     let components: Vec<&str> = route_path
         .components()
         .filter_map(|c| {
@@ -186,7 +188,7 @@ fn derive_layout_name_from_route(path: &Path) -> Result<String> {
                 None
             }
         })
-        .filter(|s| *s != "+layout.wh")
+        .filter(|s| !s.starts_with("+layout"))  // Filter out +layout.wh and +layout@*.wh
         .collect();
 
     // Generate layout name based on components
