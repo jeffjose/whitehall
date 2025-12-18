@@ -260,7 +260,8 @@ fn install_apk(toolchain: &Toolchain, output_dir: &Path, device_id: &str, packag
         if let Ok(stored_hash) = fs::read_to_string(&hash_file) {
             if stored_hash.trim() == apk_hash {
                 // APK unchanged and app is installed, skip installation
-                println!("  {} (APK unchanged)", "Skipped install".dimmed());
+                // Use \r\n for raw mode compatibility
+                print!("  {} (APK unchanged)\r\n", "Skipped install".dimmed());
                 return Ok(());
             }
         }
@@ -318,13 +319,26 @@ fn calculate_file_hash(path: &Path) -> Result<String> {
 fn launch_app(toolchain: &Toolchain, package: &str, device_id: &str) -> Result<()> {
     let activity = format!("{}/.MainActivity", package);
 
-    let status = toolchain
+    // Capture output and reprint with \r\n for raw mode compatibility
+    let output = toolchain
         .adb_cmd()?
         .args(["-s", device_id, "shell", "am", "start", "-n", &activity])
-        .status()
+        .output()
         .context("Failed to launch app")?;
 
-    if !status.success() {
+    // Print stdout with proper line endings
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    for line in stdout.lines() {
+        print!("{}\r\n", line);
+    }
+
+    // Print stderr with proper line endings
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    for line in stderr.lines() {
+        eprint!("{}\r\n", line);
+    }
+
+    if !output.status.success() {
         anyhow::bail!("App launch failed");
     }
 
@@ -787,7 +801,8 @@ fn run_full_cycle(
 
     if !result.errors.is_empty() {
         for error in &result.errors {
-            eprintln!("  {} - {}", error.file.display(), error.message);
+            // Use \r\n for raw mode compatibility
+            eprint!("  {} - {}\r\n", error.file.display(), error.message);
         }
         anyhow::bail!("Build failed with {} error(s)", result.errors.len());
     }
