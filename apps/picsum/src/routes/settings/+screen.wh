@@ -1,1 +1,10 @@
-<Text>settings!</Text>
+@store object SettingsStore {
+  var theme: String = "system" // "light", "dark", "system"
+  var gridColumns: Int = 2
+  var imageQuality: String = "medium" // "low", "medium", "high"
+}
+
+<Column p={16} spacing={16}>
+<Text style="headlineMedium">Settings</Text>
+<Text style="titleMedium" > Theme </Text>
+</Column>

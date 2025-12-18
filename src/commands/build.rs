@@ -312,7 +312,7 @@ fn run_single_file_build_watch(file_path: &Path, original_dir: &Path) -> Result<
 
     if !result.errors.is_empty() {
         for error in &result.errors {
-            eprintln!("  {} - {}", error.file.display(), error.message);
+            eprint!("  {} - {}\r\n", error.file.display(), error.message);
         }
         anyhow::bail!("Build failed with {} error(s)", result.errors.len());
     }
@@ -434,7 +434,7 @@ fn run_build_watch(config: &crate::config::Config) -> Result<()> {
 
     if !result.errors.is_empty() {
         for error in &result.errors {
-            eprintln!("  {} - {}", error.file.display(), error.message);
+            eprint!("  {} - {}\r\n", error.file.display(), error.message);
         }
         anyhow::bail!("Build failed with {} error(s)", result.errors.len());
     }

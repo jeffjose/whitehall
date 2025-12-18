@@ -468,7 +468,7 @@ fn install_cycle(
 
     if !result.errors.is_empty() {
         for error in &result.errors {
-            eprintln!("  {} - {}", error.file.display(), error.message);
+            eprint!("  {} - {}\r\n", error.file.display(), error.message);
         }
         anyhow::bail!("Build failed with {} error(s)", result.errors.len());
     }
