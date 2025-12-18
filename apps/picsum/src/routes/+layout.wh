@@ -1,10 +1,9 @@
+import $components.AppTopBar
+
 <Scaffold
   topBar={
-    <TopAppBar title="Picsum Photos" />
+    <AppTopBar/>
   }
 >
-  <Column>
-    <Text>layout.wh</Text>
-    <slot />
-  </Column>
+  <slot />
 </Scaffold>

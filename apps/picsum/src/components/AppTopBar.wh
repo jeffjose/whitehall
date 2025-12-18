@@ -1,0 +1,24 @@
+var showMenu = false
+
+<TopAppBar
+  title="Picsum Photos"
+  actions={
+    <Box>
+      <IconButton onClick={() => showMenu = true}>
+        <Icon name="MoreVert" />
+      </IconButton>
+      <DropdownMenu
+        expanded={showMenu}
+        onDismissRequest={() => showMenu = false}
+      >
+        <DropdownMenuItem
+          text="Settings"
+          onClick={() => {
+            showMenu = false
+            $navigate("/settings")
+          }}
+        />
+      </DropdownMenu>
+    </Box>
+  }
+/>
