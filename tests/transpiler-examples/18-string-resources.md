@@ -43,13 +43,16 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.app.LocalNavController
 import com.example.app.R
+import com.example.app.routes.Routes
 
 @Composable
 fun WelcomeScreen(
     userName: String,
     itemCount: Int
 ) {
+    val navController = LocalNavController.current
     Column(
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
@@ -65,7 +68,9 @@ fun WelcomeScreen(
         Text(
             text = "${stringResource(R.string.items_count, itemCount)}"
         )
-        Button(onClick = { $navigate(Routes.Home) }) {
+        Button(
+            onClick = { navController.navigate(Routes.Home) }
+        ) {
             Text(text = "${stringResource(R.string.action_continue)}")
         }
     }

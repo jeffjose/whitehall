@@ -23,6 +23,7 @@ pub struct ComposeBackend {
     uses_log: bool, // Track if $log() API is used (for android.util.Log import)
     uses_pull_to_refresh: bool, // Track if onRefresh prop is used (for PullToRefreshBox)
     uses_auto_column: bool, // Track if auto-wrap Column is used (for Column import)
+    uses_navigate: bool, // Track if $navigate() is used (for LocalNavController import)
     // Phase 1.1: ViewModel wrapper context
     in_viewmodel_wrapper: bool, // Are we generating markup inside a ViewModel wrapper?
     mutable_vars: std::collections::HashSet<String>, // Mutable vars (need uiState prefix)
@@ -122,6 +123,7 @@ impl ComposeBackend {
             uses_log: false, // Track $log() API usage for android.util.Log import
             uses_pull_to_refresh: false, // Track onRefresh prop usage for PullToRefreshBox
             uses_auto_column: false, // Track auto-wrap Column usage
+            uses_navigate: false, // Track $navigate() usage for LocalNavController import
             in_viewmodel_wrapper: false, // Phase 1.1: Not in ViewModel wrapper by default
             mutable_vars: std::collections::HashSet::new(), // Phase 1.1: Track mutable vars
             derived_props: std::collections::HashSet::new(), // Phase 1.1: Track derived properties
@@ -352,9 +354,10 @@ impl ComposeBackend {
             imports.push("kotlinx.serialization.json.Json".to_string());
         }
 
-        // Add Routes import if $routes or $navigate is used (for screens)
-        if self.uses_routes && self.component_type.as_deref() == Some("screen") {
-            // Extract base package (e.g., com.example.app.screens -> com.example.app)
+        // Add Routes import if $routes or $navigate is used
+        // For screens: uses_routes is set by route aliases ($routes.xxx)
+        // For all components: uses_navigate is set by $navigate() calls
+        if self.uses_routes || self.uses_navigate {
             let base_package = self.get_base_package();
             imports.push(format!("{}.routes.Routes", base_package));
         }
@@ -370,6 +373,13 @@ impl ComposeBackend {
             if !imports.contains(&column_import) {
                 imports.push(column_import);
             }
+        }
+
+        // Add LocalNavController import for $navigate() API usage (non-screens only)
+        // Screens receive navController as a parameter, so they don't need LocalNavController
+        if self.uses_navigate && self.component_type.as_deref() != Some("screen") {
+            let base_package = self.get_base_package();
+            imports.push(format!("{}.LocalNavController", base_package));
         }
 
         // Note: Dispatchers import is added later if needed (see end of generate function)
@@ -461,6 +471,12 @@ impl ComposeBackend {
 
         output.push_str(") {\n");
         self.indent_level += 1;
+
+        // For non-screen, non-layout components that use $navigate, add navController from LocalNavController
+        if self.uses_navigate && !is_screen && !is_layout {
+            output.push_str(&self.indent());
+            output.push_str("val navController = LocalNavController.current\n");
+        }
 
         // Separate mutable (var) and computed (val) state
         let mut mutable_state = Vec::new();
@@ -655,10 +671,8 @@ impl ComposeBackend {
                             transformed_line = self.transform_log_call(&transformed_line);
                         }
 
-                        // For screens, transform $navigate() to navController.navigate()
-                        if self.component_type.as_deref() == Some("screen") {
-                            transformed_line = transformed_line.replace("$navigate(", "navController.navigate(");
-                        }
+                        // Transform $navigate() to use LocalNavController (works everywhere)
+                        transformed_line = self.transform_navigate_call(&transformed_line);
 
                         // For non-suspend functions with launch calls, prefix with coroutineScope.
                         if !func.is_suspend && (transformed_line.trim().starts_with("launch ") || transformed_line.trim().starts_with("launch{")) {
@@ -863,10 +877,8 @@ impl ComposeBackend {
                             transformed_line = self.transform_log_call(&transformed_line);
                         }
 
-                        // For screens, transform $navigate() to navController.navigate()
-                        if self.component_type.as_deref() == Some("screen") {
-                            transformed_line = transformed_line.replace("$navigate(", "navController.navigate(");
-                        }
+                        // Transform $navigate() to use LocalNavController (works everywhere)
+                        transformed_line = self.transform_navigate_call(&transformed_line);
 
                         // For non-suspend functions with launch calls, prefix with coroutineScope.
                         if !func.is_suspend && (transformed_line.trim().starts_with("launch ") || transformed_line.trim().starts_with("launch{")) {
@@ -3604,12 +3616,8 @@ impl ComposeBackend {
         // Transform route aliases first: $routes → Routes (before adding braces)
         let value = self.transform_route_aliases(prop_value);
 
-        // Transform $navigate() → navController.navigate() for screens
-        let value = if self.component_type.as_deref() == Some("screen") {
-            value.replace("$navigate(", "navController.navigate(")
-        } else {
-            value
-        };
+        // Transform $navigate() to use LocalNavController (works everywhere)
+        let value = self.transform_navigate_call(&value);
 
         // Transform lambda arrow syntax: () => to {}
         let value = self.transform_lambda_arrow(&value);
@@ -4096,6 +4104,118 @@ impl ComposeBackend {
         } else {
             value.to_string()
         }
+    }
+
+    /// Transform $navigate() calls
+    /// For screens: uses navController parameter (passed from NavHost)
+    /// For other components: uses navController (assumes it's captured at function start)
+    /// Handles: $navigate("/path"), $navigate.back(), $navigate.replace("/path"), $navigate.popUpTo("/path")
+    fn transform_navigate_call(&mut self, value: &str) -> String {
+        let mut result = value.to_string();
+
+        // Use navController for screens (they receive it as parameter)
+        // For other components, we'll also use navController which is declared at function start
+        let nav_ref = "navController";
+
+        // Transform $navigate.back() → navController.popBackStack()
+        if result.contains("$navigate.back()") {
+            self.uses_navigate = true;
+            result = result.replace("$navigate.back()", &format!("{}.popBackStack()", nav_ref));
+        }
+
+        // Transform $navigate.back("@navhost") → navController.popBackStack() (TODO: multi-navhost)
+        // For now, just strip the navhost prefix and use default
+        while let Some(start) = result.find("$navigate.back(\"") {
+            self.uses_navigate = true;
+            if let Some(end) = result[start..].find("\")") {
+                let replacement = format!("{}.popBackStack()", nav_ref);
+                result = format!("{}{}{}", &result[..start], replacement, &result[start + end + 2..]);
+            } else {
+                break;
+            }
+        }
+
+        // Transform $navigate.replace("/path") → navController.navigate("path") { popUpTo(0) }
+        while let Some(start) = result.find("$navigate.replace(") {
+            self.uses_navigate = true;
+            let after_call = &result[start + 18..]; // Skip "$navigate.replace("
+            if let Some(end) = after_call.find(')') {
+                let path_with_quotes = &after_call[..end];
+                // Strip leading "/" from path for Compose Navigation
+                let path = if path_with_quotes.starts_with('"') && path_with_quotes.len() > 2 {
+                    let inner = &path_with_quotes[1..path_with_quotes.len()-1];
+                    if inner.starts_with('/') {
+                        format!("\"{}\"", &inner[1..])
+                    } else {
+                        path_with_quotes.to_string()
+                    }
+                } else {
+                    path_with_quotes.to_string()
+                };
+                let replacement = format!("{}.navigate({}) {{ popUpTo(0) {{ inclusive = true }} }}", nav_ref, path);
+                result = format!("{}{}{}", &result[..start], replacement, &result[start + 19 + end..]);
+            } else {
+                break;
+            }
+        }
+
+        // Transform $navigate.popUpTo("/path") → navController.popBackStack("path", false)
+        while let Some(start) = result.find("$navigate.popUpTo(") {
+            self.uses_navigate = true;
+            let after_call = &result[start + 18..]; // Skip "$navigate.popUpTo("
+            if let Some(end) = after_call.find(')') {
+                let path_with_quotes = &after_call[..end];
+                // Strip leading "/" from path for Compose Navigation
+                let path = if path_with_quotes.starts_with('"') && path_with_quotes.len() > 2 {
+                    let inner = &path_with_quotes[1..path_with_quotes.len()-1];
+                    if inner.starts_with('/') {
+                        format!("\"{}\"", &inner[1..])
+                    } else {
+                        path_with_quotes.to_string()
+                    }
+                } else {
+                    path_with_quotes.to_string()
+                };
+                let replacement = format!("{}.popBackStack({}, false)", nav_ref, path);
+                result = format!("{}{}{}", &result[..start], replacement, &result[start + 19 + end..]);
+            } else {
+                break;
+            }
+        }
+
+        // Transform $navigate("/path") → navController.navigate("path")
+        // Also handles $navigate("@navhost/path") for multi-navhost (TODO: implement properly)
+        while let Some(start) = result.find("$navigate(") {
+            self.uses_navigate = true;
+            let after_call = &result[start + 10..]; // Skip "$navigate("
+            if let Some(end) = after_call.find(')') {
+                let path_with_quotes = &after_call[..end];
+                // Strip leading "/" from path for Compose Navigation
+                let path = if path_with_quotes.starts_with('"') && path_with_quotes.len() > 2 {
+                    let inner = &path_with_quotes[1..path_with_quotes.len()-1];
+                    if inner.starts_with('/') {
+                        format!("\"{}\"", &inner[1..])
+                    } else if inner.starts_with('@') {
+                        // TODO: Multi-navhost support - for now strip @navhost/ prefix
+                        if let Some(slash_pos) = inner.find('/') {
+                            format!("\"{}\"", &inner[slash_pos + 1..])
+                        } else {
+                            path_with_quotes.to_string()
+                        }
+                    } else {
+                        path_with_quotes.to_string()
+                    }
+                } else {
+                    path_with_quotes.to_string()
+                };
+                let replacement = format!("{}.navigate({})", nav_ref, path);
+                result = format!("{}{}{}", &result[..start], replacement, &result[start + 11 + end..]);
+            } else {
+                break;
+            }
+        }
+
+        result
     }
 
     fn extract_route_params(&self, file: &WhitehallFile) -> Vec<String> {
@@ -4689,25 +4809,35 @@ impl ComposeBackend {
         }
     }
 
-    /// Detect if a file uses $routes or $navigate (needs Routes import)
+    /// Detect if a file uses $routes or $navigate (needs Routes and LocalNavController imports)
     fn detect_routes_usage(&mut self, file: &WhitehallFile) {
         // Check functions for $routes or $navigate
         for func in &file.functions {
-            if func.body.contains("$routes") || func.body.contains("$navigate") {
+            if func.body.contains("$routes") {
                 self.uses_routes = true;
-                return;
+            }
+            if func.body.contains("$navigate") {
+                self.uses_navigate = true;
+                self.uses_routes = true; // $navigate uses Routes for type-safe navigation
             }
         }
         // Check lifecycle hooks
         for hook in &file.lifecycle_hooks {
-            if hook.body.contains("$routes") || hook.body.contains("$navigate") {
+            if hook.body.contains("$routes") {
                 self.uses_routes = true;
-                return;
+            }
+            if hook.body.contains("$navigate") {
+                self.uses_navigate = true;
+                self.uses_routes = true;
             }
         }
         // Check markup (onClick handlers, etc.)
         let markup_str = format!("{:?}", file.markup);
-        if markup_str.contains("$routes") || markup_str.contains("$navigate") {
+        if markup_str.contains("$routes") {
+            self.uses_routes = true;
+        }
+        if markup_str.contains("$navigate") {
+            self.uses_navigate = true;
             self.uses_routes = true;
         }
     }
@@ -6221,10 +6351,17 @@ impl ComposeBackend {
             imports.push("androidx.navigation.NavController".to_string());
         }
 
-        // Add Routes import if $routes or $navigate is used (for screens)
-        if self.uses_routes && self.component_type.as_deref() == Some("screen") {
+        // Add Routes import if $routes or $navigate is used
+        if self.uses_routes || self.uses_navigate {
             let base_package = self.get_base_package();
             imports.push(format!("{}.routes.Routes", base_package));
+        }
+
+        // Add LocalNavController import for $navigate() API usage (non-screens only)
+        // Screens receive navController as a parameter, so they don't need LocalNavController
+        if self.uses_navigate && self.component_type.as_deref() != Some("screen") {
+            let base_package = self.get_base_package();
+            imports.push(format!("{}.LocalNavController", base_package));
         }
 
         // Sort imports alphabetically (standard Kotlin convention)

@@ -539,11 +539,13 @@ import androidx.compose.material3.lightColorScheme"#,
             r#"            {}
             {}
                 val navController = rememberNavController()
-                NavHost(
-                    navController = navController,
-                    startDestination = {}
-                ) {{
+                CompositionLocalProvider(LocalNavController provides navController) {{
+                    NavHost(
+                        navController = navController,
+                        startDestination = {}
+                    ) {{
 {}
+                    }}
                 }}
             }}"#,
             color_scheme_setup,
@@ -555,11 +557,13 @@ import androidx.compose.material3.lightColorScheme"#,
         format!(
             r#"            MaterialTheme {{
                 val navController = rememberNavController()
-                NavHost(
-                    navController = navController,
-                    startDestination = {}
-                ) {{
+                CompositionLocalProvider(LocalNavController provides navController) {{
+                    NavHost(
+                        navController = navController,
+                        startDestination = {}
+                    ) {{
 {}
+                    }}
                 }}
             }}"#,
             start_destination,
@@ -581,6 +585,9 @@ import androidx.compose.material3.lightColorScheme"#,
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.staticCompositionLocalOf
+import androidx.navigation.NavController
 {}
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -589,6 +596,11 @@ import androidx.navigation.toRoute
 import {}.routes.Routes
 import {}.screens.*
 {}
+// Global navigation controller accessible via LocalNavController.current
+val LocalNavController = staticCompositionLocalOf<NavController> {{
+    error("NavController not provided - ensure you're inside a CompositionLocalProvider")
+}}
+
 class MainActivity : ComponentActivity() {{
     override fun onCreate(savedInstanceState: Bundle?) {{
         super.onCreate(savedInstanceState)

@@ -40,12 +40,15 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.app.LocalNavController
 import com.example.app.models.Post
+import com.example.app.routes.Routes
 
 @Composable
 fun PostList(
     posts: List<Post>
 ) {
+    val navController = LocalNavController.current
     Column(
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
@@ -58,7 +61,7 @@ fun PostList(
             posts.forEach { post ->
                 key(post.id) {
                     Card(
-                        onClick = { $navigate(Routes.Post.Detail(id = post.id)) }
+                        onClick = { navController.navigate(Routes.Post.Detail(id = post.id)) }
                     ) {
                         Column(modifier = Modifier.padding(12.dp)) {
                             Text(
