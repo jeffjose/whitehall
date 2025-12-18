@@ -335,6 +335,97 @@ MaterialTheme(colorScheme = colorScheme) {
 - When no `<App>` is specified, defaults to `MaterialTheme {}` with system defaults
 - Dynamic colors gracefully fall back to default Material3 colors on Android < 12
 
+### Layouts (+layout.wh)
+
+Whitehall supports SvelteKit-style layouts for shared UI structure across routes. Layouts wrap screens and can be nested.
+
+**File Convention:**
+```
+src/routes/
+├── +layout.wh          # Root layout (wraps all screens)
+├── +screen.wh          # Home screen (wrapped by RootLayout)
+├── settings/
+│   ├── +layout.wh      # Settings layout (nested inside RootLayout)
+│   └── +screen.wh      # Settings screen (wrapped by both layouts)
+└── auth/
+    └── +screen@.wh     # Auth screen (NO layouts - @ breaks inheritance)
+```
+
+**Basic Layout Syntax:**
+```whitehall
+<Scaffold
+  topBar={<TopAppBar title="My App" />}
+>
+  <slot />
+</Scaffold>
+```
+
+- `<slot />` is where child content (screens or nested layouts) is rendered
+- Layouts generate Composable functions: `RootLayout`, `SettingsLayout`, etc.
+
+**Generated Kotlin:**
+```kotlin
+@Composable
+fun RootLayout(content: @Composable () -> Unit) {
+    Scaffold(
+        topBar = { TopAppBar(title = { Text("My App") }) }
+    ) { paddingValues ->
+        Column(modifier = Modifier.padding(paddingValues)) {
+            content()
+        }
+    }
+}
+```
+
+**Layout Nesting:**
+
+Layouts automatically nest from outermost (root) to innermost:
+
+```
+/settings/profile → RootLayout → SettingsLayout → ProfileScreen
+```
+
+The generated NavHost wraps screens with their layout chain:
+```kotlin
+composable("settings/profile") {
+    RootLayout {
+        SettingsLayout {
+            ProfileScreen(navController)
+        }
+    }
+}
+```
+
+**Layout Breaking (@ syntax):**
+
+Use `@` in the filename to control layout inheritance:
+
+| Filename | Behavior |
+|----------|----------|
+| `+screen.wh` | Inherits all ancestor layouts |
+| `+screen@.wh` | No layouts (breaks all inheritance) |
+| `+screen@root.wh` | Only root layout (skips intermediate) |
+
+**Examples:**
+```
+src/routes/admin/+screen@.wh     # Admin screen with NO layouts (fullscreen)
+src/routes/admin/+screen@root.wh # Admin screen with only RootLayout (skip AdminLayout)
+```
+
+**Current Limitations:**
+- Layouts don't automatically receive `navController` (screens do)
+- To navigate from a layout, extract navigation logic to a component and pass callbacks
+
+**Workaround for navigation in layouts:**
+```whitehall
+// +layout.wh
+<Scaffold
+  topBar={<AppTopBar onSettingsClick={onSettingsClick} />}
+>
+  <slot />
+</Scaffold>
+```
+
 ### Control Flow Syntax
 
 Whitehall uses `@` prefix for control flow constructs within markup:
