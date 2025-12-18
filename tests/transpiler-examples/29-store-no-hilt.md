@@ -60,4 +60,5 @@ class Counter : ViewModel() {
 ```
 file: Counter.wh
 package: com.example.app
+type: store
 ```

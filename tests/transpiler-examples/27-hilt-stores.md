@@ -72,4 +72,5 @@ class UserProfile @Inject constructor(
 ```
 file: HiltStore.wh
 package: com.example.app
+type: store
 ```

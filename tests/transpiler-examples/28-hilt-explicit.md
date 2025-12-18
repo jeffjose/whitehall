@@ -58,4 +58,5 @@ class AppSettings @Inject constructor(
 ```
 file: AppSettings.wh
 package: com.example.app
+type: store
 ```

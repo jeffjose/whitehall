@@ -70,4 +70,5 @@ class DataStore : ViewModel() {
 ```
 file: DataStore.wh
 package: com.example.app
+type: store
 ```

@@ -218,6 +218,7 @@ impl ComposeBackend {
             // Check if file also has markup (screen with inline store)
             let has_markup = match &file.markup {
                 crate::transpiler::ast::Markup::Sequence(items) => !items.is_empty(),
+                crate::transpiler::ast::Markup::Text(s) => !s.is_empty(),
                 _ => true, // Any other variant means there's content
             };
 
@@ -410,10 +411,11 @@ impl ComposeBackend {
             imports.push("androidx.compose.material.icons.filled.*".to_string());
         }
 
-        // Add navigateSafe import for $navigate() API usage (all components)
+        // Add navigation imports for $navigate() API usage
         if self.uses_navigate {
             let base_package = self.get_base_package();
-            imports.push(format!("{}.navigateSafe", base_package));
+            // Routes import for type-safe navigation
+            imports.push(format!("{}.routes.Routes", base_package));
             // LocalNavController only needed for non-screens (screens get navController as parameter)
             if self.component_type.as_deref() != Some("screen") {
                 imports.push(format!("{}.LocalNavController", base_package));
@@ -6766,10 +6768,11 @@ impl ComposeBackend {
             imports.push(format!("{}.routes.Routes", base_package));
         }
 
-        // Add navigateSafe import for $navigate() API usage (all components)
+        // Add navigation imports for $navigate() API usage
         if self.uses_navigate {
             let base_package = self.get_base_package();
-            imports.push(format!("{}.navigateSafe", base_package));
+            // Routes import for type-safe navigation
+            imports.push(format!("{}.routes.Routes", base_package));
             // LocalNavController only needed for non-screens (screens get navController as parameter)
             if self.component_type.as_deref() != Some("screen") {
                 imports.push(format!("{}.LocalNavController", base_package));
