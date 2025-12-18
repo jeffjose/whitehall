@@ -1,3 +1,4 @@
 <App colorScheme="dynamic" darkMode="system">
+<Text>main.wh</Text>
   <slot />
 </App>

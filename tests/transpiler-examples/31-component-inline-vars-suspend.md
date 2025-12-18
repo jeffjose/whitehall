@@ -96,14 +96,16 @@ fun UserProfile() {
             }
         } else if (uiState.user != null) {
             Card {
-                Text(
-                    text = uiState.user.name,
-                    fontSize = 20.sp
-                )
-                Text(
-                    text = uiState.user.email,
-                    color = Color(0xFF666666)
-                )
+                Column {
+                    Text(
+                        text = uiState.user.name,
+                        fontSize = 20.sp
+                    )
+                    Text(
+                        text = uiState.user.email,
+                        color = Color(0xFF666666)
+                    )
+                }
             }
         }
     }

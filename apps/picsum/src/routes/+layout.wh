@@ -3,5 +3,8 @@
     <TopAppBar title="Picsum Photos" />
   }
 >
-  <slot />
+  <Column>
+    <Text>layout.wh</Text>
+    <slot />
+  </Column>
 </Scaffold>

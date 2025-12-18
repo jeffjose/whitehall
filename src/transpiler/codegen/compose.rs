@@ -22,6 +22,7 @@ pub struct ComposeBackend {
     uses_on_appear: bool, // Track if onAppear prop is used (for LaunchedEffect import)
     uses_log: bool, // Track if $log() API is used (for android.util.Log import)
     uses_pull_to_refresh: bool, // Track if onRefresh prop is used (for PullToRefreshBox)
+    uses_auto_column: bool, // Track if auto-wrap Column is used (for Column import)
     // Phase 1.1: ViewModel wrapper context
     in_viewmodel_wrapper: bool, // Are we generating markup inside a ViewModel wrapper?
     mutable_vars: std::collections::HashSet<String>, // Mutable vars (need uiState prefix)
@@ -120,6 +121,7 @@ impl ComposeBackend {
             uses_on_appear: false, // Track onAppear prop usage for LaunchedEffect import
             uses_log: false, // Track $log() API usage for android.util.Log import
             uses_pull_to_refresh: false, // Track onRefresh prop usage for PullToRefreshBox
+            uses_auto_column: false, // Track auto-wrap Column usage
             in_viewmodel_wrapper: false, // Phase 1.1: Not in ViewModel wrapper by default
             mutable_vars: std::collections::HashSet::new(), // Phase 1.1: Track mutable vars
             derived_props: std::collections::HashSet::new(), // Phase 1.1: Track derived properties
@@ -360,6 +362,14 @@ impl ComposeBackend {
         // Add android.util.Log import for $log() API usage
         if self.uses_log {
             imports.push("android.util.Log".to_string());
+        }
+
+        // Add Column import for auto-wrap feature
+        if self.uses_auto_column {
+            let column_import = "androidx.compose.foundation.layout.Column".to_string();
+            if !imports.contains(&column_import) {
+                imports.push(column_import);
+            }
         }
 
         // Note: Dispatchers import is added later if needed (see end of generate function)
@@ -2176,11 +2186,21 @@ impl ComposeBackend {
 
                 // Generate children if any (but not for Text, which uses children for text parameter)
                 if has_children {
-                    // Scaffold children need paddingValues lambda parameter only if first child is layout component or slot
-                    let scaffold_needs_padding = comp.name == "Scaffold" &&
-                        comp.children.first().map_or(false, |child| {
-                            matches!(child, Markup::Component(c) if c.name == "Column" || c.name == "Row" || c.name == "Box" || c.name == "slot")
-                        });
+                    // Check if we should auto-wrap multiple children in Column (HTML-like vertical flow)
+                    // Skip auto-wrap for explicit layout containers: Box, Row, Column, LazyColumn, LazyRow
+                    let is_layout_container = matches!(comp.name.as_str(), "Box" | "Row" | "Column" | "LazyColumn" | "LazyRow");
+                    let non_empty_children: Vec<_> = comp.children.iter()
+                        .filter(|c| !matches!(c, Markup::Text(t) if t.trim().is_empty()))
+                        .collect();
+                    let should_auto_wrap = non_empty_children.len() > 1 && !is_layout_container;
+
+                    // Scaffold children need paddingValues lambda parameter if:
+                    // 1. First child is a layout container (Column/Row/Box/slot)
+                    // 2. OR we're going to auto-wrap children in Column
+                    let first_child_is_layout = comp.children.first().map_or(false, |child| {
+                        matches!(child, Markup::Component(c) if c.name == "Column" || c.name == "Row" || c.name == "Box" || c.name == "slot")
+                    });
+                    let scaffold_needs_padding = comp.name == "Scaffold" && (first_child_is_layout || should_auto_wrap);
 
                     if scaffold_needs_padding {
                         output.push_str(" { paddingValues ->\n");
@@ -2228,13 +2248,28 @@ impl ComposeBackend {
                         }
                     }
 
-                    // Generate regular children (pass component name as parent for context-aware generation)
-                    for (i, child) in comp.children.iter().enumerate() {
-                        // For Scaffold with layout child, mark first child to add paddingValues to modifier
-                        if scaffold_needs_padding && i == 0 {
-                            output.push_str(&self.generate_scaffold_child(child, effective_indent + 1)?);
+                    // Generate children - auto-wrap in Column if needed
+                    if should_auto_wrap {
+                        self.uses_auto_column = true;
+                        // For Scaffold, Column needs paddingValues modifier
+                        if comp.name == "Scaffold" {
+                            output.push_str(&format!("{}    Column(modifier = Modifier.padding(paddingValues)) {{\n", indent_str));
                         } else {
-                            output.push_str(&self.generate_markup_with_context(child, effective_indent + 1, Some(&comp.name))?);
+                            output.push_str(&format!("{}    Column {{\n", indent_str));
+                        }
+                        for child in &comp.children {
+                            output.push_str(&self.generate_markup_with_context(child, effective_indent + 2, Some("Column"))?);
+                        }
+                        output.push_str(&format!("{}    }}\n", indent_str));
+                    } else {
+                        // Generate regular children (pass component name as parent for context-aware generation)
+                        for (i, child) in comp.children.iter().enumerate() {
+                            // For Scaffold with layout child, mark first child to add paddingValues to modifier
+                            if scaffold_needs_padding && i == 0 {
+                                output.push_str(&self.generate_scaffold_child(child, effective_indent + 1)?);
+                            } else {
+                                output.push_str(&self.generate_markup_with_context(child, effective_indent + 1, Some(&comp.name))?);
+                            }
                         }
                     }
                     output.push_str(&format!("{}}}\n", indent_str));
@@ -2268,8 +2303,26 @@ impl ComposeBackend {
             }
             Markup::Sequence(items) => {
                 let mut output = String::new();
-                for item in items {
-                    output.push_str(&self.generate_markup_with_indent(item, indent)?);
+                let indent_str = "    ".repeat(indent);
+
+                // Check if we should auto-wrap at root level
+                // Auto-wrap if: at root (parent is None) AND multiple non-empty items
+                let non_empty_items: Vec<_> = items.iter()
+                    .filter(|i| !matches!(i, Markup::Text(t) if t.trim().is_empty()))
+                    .collect();
+                let should_auto_wrap = parent.is_none() && non_empty_items.len() > 1;
+
+                if should_auto_wrap {
+                    self.uses_auto_column = true;
+                    output.push_str(&format!("{}Column {{\n", indent_str));
+                    for item in items {
+                        output.push_str(&self.generate_markup_with_context(item, indent + 1, Some("Column"))?);
+                    }
+                    output.push_str(&format!("{}}}\n", indent_str));
+                } else {
+                    for item in items {
+                        output.push_str(&self.generate_markup_with_indent(item, indent)?);
+                    }
                 }
                 Ok(output)
             }
@@ -2970,10 +3023,17 @@ impl ComposeBackend {
                             component_imports.push(import);
                         }
                         // Check if first child needs paddingValues (slot, Column, Row, Box)
-                        let first_child_needs_padding = comp.children.first().map_or(false, |c| {
+                        let first_child_is_layout = comp.children.first().map_or(false, |c| {
                             matches!(c, Markup::Component(ch) if ch.name == "slot" || ch.name == "Column" || ch.name == "Row" || ch.name == "Box")
                         });
-                        if first_child_needs_padding {
+                        // Also check if we'll auto-wrap (multiple non-empty children)
+                        let non_empty_children: Vec<_> = comp.children.iter()
+                            .filter(|c| !matches!(c, Markup::Text(t) if t.trim().is_empty()))
+                            .collect();
+                        let will_auto_wrap = non_empty_children.len() > 1;
+                        let needs_padding_imports = first_child_is_layout || will_auto_wrap;
+
+                        if needs_padding_imports {
                             // If slot is direct child, we wrap it in Box
                             if comp.children.iter().any(|c| matches!(c, Markup::Component(ch) if ch.name == "slot")) {
                                 let box_import = "androidx.compose.foundation.layout.Box".to_string();
@@ -2989,6 +3049,13 @@ impl ComposeBackend {
                             let padding_import = "androidx.compose.foundation.layout.padding".to_string();
                             if !prop_imports.contains(&padding_import) {
                                 prop_imports.push(padding_import);
+                            }
+                            // If auto-wrap, also need Column import
+                            if will_auto_wrap && !first_child_is_layout {
+                                let column_import = "androidx.compose.foundation.layout.Column".to_string();
+                                if !component_imports.contains(&column_import) {
+                                    component_imports.push(column_import);
+                                }
                             }
                         }
                     }
