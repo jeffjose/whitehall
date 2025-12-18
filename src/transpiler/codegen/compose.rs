@@ -1293,15 +1293,43 @@ impl ComposeBackend {
                         }
                     }
                 }
-                // Special handling for DropdownMenu - transform to ExposedDropdownMenuBox
+                // Special handling for DropdownMenu
+                // Two patterns:
+                // 1. Form select: value, onValueChange, items → ExposedDropdownMenuBox
+                // 2. Popup menu: expanded, onDismissRequest, children → DropdownMenu (passthrough)
                 else if comp.name == "DropdownMenu" {
-                    // Mark that we're using experimental Material3 APIs
-                    self.uses_experimental_material3 = true;
-
                     // Extract props
                     let value_prop = comp.props.iter().find(|p| p.name == "value");
                     let on_value_change = comp.props.iter().find(|p| p.name == "onValueChange");
                     let items_prop = comp.props.iter().find(|p| p.name == "items");
+                    let expanded_prop = comp.props.iter().find(|p| p.name == "expanded");
+
+                    // Pattern 2: Popup menu (has expanded but not value/items)
+                    if expanded_prop.is_some() && value_prop.is_none() {
+                        // Simple DropdownMenu - pass through as-is
+                        output.push_str(&indent_str);
+                        output.push_str("DropdownMenu(\n");
+
+                        for prop in &comp.props {
+                            let prop_value = self.process_prop_value(&prop.value, &prop.name);
+                            output.push_str(&format!("{}    {} = {},\n", indent_str, prop.name, prop_value));
+                        }
+
+                        output.push_str(&format!("{}) {{\n", indent_str));
+
+                        // Generate children (DropdownMenuItem components)
+                        for child in &comp.children {
+                            let child_code = self.generate_markup_with_indent(child, indent + 1)?;
+                            output.push_str(&child_code);
+                        }
+
+                        output.push_str(&format!("{}}}\n", indent_str));
+                        return Ok(output);
+                    }
+
+                    // Pattern 1: Form select (ExposedDropdownMenuBox)
+                    // Mark that we're using experimental Material3 APIs
+                    self.uses_experimental_material3 = true;
 
                     if let (Some(value), Some(on_change), Some(items)) = (value_prop, on_value_change, items_prop) {
                         let value_expr = self.get_prop_expr(&value.value);
@@ -2998,11 +3026,14 @@ impl ComposeBackend {
                         }
                     }
                     "DropdownMenu" => {
-                        // DropdownMenu transforms to ExposedDropdownMenuBox pattern
-                        // Note: ExposedDropdownMenu is part of ExposedDropdownMenuBoxScope, not a separate import
+                        // DropdownMenu has two patterns:
+                        // 1. Form select (with value/items) → ExposedDropdownMenuBox
+                        // 2. Popup menu (with expanded/children) → DropdownMenu
+                        // Add both sets of imports - unused ones will be removed by IDE/linter
                         let imports = vec![
-                            "androidx.compose.material3.ExposedDropdownMenuBox".to_string(),
+                            "androidx.compose.material3.DropdownMenu".to_string(),
                             "androidx.compose.material3.DropdownMenuItem".to_string(),
+                            "androidx.compose.material3.ExposedDropdownMenuBox".to_string(),
                             "androidx.compose.material3.TextField".to_string(),
                             "androidx.compose.material3.Text".to_string(),
                         ];
