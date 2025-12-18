@@ -197,6 +197,7 @@ pub fn discover_routes_with_layouts(layouts: &[Layout]) -> Result<Vec<Route>> {
 }
 
 /// Parse route information from file path (legacy, without layouts)
+#[cfg(test)]
 fn parse_route_from_path(path: &Path) -> Result<Route> {
     parse_route_from_path_with_layouts(path, &[])
 }
