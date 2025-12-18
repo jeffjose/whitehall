@@ -47,7 +47,6 @@ fun onRefresh() {
   isRefreshing = false
   $log("done")
 }
-<Text>screen.wh</Text>
 <Column spacing={8} p={10} {onRefresh} {isRefreshing}>
 <TextField value={query} onValueChange={(v) => query = v} placeholder="Search by author..." width="100%"/>
   <Text>Photos {filteredPhotos.size} ({photos.size})</Text>

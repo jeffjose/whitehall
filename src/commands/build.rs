@@ -16,28 +16,28 @@ use crate::single_file;
 use crate::commands::{detect_target, Target};
 use crate::toolchain::Toolchain;
 
-pub fn execute(target: &str, watch: bool) -> Result<()> {
+pub fn execute(target: &str, watch: bool, release: bool) -> Result<()> {
     // Detect if we're building a project or single file
     match detect_target(target) {
         Target::Project(manifest_path) => {
             if watch {
-                execute_project_watch(&manifest_path)
+                execute_project_watch(&manifest_path, release)
             } else {
-                execute_project(&manifest_path)
+                execute_project(&manifest_path, release)
             }
         }
         Target::SingleFile(file_path) => {
             if watch {
-                execute_single_file_watch(&file_path)
+                execute_single_file_watch(&file_path, release)
             } else {
-                execute_single_file(&file_path)
+                execute_single_file(&file_path, release)
             }
         }
     }
 }
 
 /// Build a single .wh file
-fn execute_single_file(file_path: &str) -> Result<()> {
+fn execute_single_file(file_path: &str, release: bool) -> Result<()> {
     let start = Instant::now();
 
     // Parse frontmatter
@@ -81,12 +81,15 @@ fn execute_single_file(file_path: &str) -> Result<()> {
         let toolchain = Toolchain::new()?;
         toolchain.ensure_all_for_build(&config.toolchain.java, &config.toolchain.gradle)?;
 
-        build_with_gradle(&toolchain, &config, &result.output_dir)?;
+        build_with_gradle(&toolchain, &config, &result.output_dir, release)?;
 
         let elapsed = start.elapsed();
-        let apk_path = result.output_dir.join("app/build/outputs/apk/debug/app-debug.apk");
-        println!("   {} APK for `{}` v{} ({}) in {:.2}s",
+        let build_type = if release { "release" } else { "debug" };
+        let apk_name = if release { "app-release-unsigned.apk" } else { "app-debug.apk" };
+        let apk_path = result.output_dir.join(format!("app/build/outputs/apk/{}/{}", build_type, apk_name));
+        println!("   {} {} APK for `{}` v{} ({}) in {:.2}s",
             "Built".green().bold(),
+            if release { "release" } else { "debug" },
             single_config.app.name,
             config.project.version,
             single_config.app.package,
@@ -109,7 +112,7 @@ fn execute_single_file(file_path: &str) -> Result<()> {
 }
 
 /// Build a project (existing behavior)
-fn execute_project(manifest_path: &str) -> Result<()> {
+fn execute_project(manifest_path: &str, release: bool) -> Result<()> {
     let start = Instant::now();
 
     // 1. Determine project directory from manifest path
@@ -169,12 +172,15 @@ fn execute_project(manifest_path: &str) -> Result<()> {
         let toolchain = Toolchain::new()?;
         toolchain.ensure_all_for_build(&config.toolchain.java, &config.toolchain.gradle)?;
 
-        build_with_gradle(&toolchain, &config, &result.output_dir)?;
+        build_with_gradle(&toolchain, &config, &result.output_dir, release)?;
 
         let elapsed = start.elapsed();
-        let apk_path = result.output_dir.join("app/build/outputs/apk/debug/app-debug.apk");
-        println!("   {} APK for `{}` v{} ({}) in {:.2}s",
+        let build_type = if release { "release" } else { "debug" };
+        let apk_name = if release { "app-release-unsigned.apk" } else { "app-debug.apk" };
+        let apk_path = result.output_dir.join(format!("app/build/outputs/apk/{}/{}", build_type, apk_name));
+        println!("   {} {} APK for `{}` v{} ({}) in {:.2}s",
             "Built".green().bold(),
+            if release { "release" } else { "debug" },
             config.project.name,
             config.project.version,
             config.android.package,
@@ -198,7 +204,7 @@ fn execute_project(manifest_path: &str) -> Result<()> {
     Ok(())
 }
 
-fn build_with_gradle(toolchain: &Toolchain, config: &crate::config::Config, output_dir: &Path) -> Result<()> {
+fn build_with_gradle(toolchain: &Toolchain, config: &crate::config::Config, output_dir: &Path, release: bool) -> Result<()> {
     // Create a spinner to show progress
     let pb = ProgressBar::new_spinner();
     pb.set_style(
@@ -207,14 +213,16 @@ fn build_with_gradle(toolchain: &Toolchain, config: &crate::config::Config, outp
             .unwrap()
             .tick_strings(&["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"])
     );
-    pb.set_message("Building APK with Gradle...");
+    let build_type = if release { "release" } else { "debug" };
+    pb.set_message(format!("Building {} APK with Gradle...", build_type));
     pb.enable_steady_tick(std::time::Duration::from_millis(80));
 
     let mut gradle = toolchain.gradle_cmd(&config.toolchain.java, &config.toolchain.gradle)?;
 
+    let task = if release { "assembleRelease" } else { "assembleDebug" };
     let status = gradle
         .current_dir(output_dir)
-        .args(&["assembleDebug", "--console=plain", "--quiet"])
+        .args(&[task, "--console=plain", "--quiet"])
         .status()
         .context("Failed to run Gradle")?;
 
@@ -233,7 +241,8 @@ fn build_with_gradle(toolchain: &Toolchain, config: &crate::config::Config, outp
 // ============================================================================
 
 /// Watch a single .wh file for changes and rebuild
-fn execute_single_file_watch(file_path: &str) -> Result<()> {
+/// Note: Watch mode always uses debug builds for fast iteration
+fn execute_single_file_watch(file_path: &str, _release: bool) -> Result<()> {
     let file_path_buf = PathBuf::from(file_path);
     let original_dir = env::current_dir()?;
 
@@ -345,7 +354,8 @@ fn run_single_file_build_watch(file_path: &Path, original_dir: &Path) -> Result<
 }
 
 /// Watch a project for changes and rebuild
-fn execute_project_watch(manifest_path: &str) -> Result<()> {
+/// Note: Watch mode always uses debug builds for fast iteration
+fn execute_project_watch(manifest_path: &str, _release: bool) -> Result<()> {
     // Determine project directory from manifest path
     let manifest_path = Path::new(manifest_path);
     let original_dir = env::current_dir()?;
