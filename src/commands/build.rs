@@ -1,7 +1,6 @@
-use anyhow::{Context, Result};
+use anyhow::Result;
 use colored::Colorize;
 use ignore::gitignore::{Gitignore, GitignoreBuilder};
-use indicatif::{ProgressBar, ProgressStyle};
 use notify::{Event, RecursiveMode, Watcher};
 use std::env;
 use std::fs;
@@ -13,7 +12,7 @@ use crate::build_pipeline;
 use crate::config;
 use crate::keyboard::{self, KeyAction, RawModeGuard};
 use crate::single_file;
-use crate::commands::{detect_target, Target};
+use crate::commands::{detect_target, Target, build_with_gradle};
 use crate::toolchain::Toolchain;
 
 pub fn execute(target: &str, watch: bool, release: bool) -> Result<()> {
@@ -199,38 +198,6 @@ fn execute_project(manifest_path: &str, release: bool) -> Result<()> {
     // 6. Restore original directory if we changed it
     if project_dir != original_dir {
         env::set_current_dir(&original_dir)?;
-    }
-
-    Ok(())
-}
-
-fn build_with_gradle(toolchain: &Toolchain, config: &crate::config::Config, output_dir: &Path, release: bool) -> Result<()> {
-    // Create a spinner to show progress
-    let pb = ProgressBar::new_spinner();
-    pb.set_style(
-        ProgressStyle::default_spinner()
-            .template("{spinner:.dim} {msg}")
-            .unwrap()
-            .tick_strings(&["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"])
-    );
-    let build_type = if release { "release" } else { "debug" };
-    pb.set_message(format!("Building {} APK with Gradle...", build_type));
-    pb.enable_steady_tick(std::time::Duration::from_millis(80));
-
-    let mut gradle = toolchain.gradle_cmd(&config.toolchain.java, &config.toolchain.gradle)?;
-
-    let task = if release { "assembleRelease" } else { "assembleDebug" };
-    let status = gradle
-        .current_dir(output_dir)
-        .args(&[task, "--console=plain", "--quiet"])
-        .status()
-        .context("Failed to run Gradle")?;
-
-    // Clear the progress bar (it disappears)
-    pb.finish_and_clear();
-
-    if !status.success() {
-        anyhow::bail!("Gradle build failed");
     }
 
     Ok(())

@@ -1,7 +1,6 @@
 use anyhow::{Context, Result};
 use colored::Colorize;
 use ignore::gitignore::{Gitignore, GitignoreBuilder};
-use indicatif::{ProgressBar, ProgressStyle};
 use notify::{Event, RecursiveMode, Watcher};
 use std::env;
 use std::fs;
@@ -13,7 +12,7 @@ use crate::build_pipeline;
 use crate::config;
 use crate::keyboard::{self, KeyAction, RawModeGuard};
 use crate::single_file;
-use crate::commands::{detect_target, Target};
+use crate::commands::{detect_target, Target, build_with_gradle};
 use crate::commands::device;
 use crate::toolchain::Toolchain;
 
@@ -104,7 +103,7 @@ fn execute_single_file(file_path: &str, device_query: Option<&str>) -> Result<()
     println!("    {} {}", "Device".cyan(), device.display_name());
 
     // Build APK and install
-    build_with_gradle(&toolchain, &config, &result.output_dir)?;
+    build_with_gradle(&toolchain, &config, &result.output_dir, false)?;
     install_apk(&toolchain, &result.output_dir, &device.id)?;
 
     println!(
@@ -179,7 +178,7 @@ fn execute_project(manifest_path: &str, device_query: Option<&str>) -> Result<()
     println!("    {} {}", "Device".cyan(), device.display_name());
 
     // Build APK and install
-    build_with_gradle(&toolchain, &config, &result.output_dir)?;
+    build_with_gradle(&toolchain, &config, &result.output_dir, false)?;
     install_apk(&toolchain, &result.output_dir, &device.id)?;
 
     println!(
@@ -192,36 +191,6 @@ fn execute_project(manifest_path: &str, device_query: Option<&str>) -> Result<()
     // Restore original directory
     if project_dir != original_dir {
         env::set_current_dir(&original_dir)?;
-    }
-
-    Ok(())
-}
-
-fn build_with_gradle(toolchain: &Toolchain, config: &crate::config::Config, output_dir: &Path) -> Result<()> {
-    // Create a spinner to show progress
-    let pb = ProgressBar::new_spinner();
-    pb.set_style(
-        ProgressStyle::default_spinner()
-            .template("{spinner:.dim} {msg}")
-            .unwrap()
-            .tick_strings(&["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"])
-    );
-    pb.set_message("Building APK with Gradle...");
-    pb.enable_steady_tick(std::time::Duration::from_millis(80));
-
-    let mut gradle = toolchain.gradle_cmd(&config.toolchain.java, &config.toolchain.gradle)?;
-
-    let status = gradle
-        .current_dir(output_dir)
-        .args(["assembleDebug", "--console=plain", "--quiet"])
-        .status()
-        .context("Failed to run Gradle")?;
-
-    // Clear the progress bar (it disappears)
-    pb.finish_and_clear();
-
-    if !status.success() {
-        anyhow::bail!("Gradle build failed");
     }
 
     Ok(())
@@ -505,7 +474,7 @@ fn install_cycle(
     }
 
     // 2. Build APK with Gradle
-    build_with_gradle(toolchain, config, &result.output_dir)?;
+    build_with_gradle(toolchain, config, &result.output_dir, false)?;
 
     // 3. Install APK
     install_apk(toolchain, &result.output_dir, device_id)?;
