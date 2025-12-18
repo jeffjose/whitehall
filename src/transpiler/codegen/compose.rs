@@ -1,5 +1,6 @@
 /// Compose backend - generates Jetpack Compose code
 
+use colored::Colorize;
 use crate::transpiler::analyzer::StoreRegistry;
 use crate::transpiler::ast::{ClassDeclaration, Component, ForLoopBlock, Markup, PropValue, WhitehallFile};
 use crate::transpiler::optimizer::Optimization;
@@ -24,6 +25,7 @@ pub struct ComposeBackend {
     uses_pull_to_refresh: bool, // Track if onRefresh prop is used (for PullToRefreshBox)
     uses_auto_column: bool, // Track if auto-wrap Column is used (for Column import)
     uses_navigate: bool, // Track if $navigate() is used (for LocalNavController import)
+    uses_material_icons: bool, // Track if Icon with name prop is used (for Icons import)
     // Phase 1.1: ViewModel wrapper context
     in_viewmodel_wrapper: bool, // Are we generating markup inside a ViewModel wrapper?
     mutable_vars: std::collections::HashSet<String>, // Mutable vars (need uiState prefix)
@@ -124,6 +126,7 @@ impl ComposeBackend {
             uses_pull_to_refresh: false, // Track onRefresh prop usage for PullToRefreshBox
             uses_auto_column: false, // Track auto-wrap Column usage
             uses_navigate: false, // Track $navigate() usage for LocalNavController import
+            uses_material_icons: false, // Track Icon with name prop for Icons import
             in_viewmodel_wrapper: false, // Phase 1.1: Not in ViewModel wrapper by default
             mutable_vars: std::collections::HashSet::new(), // Phase 1.1: Track mutable vars
             derived_props: std::collections::HashSet::new(), // Phase 1.1: Track derived properties
@@ -375,11 +378,20 @@ impl ComposeBackend {
             }
         }
 
-        // Add LocalNavController import for $navigate() API usage (non-screens only)
-        // Screens receive navController as a parameter, so they don't need LocalNavController
-        if self.uses_navigate && self.component_type.as_deref() != Some("screen") {
+        // Add Material Icons imports for Icon with name prop
+        if self.uses_material_icons {
+            imports.push("androidx.compose.material.icons.Icons".to_string());
+            imports.push("androidx.compose.material.icons.filled.*".to_string());
+        }
+
+        // Add navigateSafe import for $navigate() API usage (all components)
+        if self.uses_navigate {
             let base_package = self.get_base_package();
-            imports.push(format!("{}.LocalNavController", base_package));
+            imports.push(format!("{}.navigateSafe", base_package));
+            // LocalNavController only needed for non-screens (screens get navController as parameter)
+            if self.component_type.as_deref() != Some("screen") {
+                imports.push(format!("{}.LocalNavController", base_package));
+            }
         }
 
         // Note: Dispatchers import is added later if needed (see end of generate function)
@@ -1306,20 +1318,42 @@ impl ComposeBackend {
 
                     // Pattern 2: Popup menu (has expanded but not value/items)
                     if expanded_prop.is_some() && value_prop.is_none() {
+                        // Clear the component name we added earlier (it was pushed at line 1241)
+                        output.clear();
                         // Simple DropdownMenu - pass through as-is
                         output.push_str(&indent_str);
                         output.push_str("DropdownMenu(\n");
 
                         for prop in &comp.props {
-                            let prop_value = self.process_prop_value(&prop.value, &prop.name);
+                            let prop_value = self.get_prop_expr(&prop.value);
+                            // Transform props appropriately
+                            let prop_value = match prop.name.as_str() {
+                                "onDismissRequest" => {
+                                    // Transform arrow to Kotlin lambda, then transform viewmodel
+                                    let lambda = self.transform_lambda_arrow(&prop_value);
+                                    // Extract inner content if wrapped in braces
+                                    if lambda.starts_with('{') && lambda.ends_with('}') {
+                                        let inner = lambda.trim_start_matches('{').trim_end_matches('}').trim();
+                                        let transformed = self.transform_viewmodel_expression(inner);
+                                        format!("{{ {} }}", transformed)
+                                    } else {
+                                        self.transform_viewmodel_expression(&lambda)
+                                    }
+                                }
+                                "expanded" => {
+                                    // Transform state variable reference
+                                    self.transform_viewmodel_expression(&prop_value)
+                                }
+                                _ => prop_value.to_string()
+                            };
                             output.push_str(&format!("{}    {} = {},\n", indent_str, prop.name, prop_value));
                         }
 
                         output.push_str(&format!("{}) {{\n", indent_str));
 
-                        // Generate children (DropdownMenuItem components)
+                        // Generate children (DropdownMenuItem components) with special handling
                         for child in &comp.children {
-                            let child_code = self.generate_markup_with_indent(child, indent + 1)?;
+                            let child_code = self.generate_dropdown_menu_item(child, indent + 1)?;
                             output.push_str(&child_code);
                         }
 
@@ -1446,7 +1480,7 @@ impl ComposeBackend {
                         }
                     }
                 }
-                // Special handling for TopAppBar title
+                // Special handling for TopAppBar title, actions, navigationIcon
                 else if comp.name == "TopAppBar" {
                     for prop in &comp.props {
                         if prop.name == "title" {
@@ -1459,6 +1493,21 @@ impl ComposeBackend {
                                     // title with component: wrap in lambda
                                     let title_code = self.generate_markup_with_indent(markup, indent + 1)?;
                                     params.push(format!("title = {{\n{}}}", title_code.trim_end()));
+                                }
+                            }
+                        } else if prop.name == "actions" || prop.name == "navigationIcon" {
+                            // actions and navigationIcon accept composable lambdas
+                            match &prop.value {
+                                PropValue::Markup(markup) => {
+                                    // Markup prop: wrap in lambda
+                                    let content_code = self.generate_markup_with_indent(markup, indent + 2)?;
+                                    let closing_indent = "    ".repeat(indent + 1);
+                                    params.push(format!("{} = {{\n{}{}}}", prop.name, content_code, closing_indent));
+                                }
+                                PropValue::Expression(expr) => {
+                                    // Expression - likely a lambda already
+                                    let transformed = self.transform_lambda_arrow(expr);
+                                    params.push(format!("{} = {}", prop.name, transformed));
                                 }
                             }
                         } else {
@@ -1765,14 +1814,14 @@ impl ComposeBackend {
                     output.push_str(&indent_str);
                     output.push_str("AsyncImage");
                 }
-                // Special handling for Text, Card, and Button with modifier props
-                else if comp.name == "Text" || comp.name == "Card" || comp.name == "Button" {
+                // Special handling for Text, Card, Button, and IconButton with modifier props
+                else if comp.name == "Text" || comp.name == "Card" || comp.name == "Button" || comp.name == "IconButton" {
                     // Use unified builder for padding and onClick
-                    // Card and Button have native onClick, so disable clickable modifier for them
+                    // Card, Button, and IconButton have native onClick, so disable clickable modifier for them
                     let (mut modifiers, mut handled) = self.build_modifiers_for_component(comp, ModifierConfig {
                         handle_padding: true,
                         handle_fill_max: true,
-                        handle_click_as_modifier: comp.name == "Text", // Card/Button have native onClick
+                        handle_click_as_modifier: comp.name == "Text", // Card/Button/IconButton have native onClick
                         ..Default::default()
                     })?;
 
@@ -2044,8 +2093,34 @@ impl ComposeBackend {
                 }
                 // Special handling for Icon
                 else if comp.name == "Icon" {
-                    // Add all props
+                    let mut handled = std::collections::HashSet::new();
+
+                    // Handle name prop → imageVector = Icons.Default.{name}
+                    if let Some(name_prop) = comp.props.iter().find(|p| p.name == "name") {
+                        let name_value = self.get_prop_expr(&name_prop.value);
+                        // Strip quotes if present
+                        let icon_name = name_value.trim_matches('"');
+                        // Mark that we need Icons import
+                        self.uses_material_icons = true;
+                        params.push(format!("imageVector = Icons.Default.{}", icon_name));
+                        handled.insert("name".to_string());
+                    }
+
+                    // Add contentDescription (required parameter)
+                    if let Some(desc_prop) = comp.props.iter().find(|p| p.name == "contentDescription") {
+                        let desc_value = self.get_prop_expr(&desc_prop.value);
+                        params.push(format!("contentDescription = {}", desc_value));
+                        handled.insert("contentDescription".to_string());
+                    } else if handled.contains("name") {
+                        // Add default null contentDescription if name was provided but no description
+                        params.push("contentDescription = null".to_string());
+                    }
+
+                    // Add other props
                     for prop in &comp.props {
+                        if handled.contains(&prop.name) {
+                            continue;
+                        }
                         let prop_expr = self.get_prop_expr(&prop.value);
                         let transformed = self.transform_prop(&comp.name, &prop.name, prop_expr);
                         params.extend(transformed?);
@@ -2369,6 +2444,86 @@ impl ComposeBackend {
         }
     }
 
+    /// Generate a DropdownMenuItem component with proper text and onClick handling
+    fn generate_dropdown_menu_item(&mut self, markup: &Markup, indent: usize) -> Result<String, String> {
+        let indent_str = "    ".repeat(indent);
+
+        match markup {
+            Markup::Component(comp) if comp.name == "DropdownMenuItem" => {
+                let mut output = String::new();
+                output.push_str(&indent_str);
+                output.push_str("DropdownMenuItem(\n");
+
+                for prop in &comp.props {
+                    let prop_value = self.get_prop_expr(&prop.value);
+
+                    match prop.name.as_str() {
+                        "text" => {
+                            // Transform text="Settings" to text = { Text("Settings") }
+                            // Check if it's a string literal
+                            if prop_value.starts_with('"') && prop_value.ends_with('"') {
+                                output.push_str(&format!("{}    text = {{ Text({}) }},\n", indent_str, prop_value));
+                            } else {
+                                // It's an expression, wrap it in Text() composable
+                                output.push_str(&format!("{}    text = {{ Text({}) }},\n", indent_str, prop_value));
+                            }
+                        }
+                        "onClick" => {
+                            // Transform onClick lambda and handle $navigate
+                            let transformed = self.transform_lambda_arrow(&prop_value);
+
+                            // Check if it's a multi-line block with braces
+                            if transformed.starts_with('{') && transformed.ends_with('}') {
+                                // Extract inner content
+                                let inner = transformed.trim_start_matches('{').trim_end_matches('}').trim();
+
+                                // Handle multi-line content: transform each line separately
+                                let lines: Vec<&str> = inner.lines().collect();
+                                if lines.len() > 1 {
+                                    // Multi-line: process each line, join with semicolons
+                                    let transformed_lines: Vec<String> = lines.iter()
+                                        .map(|line| {
+                                            let trimmed = line.trim();
+                                            if trimmed.is_empty() {
+                                                String::new()
+                                            } else {
+                                                let t = self.transform_navigate_call(&trimmed.to_string());
+                                                self.transform_viewmodel_expression(&t)
+                                            }
+                                        })
+                                        .filter(|s| !s.is_empty())
+                                        .collect();
+                                    let joined = transformed_lines.join("; ");
+                                    output.push_str(&format!("{}    onClick = {{ {} }},\n", indent_str, joined));
+                                } else {
+                                    // Single line
+                                    let inner_transformed = self.transform_navigate_call(&inner.to_string());
+                                    let inner_transformed = self.transform_viewmodel_expression(&inner_transformed);
+                                    output.push_str(&format!("{}    onClick = {{ {} }},\n", indent_str, inner_transformed));
+                                }
+                            } else {
+                                // Single expression
+                                let transformed = self.transform_navigate_call(&transformed);
+                                let transformed = self.transform_viewmodel_expression(&transformed);
+                                output.push_str(&format!("{}    onClick = {{ {} }},\n", indent_str, transformed));
+                            }
+                        }
+                        _ => {
+                            // Pass through other props as-is
+                            let transformed = self.transform_lambda_arrow(&prop_value);
+                            output.push_str(&format!("{}    {} = {},\n", indent_str, prop.name, transformed));
+                        }
+                    }
+                }
+
+                output.push_str(&format!("{})\n", indent_str));
+                Ok(output)
+            }
+            // For non-DropdownMenuItem children, fall back to standard generation
+            _ => self.generate_markup_with_indent(markup, indent),
+        }
+    }
+
     fn resolve_import(&self, path: &str) -> String {
         // Resolve $ aliases to actual package paths
         if path.starts_with('$') {
@@ -2377,7 +2532,7 @@ impl ComposeBackend {
             // Extract the root package by removing common package type suffixes
             // e.g., "com.example.app.components" -> "com.example.app"
             // e.g., "com.example.app.screens" -> "com.example.app"
-            let known_suffixes = [".components", ".screens", ".routes", ".lib", ".models", ".utils"];
+            let known_suffixes = [".components", ".screens", ".routes", ".layouts", ".lib", ".models", ".utils"];
             let root_package = known_suffixes.iter()
                 .find_map(|&suffix| {
                     if self.package.ends_with(suffix) {
@@ -3125,6 +3280,17 @@ impl ComposeBackend {
                         let import = "androidx.compose.material3.Icon".to_string();
                         if !component_imports.contains(&import) {
                             component_imports.push(import);
+                        }
+                        // Check if Icon has name prop → needs Icons import
+                        if comp.props.iter().any(|p| p.name == "name") {
+                            let icons_import = "androidx.compose.material.icons.Icons".to_string();
+                            if !component_imports.contains(&icons_import) {
+                                component_imports.push(icons_import);
+                            }
+                            let filled_import = "androidx.compose.material.icons.filled.*".to_string();
+                            if !component_imports.contains(&filled_import) {
+                                component_imports.push(filled_import);
+                            }
                         }
                     }
                     "IconButton" => {
@@ -4178,7 +4344,10 @@ impl ComposeBackend {
                     if inner.starts_with('/') {
                         format!("\"{}\"", &inner[1..])
                     } else {
-                        path_with_quotes.to_string()
+                        // Invalid route path
+                        eprintln!("{} Invalid route in $navigate.replace(\"{}\")", "error:".red().bold(), inner);
+                        eprintln!("       {} routes must start with '/' (e.g., $navigate.replace(\"/home\"))", "-->".blue().bold());
+                        format!("/* ERROR: Invalid route '{}' - must start with / */ INVALID_ROUTE", inner)
                     }
                 } else {
                     path_with_quotes.to_string()
@@ -4202,7 +4371,10 @@ impl ComposeBackend {
                     if inner.starts_with('/') {
                         format!("\"{}\"", &inner[1..])
                     } else {
-                        path_with_quotes.to_string()
+                        // Invalid route path
+                        eprintln!("{} Invalid route in $navigate.popUpTo(\"{}\")", "error:".red().bold(), inner);
+                        eprintln!("       {} routes must start with '/' (e.g., $navigate.popUpTo(\"/home\"))", "-->".blue().bold());
+                        format!("/* ERROR: Invalid route '{}' - must start with / */ INVALID_ROUTE", inner)
                     }
                 } else {
                     path_with_quotes.to_string()
@@ -4214,32 +4386,44 @@ impl ComposeBackend {
             }
         }
 
-        // Transform $navigate("/path") → navController.navigate("path")
+        // Transform $navigate("/path") → navController.navigateSafe("path") for string routes
+        // Transform $navigate(Routes.X) → navController.navigate(Routes.X) for typed routes
         // Also handles $navigate("@navhost/path") for multi-navhost (TODO: implement properly)
         while let Some(start) = result.find("$navigate(") {
             self.uses_navigate = true;
             let after_call = &result[start + 10..]; // Skip "$navigate("
             if let Some(end) = after_call.find(')') {
                 let path_with_quotes = &after_call[..end];
-                // Strip leading "/" from path for Compose Navigation
-                let path = if path_with_quotes.starts_with('"') && path_with_quotes.len() > 2 {
+                // Check if it's a string literal (starts with ") or a typed route (Routes.*)
+                let (path, use_safe) = if path_with_quotes.starts_with('"') && path_with_quotes.len() > 2 {
+                    // String route - use navigateSafe for runtime error handling
                     let inner = &path_with_quotes[1..path_with_quotes.len()-1];
                     if inner.starts_with('/') {
-                        format!("\"{}\"", &inner[1..])
+                        (format!("\"{}\"", &inner[1..]), true)
                     } else if inner.starts_with('@') {
                         // TODO: Multi-navhost support - for now strip @navhost/ prefix
                         if let Some(slash_pos) = inner.find('/') {
-                            format!("\"{}\"", &inner[slash_pos + 1..])
+                            (format!("\"{}\"", &inner[slash_pos + 1..]), true)
                         } else {
-                            path_with_quotes.to_string()
+                            (path_with_quotes.to_string(), true)
                         }
                     } else {
-                        path_with_quotes.to_string()
+                        // Invalid route path - must start with / or @
+                        // Generate a compile error by creating invalid Kotlin
+                        eprintln!("{} Invalid route in $navigate(\"{}\")", "error:".red().bold(), inner);
+                        eprintln!("       {} routes must start with '/' (e.g., $navigate(\"/settings\")) or '@' for named navhosts", "-->".blue().bold());
+                        (format!("/* ERROR: Invalid route '{}' - must start with / or @ */ INVALID_ROUTE", inner), true)
                     }
                 } else {
-                    path_with_quotes.to_string()
+                    // Typed route (e.g., Routes.Photo(id = ...)) - use regular navigate
+                    // These are compile-time checked so don't need runtime safety
+                    (path_with_quotes.to_string(), false)
                 };
-                let replacement = format!("{}.navigate({})", nav_ref, path);
+                let replacement = if use_safe {
+                    format!("{}.navigateSafe({})", nav_ref, path)
+                } else {
+                    format!("{}.navigate({})", nav_ref, path)
+                };
                 result = format!("{}{}{}", &result[..start], replacement, &result[start + 11 + end..]);
             } else {
                 break;
@@ -6337,6 +6521,11 @@ impl ComposeBackend {
             }
         }
 
+        // Check if experimental Material3 APIs are used (DropdownMenu → ExposedDropdownMenuBox, TopAppBar)
+        if component_imports.iter().any(|imp| imp.contains("ExposedDropdownMenuBox") || imp.contains("TopAppBar")) {
+            self.uses_experimental_material3 = true;
+        }
+
         let mut imports = Vec::new();
 
         // Add prop imports first (layout, styling, etc.)
@@ -6365,6 +6554,12 @@ impl ComposeBackend {
             imports.push("androidx.compose.material3.pulltorefresh.PullToRefreshBox".to_string());
         }
 
+        // Add ExperimentalMaterial3Api import if using experimental APIs (TopAppBar, DropdownMenu, etc.)
+        if self.uses_experimental_material3 && !self.uses_pull_to_refresh {
+            // Only add if not already added by PullToRefresh
+            imports.push("androidx.compose.material3.ExperimentalMaterial3Api".to_string());
+        }
+
         // User imports (resolve $ aliases)
         for import in &file.imports {
             let resolved = self.resolve_import(&import.path);
@@ -6388,11 +6583,20 @@ impl ComposeBackend {
             imports.push(format!("{}.routes.Routes", base_package));
         }
 
-        // Add LocalNavController import for $navigate() API usage (non-screens only)
-        // Screens receive navController as a parameter, so they don't need LocalNavController
-        if self.uses_navigate && self.component_type.as_deref() != Some("screen") {
+        // Add navigateSafe import for $navigate() API usage (all components)
+        if self.uses_navigate {
             let base_package = self.get_base_package();
-            imports.push(format!("{}.LocalNavController", base_package));
+            imports.push(format!("{}.navigateSafe", base_package));
+            // LocalNavController only needed for non-screens (screens get navController as parameter)
+            if self.component_type.as_deref() != Some("screen") {
+                imports.push(format!("{}.LocalNavController", base_package));
+            }
+        }
+
+        // Add Material Icons imports for Icon with name prop
+        if self.uses_material_icons {
+            imports.push("androidx.compose.material.icons.Icons".to_string());
+            imports.push("androidx.compose.material.icons.filled.*".to_string());
         }
 
         // Sort imports alphabetically (standard Kotlin convention)
@@ -6443,8 +6647,8 @@ impl ComposeBackend {
 
         let props_list = params.join(", ");
 
-        // Add @OptIn if using experimental Material3 APIs (PullToRefresh, etc.)
-        if self.uses_pull_to_refresh {
+        // Add @OptIn if using experimental Material3 APIs (PullToRefresh, DropdownMenu, TopAppBar, etc.)
+        if self.uses_pull_to_refresh || self.uses_experimental_material3 {
             output.push_str("@OptIn(ExperimentalMaterial3Api::class)\n");
         }
         output.push_str("@Composable\n");
@@ -6456,6 +6660,12 @@ impl ComposeBackend {
         output.push_str(&format!("val viewModel = viewModel<{}>()\n", viewmodel_name));
         output.push_str(&self.indent());
         output.push_str("val uiState by viewModel.uiState.collectAsState()\n");
+
+        // For non-screen components that use $navigate, add navController from LocalNavController
+        if self.uses_navigate && !is_screen {
+            output.push_str(&self.indent());
+            output.push_str("val navController = LocalNavController.current\n");
+        }
 
         // Phase 1.1: Set up ViewModel wrapper context before generating markup
         // This enables transformation of variable/function references

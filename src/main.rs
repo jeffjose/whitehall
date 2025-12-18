@@ -30,6 +30,9 @@ enum Commands {
         /// Omit package declaration (for pasting) - only for single files
         #[arg(long)]
         no_package: bool,
+        /// Watch for changes and recompile automatically
+        #[arg(long, short)]
+        watch: bool,
     },
     /// Transpile + build APK
     /// Works with both project directories (whitehall.toml) and single .wh files
@@ -205,8 +208,8 @@ fn main() {
         Commands::Init { name } => {
             commands::init::execute(&name)
         }
-        Commands::Compile { target, package, no_package } => {
-            commands::compile::execute(&target, package.as_deref(), no_package)
+        Commands::Compile { target, package, no_package, watch } => {
+            commands::compile::execute(&target, package.as_deref(), no_package, watch)
         }
         Commands::Build { target, watch } => {
             commands::build::execute(&target, watch)

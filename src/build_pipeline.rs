@@ -583,10 +583,23 @@ import androidx.compose.material3.lightColorScheme"#,
         r#"package {}
 
 import android.os.Bundle
+import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.compose.foundation.layout.*
+import androidx.compose.material3.Button
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.staticCompositionLocalOf
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
 {}
 import androidx.navigation.compose.NavHost
@@ -601,11 +614,76 @@ val LocalNavController = staticCompositionLocalOf<NavController> {{
     error("NavController not provided - ensure you're inside a CompositionLocalProvider")
 }}
 
+// Global error state for app-wide error handling
+private val globalError = mutableStateOf<String?>(null)
+
+// Safe navigation extension that catches errors instead of crashing
+fun NavController.navigateSafe(route: String) {{
+    try {{
+        navigate(route)
+    }} catch (e: IllegalArgumentException) {{
+        Log.e("Navigation", "Route not found: $route", e)
+        globalError.value = route
+    }}
+}}
+
+// Error screen for navigation failures
+@Composable
+fun ErrorScreen(
+    route: String?,
+    onGoBack: () -> Unit
+) {{
+    Surface(
+        modifier = Modifier.fillMaxSize(),
+        color = MaterialTheme.colorScheme.background
+    ) {{
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(32.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center
+        ) {{
+            Text(
+                text = "Screen Not Found",
+                fontSize = 24.sp,
+                color = MaterialTheme.colorScheme.onBackground
+            )
+            Spacer(modifier = Modifier.height(16.dp))
+            Text(
+                text = "/$route",
+                fontSize = 16.sp,
+                color = MaterialTheme.colorScheme.primary,
+                fontFamily = FontFamily.Monospace
+            )
+            Spacer(modifier = Modifier.height(32.dp))
+            Button(onClick = onGoBack) {{
+                Text("Go Back")
+            }}
+        }}
+    }}
+}}
+
 class MainActivity : ComponentActivity() {{
     override fun onCreate(savedInstanceState: Bundle?) {{
         super.onCreate(savedInstanceState)
+
         setContent {{
+            // Check for navigation errors first
+            val failedRoute = globalError.value
+            if (failedRoute != null) {{
+                // Show error screen for navigation failures
+                MaterialTheme {{
+                    ErrorScreen(
+                        route = failedRoute,
+                        onGoBack = {{
+                            globalError.value = null
+                        }}
+                    )
+                }}
+            }} else {{
 {}
+            }}
         }}
     }}
 }}
