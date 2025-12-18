@@ -5,7 +5,7 @@ Tests hex color support with automatic RGBA→ARGB conversion for Android.
 ## Input
 
 ```whitehall
-<Column padding={16} spacing={12}>
+<Column padding={16} gap={12}>
   <Text fontSize={24} fontWeight="bold" color="#1976D2">
     Color Examples
   </Text>

@@ -9,7 +9,7 @@ import $models.Post
 
   @prop val posts: List<Post>
 
-<Column spacing={16}>
+<Column gap={16}>
   @for (post in posts, key = { it.id }) {
     <Card onClick={() => $navigate($routes.post.detail(id = post.id))}>
       <Column padding={12}>

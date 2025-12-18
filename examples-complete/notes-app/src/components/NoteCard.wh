@@ -4,8 +4,8 @@
 @prop val onDelete: () -> Unit
 
 <Card padding={16}>
-  <Column spacing={8}>
-    <Row spacing={8}>
+  <Column gap={8}>
+    <Row gap={8}>
       <Text fontSize={18} fontWeight="bold">
         {title}
       </Text>

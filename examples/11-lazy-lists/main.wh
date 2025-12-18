@@ -11,7 +11,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 
 val items = (1..100).toList()
 
-<Column padding={20} spacing={16}>
+<Column padding={20} gap={16}>
   <Text fontSize={32} fontWeight="bold">Lazy Lists Demo</Text>
 
   <Card padding={16} backgroundColor="primaryContainer">
@@ -20,10 +20,10 @@ val items = (1..100).toList()
 
   <Text fontSize={16} fontWeight="bold">Scroll through 100 items:</Text>
 
-  <LazyColumn spacing={8}>
+  <LazyColumn gap={8}>
     @for (i in items) {
       <Card padding={16}>
-        <Column spacing={4}>
+        <Column gap={4}>
           <Text fontSize={18} fontWeight="bold">Item #{i}</Text>
           <Text fontSize={14} color="#666666">This is item number {i}</Text>
         </Column>

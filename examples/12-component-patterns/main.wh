@@ -11,7 +11,7 @@ var count1 = 0
 var count2 = 0
 var count3 = 0
 
-<Column padding={20} spacing={16}>
+<Column padding={20} gap={16}>
   <Text fontSize={32} fontWeight="bold">Component Patterns</Text>
 
   <Card padding={16} backgroundColor="primaryContainer">
@@ -19,7 +19,7 @@ var count3 = 0
   </Card>
 
   <Card padding={16}>
-    <Column spacing={12}>
+    <Column gap={12}>
       <Text fontSize={18} fontWeight="bold">Counter #1</Text>
       <Text fontSize={32}>{count1}</Text>
       <Button onClick={() => count1++} fillMaxWidth={true}>
@@ -29,7 +29,7 @@ var count3 = 0
   </Card>
 
   <Card padding={16}>
-    <Column spacing={12}>
+    <Column gap={12}>
       <Text fontSize={18} fontWeight="bold">Counter #2</Text>
       <Text fontSize={32}>{count2}</Text>
       <Button onClick={() => count2++} fillMaxWidth={true}>
@@ -39,7 +39,7 @@ var count3 = 0
   </Card>
 
   <Card padding={16}>
-    <Column spacing={12}>
+    <Column gap={12}>
       <Text fontSize={18} fontWeight="bold">Counter #3</Text>
       <Text fontSize={32}>{count3}</Text>
       <Button onClick={() => count3++} fillMaxWidth={true}>

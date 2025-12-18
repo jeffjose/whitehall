@@ -2,7 +2,7 @@ import $.stores.CounterStore
 
 val counter = CounterStore()
 
-<Column padding={16} spacing={16}>
+<Column padding={16} gap={16}>
   <Text
     text="Counter with Store"
     fontSize={24}
@@ -10,7 +10,7 @@ val counter = CounterStore()
   />
 
   <Card padding={24}>
-    <Column spacing={12}>
+    <Column gap={12}>
       <Text
         text="Count: {uiState.count}"
         fontSize={48}
@@ -36,7 +36,7 @@ val counter = CounterStore()
     </Column>
   </Card>
 
-  <Row spacing={8}>
+  <Row gap={8}>
     <Button onClick={ { counter.decrement() } } text="−" />
     <Button onClick={ { counter.increment() } } text="+" />
   </Row>

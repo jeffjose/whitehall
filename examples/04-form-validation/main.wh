@@ -44,7 +44,7 @@ fun validateForm() {
   successMessage = "Form submitted successfully!"
 }
 
-<Column padding={20} spacing={16}>
+<Column padding={20} gap={16}>
   <Text fontSize={32} fontWeight="bold">Form Validation</Text>
 
   <Card padding={16} backgroundColor="primaryContainer">
@@ -52,7 +52,7 @@ fun validateForm() {
   </Card>
 
   <Card padding={16}>
-    <Column spacing={12}>
+    <Column gap={12}>
       <TextField
         value={email}
         onValueChange={(value) => email = value}

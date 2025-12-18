@@ -361,7 +361,7 @@ whitehall init my-app --template ./path/to/template
 - [ ] Color opacity - `color="black/50"`, `color="#FF0000/80"`
 - [ ] TextField type prop - `type="email"`, `type="number"`, `type="password"`
 - [ ] Divider component - `<Divider />`, `<Divider vertical />`
-- [ ] Grid layout - `<Grid cols={3} spacing={8}>...</Grid>`
+- [ ] Grid layout - `<Grid cols={3} gap={8}>...</Grid>`
 - [ ] Image component - Simpler than AsyncImage
 
 **Success metric:** ⚙️ Common patterns require less boilerplate

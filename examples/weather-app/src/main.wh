@@ -11,13 +11,13 @@ fun refreshWeather() {
   isLoading = false
 }
 
-<Column padding={24} spacing={24}>
+<Column padding={24} gap={24}>
   <Text fontSize={28} fontWeight="bold">
     Weather App
   </Text>
 
   <Card padding={24}>
-    <Column spacing={16}>
+    <Column gap={16}>
       <Text fontSize={24} fontWeight="bold">
         {city}
       </Text>
@@ -25,7 +25,7 @@ fun refreshWeather() {
       @if (isLoading) {
         <Text>Loading...</Text>
       } else {
-        <Column spacing={8}>
+        <Column gap={8}>
           <Text fontSize={48} fontWeight="bold">
             {temperature} degrees
           </Text>

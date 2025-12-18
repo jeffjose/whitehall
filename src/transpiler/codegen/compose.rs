@@ -2949,8 +2949,8 @@ impl ComposeBackend {
                             self.add_import_if_missing(prop_imports, "androidx.compose.foundation.layout.width");
                             self.add_import_if_missing(prop_imports, "androidx.compose.ui.unit.dp");
                         }
-                        ("Column", "spacing") => {
-                            // spacing → verticalArrangement = Arrangement.spacedBy(N.dp)
+                        ("Column", "gap") => {
+                            // gap → verticalArrangement = Arrangement.spacedBy(N.dp)
                             self.add_import_if_missing(prop_imports, "androidx.compose.foundation.layout.Arrangement");
                             self.add_import_if_missing(prop_imports, "androidx.compose.ui.unit.dp");
                         }
@@ -2974,8 +2974,8 @@ impl ComposeBackend {
                             self.add_import_if_missing(prop_imports, "androidx.compose.foundation.background");
                             self.add_import_if_missing(prop_imports, "androidx.compose.ui.graphics.Color");
                         }
-                        ("Row", "spacing") => {
-                            // spacing → horizontalArrangement = Arrangement.spacedBy(N.dp)
+                        ("Row", "gap") => {
+                            // gap → horizontalArrangement = Arrangement.spacedBy(N.dp)
                             self.add_import_if_missing(prop_imports, "androidx.compose.foundation.layout.Arrangement");
                             self.add_import_if_missing(prop_imports, "androidx.compose.ui.unit.dp");
                         }
@@ -3083,8 +3083,8 @@ impl ComposeBackend {
                                 self.add_import_if_missing(prop_imports, "coil.compose.rememberAsyncImagePainter");
                             }
                         }
-                        ("LazyColumn", "spacing") => {
-                            // spacing → verticalArrangement = Arrangement.spacedBy(N.dp)
+                        ("LazyColumn", "gap") => {
+                            // gap → verticalArrangement = Arrangement.spacedBy(N.dp)
                             self.add_import_if_missing(prop_imports, "androidx.compose.foundation.layout.Arrangement");
                             self.add_import_if_missing(prop_imports, "androidx.compose.ui.unit.dp");
                         }
@@ -3969,10 +3969,10 @@ impl ComposeBackend {
                     }
                 }
             }
-            // Column spacing → verticalArrangement = Arrangement.spacedBy(N.dp)
-            ("Column", "spacing") => {
-                let spacing_value = if value.ends_with(".dp") { value.to_string() } else { format!("{}.dp", value) };
-                Ok(vec![format!("verticalArrangement = Arrangement.spacedBy({})", spacing_value)])
+            // Column gap → verticalArrangement = Arrangement.spacedBy(N.dp)
+            ("Column", "gap") => {
+                let gap_value = if value.ends_with(".dp") { value.to_string() } else { format!("{}.dp", value) };
+                Ok(vec![format!("verticalArrangement = Arrangement.spacedBy({})", gap_value)])
             }
             // Column padding → modifier = Modifier.padding(N.dp)
             ("Column", "padding") => {
@@ -4026,20 +4026,20 @@ impl ComposeBackend {
                 };
                 Ok(vec![format!("modifier = Modifier.background({})", color)])
             }
-            // LazyColumn spacing → verticalArrangement = Arrangement.spacedBy(N.dp)
-            ("LazyColumn", "spacing") => {
-                let spacing_value = if value.ends_with(".dp") { value.to_string() } else { format!("{}.dp", value) };
-                Ok(vec![format!("verticalArrangement = Arrangement.spacedBy({})", spacing_value)])
+            // LazyColumn gap → verticalArrangement = Arrangement.spacedBy(N.dp)
+            ("LazyColumn", "gap") => {
+                let gap_value = if value.ends_with(".dp") { value.to_string() } else { format!("{}.dp", value) };
+                Ok(vec![format!("verticalArrangement = Arrangement.spacedBy({})", gap_value)])
             }
             // LazyColumn padding → contentPadding = PaddingValues(N.dp)
             ("LazyColumn", "padding") => {
                 let padding_value = if value.ends_with(".dp") { value.to_string() } else { format!("{}.dp", value) };
                 Ok(vec![format!("contentPadding = PaddingValues({})", padding_value)])
             }
-            // Row spacing → horizontalArrangement = Arrangement.spacedBy(N.dp)
-            ("Row", "spacing") => {
-                let spacing_value = if value.ends_with(".dp") { value.to_string() } else { format!("{}.dp", value) };
-                Ok(vec![format!("horizontalArrangement = Arrangement.spacedBy({})", spacing_value)])
+            // Row gap → horizontalArrangement = Arrangement.spacedBy(N.dp)
+            ("Row", "gap") => {
+                let gap_value = if value.ends_with(".dp") { value.to_string() } else { format!("{}.dp", value) };
+                Ok(vec![format!("horizontalArrangement = Arrangement.spacedBy({})", gap_value)])
             }
             // Row padding → modifier = Modifier.padding(N.dp)
             ("Row", "padding") => {

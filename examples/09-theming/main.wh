@@ -21,8 +21,8 @@ fun getColorScheme(): ColorScheme {
 }
 
 <MaterialTheme colorScheme={getColorScheme()}>
-  <Column p={20} spacing={16}>
-    <Row spacing={12}>
+  <Column p={20} gap={16}>
+    <Row gap={12}>
       <Text fontSize={28} fontWeight="bold">Theme Demo</Text>
 
       <Button
@@ -53,7 +53,7 @@ fun getColorScheme(): ColorScheme {
 
     // Surface color showcase
     <Card p={16} backgroundColor="surface">
-      <Column spacing={8}>
+      <Column gap={8}>
         <Text fontSize={20} fontWeight="bold">
           Surface Card
         </Text>
@@ -65,7 +65,7 @@ fun getColorScheme(): ColorScheme {
 
     // Typography showcase
     <Card p={16}>
-      <Column spacing={8}>
+      <Column gap={8}>
         <Text fontSize={24} fontWeight="bold">Typography Styles</Text>
         <Text fontSize={20}>Headline - 20sp</Text>
         <Text fontSize={16}>Body - 16sp</Text>

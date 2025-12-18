@@ -2,7 +2,7 @@
 /// name = "Colors"
 /// package = "com.example.colors"
 
-<Column padding={16} spacing={12}>
+<Column padding={16} gap={12}>
   <Text fontSize={24} fontWeight="bold">Color Examples</Text>
 
   <Text fontSize={18} fontWeight="bold" color="#1976D2">Hex Colors (#RRGGBB)</Text>

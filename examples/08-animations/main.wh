@@ -21,12 +21,12 @@ fun toggleExpanded() {
   isExpanded = !isExpanded
 }
 
-<Column p={20} spacing={16}>
+<Column p={20} gap={16}>
   <Text fontSize={28} fontWeight="bold">Animations Demo</Text>
 
   // Animated Visibility
   <Card p={16}>
-    <Column spacing={12}>
+    <Column gap={12}>
       <Text fontSize={18} fontWeight="bold">Animated Visibility</Text>
       <Button
         text="Toggle"
@@ -47,7 +47,7 @@ fun toggleExpanded() {
 
   // Expandable Card
   <Card p={16} modifier={Modifier.animateContentSize()}>
-    <Column spacing={12}>
+    <Column gap={12}>
       <Button
         text="Toggle Expand"
         onClick={() => toggleExpanded()}

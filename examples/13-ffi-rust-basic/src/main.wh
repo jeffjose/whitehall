@@ -13,7 +13,7 @@ var num1 = 5
 var num2 = 3
 var primeCheck = 7
 
-<Column padding={20} spacing={16}>
+<Column padding={20} gap={16}>
   <Text fontSize={32} fontWeight="bold">Rust FFI Basics</Text>
 
   <Card padding={16} backgroundColor="primaryContainer">
@@ -21,10 +21,10 @@ var primeCheck = 7
   </Card>
 
   <Card padding={16}>
-    <Column spacing={12}>
+    <Column gap={12}>
       <Text fontSize={18} fontWeight="bold">Math Operations</Text>
       
-      <Row spacing={8}>
+      <Row gap={8}>
         <TextField
           value={num1.toString()}
           onValueChange={(value) => num1 = value.toIntOrNull() ?: 0}
@@ -48,7 +48,7 @@ var primeCheck = 7
   </Card>
 
   <Card padding={16}>
-    <Column spacing={12}>
+    <Column gap={12}>
       <Text fontSize={18} fontWeight="bold">Factorial (Rust)</Text>
       
       <TextField
@@ -70,7 +70,7 @@ var primeCheck = 7
   </Card>
 
   <Card padding={12} backgroundColor="surfaceVariant">
-    <Column spacing={4}>
+    <Column gap={4}>
       <Text fontSize={12} color="#666666">All math operations run in Rust for performance.</Text>
       <Text fontSize={12} color="#666666">The #[ffi] macro auto-generates JNI bridges.</Text>
     </Column>

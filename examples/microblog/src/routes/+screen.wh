@@ -69,7 +69,7 @@ fun handlePostClick(postId: String) {
             onPostClick={handlePostClick}
           />
         } empty {
-          <Column center padding={32} spacing={16}>
+          <Column center padding={32} gap={16}>
             <Icon name="article" size={64} color="secondary" />
             <Text color="secondary">No posts yet</Text>
             <Button

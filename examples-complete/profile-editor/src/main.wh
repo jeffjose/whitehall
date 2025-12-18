@@ -43,11 +43,11 @@ fun markChanged() {
   showSuccess = false
 }
 
-<Column padding={20} spacing={16}>
+<Column padding={20} gap={16}>
   <Text fontSize={32} fontWeight="bold">Profile Editor</Text>
 
   <Card padding={24}>
-    <Column spacing={16}>
+    <Column gap={16}>
       <Card backgroundColor="primary" padding={32}>
         <Icon
           imageVector={Icons.Default.Person}
@@ -63,7 +63,7 @@ fun markChanged() {
   </Card>
 
   <Card padding={16}>
-    <Column spacing={16}>
+    <Column gap={16}>
       <Text fontSize={20} fontWeight="bold">Personal Information</Text>
 
       <ProfileField
@@ -90,7 +90,7 @@ fun markChanged() {
         onValueChange={(value) => { location = value; markChanged() }}
       />
 
-      <Column spacing={4}>
+      <Column gap={4}>
         <Text fontSize={14} fontWeight="bold">Bio</Text>
         <OutlinedTextField
           value={bio}
@@ -115,7 +115,7 @@ fun markChanged() {
     </Card>
   }
 
-  <Row spacing={12}>
+  <Row gap={12}>
     <Button
       onClick={() => saveProfile()}
       enabled={hasChanges()}
@@ -131,7 +131,7 @@ fun markChanged() {
   </Row>
 
   <Card padding={16} backgroundColor="surfaceVariant">
-    <Column spacing={8}>
+    <Column gap={8}>
       <Text fontSize={16} fontWeight="bold">Profile Summary</Text>
       <Text fontSize={14}>Name: {name}</Text>
       <Text fontSize={14}>Email: {email}</Text>

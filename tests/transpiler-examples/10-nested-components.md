@@ -17,12 +17,12 @@ Tests deep component nesting and props passing through multiple levels.
     />
   }
 >
-  <Column padding={16} spacing={8}>
+  <Column padding={16} gap={8}>
     <Text fontSize={20} fontWeight="bold">Items</Text>
 
     @for (item in items, key = { it }) {
       <Card>
-        <Row padding={12} spacing={8}>
+        <Row padding={12} gap={8}>
           <Icon name="check" />
           <Text>{item}</Text>
         </Row>

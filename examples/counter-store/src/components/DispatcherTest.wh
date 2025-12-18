@@ -12,7 +12,7 @@ suspend fun updateUI() {
   count = count + 10
 }
 
-<Column padding={16} spacing={12}>
+<Column padding={16} gap={12}>
   <Text fontSize={24}>Dispatcher Test: {count}</Text>
 
   <Button onClick={() => io { loadData() }}>

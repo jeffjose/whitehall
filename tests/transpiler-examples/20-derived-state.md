@@ -25,14 +25,14 @@ import $models.Product
     filteredProducts.sumOf { it.price }
   }
 
-<Column spacing={16}>
+<Column gap={16}>
   <TextField
     label="Search"
     bind:value={searchQuery}
     placeholder="Search products..."
   />
 
-  <Row spacing={8}>
+  <Row gap={8}>
     <TextField
       label="Min Price"
       bind:value={minPrice}

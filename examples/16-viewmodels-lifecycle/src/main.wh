@@ -33,7 +33,7 @@ onDispose {
   println("Component disposed - cleanup here")
 }
 
-<Column padding={20} spacing={16}>
+<Column padding={20} gap={16}>
   <Text fontSize={32} fontWeight="bold">Lifecycle Hooks</Text>
 
   <Card padding={16} backgroundColor="primaryContainer">
@@ -65,7 +65,7 @@ onDispose {
   />
 
   <Card padding={12} backgroundColor="surfaceVariant">
-    <Column spacing={4}>
+    <Column gap={4}>
       <Text fontSize={12} fontWeight="bold">Lifecycle Info:</Text>
       <Text fontSize={10} color="#666666">• onMount: Runs once when component appears</Text>
       <Text fontSize={10} color="#666666">• onDispose: Cleanup when component removed</Text>

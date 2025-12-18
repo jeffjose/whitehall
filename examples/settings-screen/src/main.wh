@@ -4,14 +4,14 @@ var autoUpdate = true
 var username = "user@example.com"
 var fontSize = 16
 
-<Column padding={24} spacing={24}>
+<Column padding={24} gap={24}>
   <Text fontSize={28} fontWeight="bold">
     Settings
   </Text>
 
-  <Column spacing={16}>
+  <Column gap={16}>
     <Card padding={16}>
-      <Column spacing={12}>
+      <Column gap={12}>
         <Text fontSize={18} fontWeight="bold">
           Account
         </Text>
@@ -24,17 +24,17 @@ var fontSize = 16
     </Card>
 
     <Card padding={16}>
-      <Column spacing={12}>
+      <Column gap={12}>
         <Text fontSize={18} fontWeight="bold">
           Appearance
         </Text>
 
-        <Column spacing={8}>
+        <Column gap={8}>
           <Text>Dark Mode</Text>
           <Switch bind:checked={darkMode} />
         </Column>
 
-        <Column spacing={8}>
+        <Column gap={8}>
           <Text>Font Size: {fontSize}</Text>
           <TextField
             bind:value={fontSize}
@@ -45,17 +45,17 @@ var fontSize = 16
     </Card>
 
     <Card padding={16}>
-      <Column spacing={12}>
+      <Column gap={12}>
         <Text fontSize={18} fontWeight="bold">
           Preferences
         </Text>
 
-        <Column spacing={8}>
+        <Column gap={8}>
           <Text>Notifications</Text>
           <Switch bind:checked={notifications} />
         </Column>
 
-        <Column spacing={8}>
+        <Column gap={8}>
           <Text>Auto Update</Text>
           <Switch bind:checked={autoUpdate} />
         </Column>

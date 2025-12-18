@@ -12,7 +12,7 @@ import $models.Post
 
 <LazyColumn
   padding={16}
-  spacing={12}
+  gap={12}
 >
   @for (post in posts, key = { it.id }) {
     <Card onClick={() => onPostClick(post.id)}>

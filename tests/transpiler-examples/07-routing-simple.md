@@ -13,7 +13,7 @@ Tests basic $routes navigation without parameters.
     $navigate($routes.signup)
   }
 
-<Column spacing={16}>
+<Column gap={16}>
   <Text fontSize={24}>Welcome!</Text>
 
   <Button

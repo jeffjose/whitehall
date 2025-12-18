@@ -75,7 +75,7 @@ src/
 - `@for` loops with keys
 - `@if/@else` conditionals
 - CSS-like padding shortcuts (`p={16}`, `px={20}`)
-- `spacing={8}` for Column/Row
+- `gap={8}` for Column/Row
 - `fillMaxWidth={true}` modifier
 - Hex colors (`#6200EE`) and theme colors (`color="secondary"`)
 - `onMount` lifecycle hook

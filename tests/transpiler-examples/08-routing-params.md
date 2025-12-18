@@ -23,7 +23,7 @@ import $models.User
   @if (isLoading) {
     <LoadingSpinner />
   } else if (user != null) {
-    <Column spacing={16}>
+    <Column gap={16}>
       <Text fontSize={24}>{user.name}</Text>
       <Text color="secondary">{user.email}</Text>
     </Column>

@@ -13,8 +13,8 @@ fun toggleFollow() {
   isFollowing = !isFollowing
 }
 
-<Column padding={24} spacing={24}>
-  <Column spacing={8}>
+<Column padding={24} gap={24}>
+  <Column gap={8}>
     <Text fontSize={28} fontWeight="bold">
       {name}
     </Text>
@@ -28,7 +28,7 @@ fun toggleFollow() {
     </Text>
   </Column>
 
-  <Column spacing={12}>
+  <Column gap={12}>
     <StatCard label="Followers" value={followers} />
     <StatCard label="Following" value={following} />
     <StatCard label="Posts" value={posts} />

@@ -77,7 +77,7 @@ Code Generator (codegen/compose.rs)
     ├─ Check if file contains @store class
     ├─ If yes: generate_store_class() → ViewModel Kotlin
     ├─ If no: generate_component() → Composable Kotlin
-    ├─ Transform props (spacing → Arrangement.spacedBy)
+    ├─ Transform props (gap → Arrangement.spacedBy)
     ├─ Transform expressions (route aliases, lambda arrows)
     ├─ Output pass-through kotlin_blocks unchanged
     ├─ Collect imports recursively
@@ -227,11 +227,11 @@ Component-specific transformations for Compose idioms:
 ```rust
 match (component, prop_name) {
     // Layout shortcuts
-    ("Column", "spacing") => "verticalArrangement = Arrangement.spacedBy({value}.dp)",
+    ("Column", "gap") => "verticalArrangement = Arrangement.spacedBy({value}.dp)",
     ("Column", "padding") => "modifier = Modifier.padding({value}.dp)",
-    ("Row", "spacing") => "horizontalArrangement = Arrangement.spacedBy({value}.dp)",
+    ("Row", "gap") => "horizontalArrangement = Arrangement.spacedBy({value}.dp)",
     ("Row", "padding") => "modifier = Modifier.padding({value}.dp)",
-    ("LazyColumn", "spacing") => "verticalArrangement = Arrangement.spacedBy({value}.dp)",
+    ("LazyColumn", "gap") => "verticalArrangement = Arrangement.spacedBy({value}.dp)",
     ("LazyColumn", "padding") => "contentPadding = PaddingValues({value}.dp)",
 
     // Text shortcuts

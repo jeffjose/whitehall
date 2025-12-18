@@ -10,11 +10,11 @@
 var userInput = ""
 var displayText = "Type something..."
 
-<Column padding={20} spacing={16}>
+<Column padding={20} gap={16}>
   <Text fontSize={32} fontWeight="bold">Text Input Demo</Text>
 
   <Card padding={16} backgroundColor="primaryContainer">
-    <Column spacing={12}>
+    <Column gap={12}>
       <Text fontSize={16} fontWeight="bold">Type in the field below</Text>
       
       <TextField
@@ -26,7 +26,7 @@ var displayText = "Type something..."
   </Card>
 
   <Card padding={16}>
-    <Column spacing={8}>
+    <Column gap={8}>
       <Text fontSize={14} color="#666666">
         Live Mirror (updates as you type):
       </Text>

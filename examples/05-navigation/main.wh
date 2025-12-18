@@ -23,7 +23,7 @@ fun navigateToSettings() {
 
 <Column>
   @if (currentScreen == "home") {
-    <Column padding={20} spacing={16}>
+    <Column padding={20} gap={16}>
       <Text fontSize={32} fontWeight="bold">Home Screen</Text>
 
       <Card padding={16} backgroundColor="primaryContainer">
@@ -39,11 +39,11 @@ fun navigateToSettings() {
       </Button>
     </Column>
   } else if (currentScreen == "profile") {
-    <Column padding={20} spacing={16}>
+    <Column padding={20} gap={16}>
       <Text fontSize={32} fontWeight="bold">Profile Screen</Text>
 
       <Card padding={16}>
-        <Column spacing={8}>
+        <Column gap={8}>
           <Text fontSize={18} fontWeight="bold">John Doe</Text>
           <Text fontSize={14}>john.doe@example.com</Text>
         </Column>
@@ -54,11 +54,11 @@ fun navigateToSettings() {
       </Button>
     </Column>
   } else if (currentScreen == "settings") {
-    <Column padding={20} spacing={16}>
+    <Column padding={20} gap={16}>
       <Text fontSize={32} fontWeight="bold">Settings Screen</Text>
 
       <Card padding={16}>
-        <Column spacing={8}>
+        <Column gap={8}>
           <Text fontSize={16}>App Version: 1.0.0</Text>
           <Text fontSize={16}>Language: English</Text>
         </Column>

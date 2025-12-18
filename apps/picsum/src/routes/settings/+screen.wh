@@ -4,6 +4,24 @@
   var imageQuality: String = "medium" // "low", "medium", "high"
 }
 
-<Column p={16} spacing={16}>
+<Column p={16} gap={16}>
   <Text style="title-md">Theme</Text>
+
+  <Row gap={8}>
+  <FilterChip
+  selected={SettingsStore.theme == "light"}
+  onClick={() => SettingsStore.theme = "light"}
+  label="Light"
+  />
+  <FilterChip
+  selected={SettingsStore.theme == "dark"}
+  onClick={() => SettingsStore.theme = "dark"}
+  label="Dark"
+  />
+  <FilterChip
+  selected={SettingsStore.theme == "system"}
+  onClick={() => SettingsStore.theme = "system"}
+  label="System"
+  />
+</Row>
 </Column>

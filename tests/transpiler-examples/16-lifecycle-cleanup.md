@@ -22,7 +22,7 @@ import $lib.websocket.WebSocketClient
     connection = null
   }
 
-<Column spacing={8}>
+<Column gap={8}>
   @for (message in messages, key = { it }) {
     <Text>{message}</Text>
   }

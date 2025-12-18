@@ -19,7 +19,7 @@ var language = "English"
 var fontSize = "Medium"
 var version = "1.0.0"
 
-<Column padding={20} spacing={12}>
+<Column padding={20} gap={12}>
   <Text fontSize={32} fontWeight="bold">Settings</Text>
 
   <SectionHeader title="General" />
@@ -77,7 +77,7 @@ var version = "1.0.0"
   />
 
   <Card padding={16} backgroundColor="primaryContainer">
-    <Column spacing={8}>
+    <Column gap={8}>
       <Text fontSize={16} fontWeight="bold">Settings Summary</Text>
       <Text fontSize={14}>Notifications: {notificationsEnabled ? "On" : "Off"}</Text>
       <Text fontSize={14}>Dark Mode: {darkModeEnabled ? "Enabled" : "Disabled"}</Text>

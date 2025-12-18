@@ -14,7 +14,7 @@ package: com.example.app
 ```whitehall
 var value = 42
 
-<Column spacing={8}>
+<Column gap={8}>
   <Text>Interpolation: {value}</Text>
   <Text>Literal braces: {{value}}</Text>
   <Text>Mixed: The value is {{value}} not {value}</Text>

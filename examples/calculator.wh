@@ -63,8 +63,8 @@ fun onClear() {
     />
   </Card>
 
-  <Column spacing={8.dp}>
-    <Row spacing={8.dp}>
+  <Column gap={8.dp}>
+    <Row gap={8.dp}>
       <Button onClick={() => onNumberClick("7")} modifier={Modifier.weight(1f)}>
         <Text text="7" fontSize={24.sp} />
       </Button>
@@ -79,7 +79,7 @@ fun onClear() {
       </Button>
     </Row>
 
-    <Row spacing={8.dp}>
+    <Row gap={8.dp}>
       <Button onClick={() => onNumberClick("4")} modifier={Modifier.weight(1f)}>
         <Text text="4" fontSize={24.sp} />
       </Button>
@@ -94,7 +94,7 @@ fun onClear() {
       </Button>
     </Row>
 
-    <Row spacing={8.dp}>
+    <Row gap={8.dp}>
       <Button onClick={() => onNumberClick("1")} modifier={Modifier.weight(1f)}>
         <Text text="1" fontSize={24.sp} />
       </Button>
@@ -109,7 +109,7 @@ fun onClear() {
       </Button>
     </Row>
 
-    <Row spacing={8.dp}>
+    <Row gap={8.dp}>
       <Button onClick={onClear} modifier={Modifier.weight(1f)}>
         <Text text="C" fontSize={24.sp} />
       </Button>

@@ -266,7 +266,7 @@ var enabled = false
 
 **Column/Row:**
 ```whitehall
-<Column spacing={16} padding={20}>
+<Column gap={16} padding={20}>
   <Text>Item 1</Text>
   <Text>Item 2</Text>
 </Column>
@@ -438,7 +438,7 @@ Both → `onClick = { doSomething() }`
 // Functions with markup bodies are auto-transpiled as @Composable
 fun UserCard(user: User, onClick: () -> Unit) {
   <Card p={16}>
-    <Column spacing={8}>
+    <Column gap={8}>
       <Text fontSize={18} fontWeight="bold">{user.name}</Text>
       <Text fontSize={14} color="#666666">{user.email}</Text>
       <Button text="View Profile" onClick={onClick} />
@@ -581,7 +581,7 @@ Some Material3 components are marked as experimental and require special handlin
 
 | Component | Prop | Example | Result |
 |-----------|------|---------|--------|
-| Column/Row | `spacing` | `spacing={16}` | `Arrangement.spacedBy(16.dp)` |
+| Column/Row | `gap` | `gap={16}` | `Arrangement.spacedBy(16.dp)` |
 | Text | `fontSize` | `fontSize={20}` | `fontSize = 20.sp` |
 | Text | `fontWeight` | `fontWeight="bold"` | `fontWeight = FontWeight.Bold` |
 | Text | `color` | `color="#FF5722"` | `color = Color(0xFFFF5722)` |
@@ -674,7 +674,7 @@ var email = ""
 var password = ""
 val isValid = email.isNotEmpty() && password.length >= 8
 
-<Column spacing={16}>
+<Column gap={16}>
   <TextField bind:value={email} label="Email" />
   <TextField bind:value={password} label="Password" type="password" />
   <Button onClick={submit} enabled={isValid} text="Login" />

@@ -8,7 +8,7 @@ Tests inline lambda syntax with `() => expression` for event handlers and compon
   @prop val items: List<String>
   @prop val onItemClick: (String) -> Unit
 
-<Column spacing={16}>
+<Column gap={16}>
   @for (item in items, key = { it }) {
     <Card onClick={() => onItemClick(item)}>
       <Text>{item}</Text>

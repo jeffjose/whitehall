@@ -38,10 +38,10 @@ import kotlinx.coroutines.launch
   }
 
 <Card onClick={() => onPostClick?.invoke(post.id)}>
-  <Column padding={12} spacing={8}>
+  <Column padding={12} gap={8}>
     // Author header
     <Row
-      spacing={8}
+      gap={8}
       onClick={(e) => {
         e.stopPropagation()
         onUserClick?.invoke(post.authorId)
@@ -65,8 +65,8 @@ import kotlinx.coroutines.launch
     </Text>
 
     // Actions
-    <Row spacing={16}>
-      <Row spacing={4} onClick={(e) => {
+    <Row gap={16}>
+      <Row gap={4} onClick={(e) => {
         e.stopPropagation()
         handleLike()
       }}>
@@ -80,14 +80,14 @@ import kotlinx.coroutines.launch
         </Text>
       </Row>
 
-      <Row spacing={4}>
+      <Row gap={4}>
         <Icon name="comment" size={20} color="secondary" />
         <Text fontSize={14} color="secondary">
           {post.commentsCount}
         </Text>
       </Row>
 
-      <Row spacing={4}>
+      <Row gap={4}>
         <Icon name="share" size={20} color="secondary" />
       </Row>
     </Row>

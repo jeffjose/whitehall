@@ -32,11 +32,11 @@ fun deleteNote(id: Int) {
   notes = notes.filter { it.id != id }
 }
 
-<Column padding={20} spacing={16}>
+<Column padding={20} gap={16}>
   <Text fontSize={32} fontWeight="bold">My Notes</Text>
 
   <Card padding={16} backgroundColor="primaryContainer">
-    <Column spacing={12}>
+    <Column gap={12}>
       <Text fontSize={18} fontWeight="bold">New Note</Text>
 
       <OutlinedTextField
@@ -51,10 +51,10 @@ fun deleteNote(id: Int) {
         label="Content"
       />
 
-      <Column spacing={8}>
+      <Column gap={8}>
         <Text fontSize={14} fontWeight="bold">Category</Text>
-        <Column spacing={8}>
-          <Row spacing={8}>
+        <Column gap={8}>
+          <Row gap={8}>
             <Button onClick={() => selectedCategory = "Personal"}>
               <Text>Personal</Text>
             </Button>
@@ -62,7 +62,7 @@ fun deleteNote(id: Int) {
               <Text>Work</Text>
             </Button>
           </Row>
-          <Row spacing={8}>
+          <Row gap={8}>
             <Button onClick={() => selectedCategory = "Ideas"}>
               <Text>Ideas</Text>
             </Button>
@@ -83,10 +83,10 @@ fun deleteNote(id: Int) {
   </Card>
 
   <Card padding={16}>
-    <Column spacing={8}>
+    <Column gap={8}>
       <Text fontSize={18} fontWeight="bold">Filter by Category</Text>
-      <Column spacing={8}>
-        <Row spacing={8}>
+      <Column gap={8}>
+        <Row gap={8}>
           <Button onClick={() => filterCategory = "All"}>
             <Text>All</Text>
           </Button>
@@ -97,7 +97,7 @@ fun deleteNote(id: Int) {
             <Text>Work</Text>
           </Button>
         </Row>
-        <Row spacing={8}>
+        <Row gap={8}>
           <Button onClick={() => filterCategory = "Ideas"}>
             <Text>Ideas</Text>
           </Button>
@@ -117,7 +117,7 @@ fun deleteNote(id: Int) {
       <Text fontSize={16}>No notes yet. Create one above!</Text>
     </Card>
   } else {
-    <LazyColumn spacing={12}>
+    <LazyColumn gap={12}>
       @for (note in notes) {
         <NoteCard
           title={note.title}

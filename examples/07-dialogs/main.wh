@@ -11,14 +11,14 @@ var showInfoDialog = false
 var showConfirmDialog = false
 var resultMessage = ""
 
-<Column padding={20} spacing={16}>
+<Column padding={20} gap={16}>
   <Text fontSize={32} fontWeight="bold">Dialogs Demo</Text>
 
   <Card padding={16} backgroundColor="primaryContainer">
     <Text fontSize={14}>Dialogs are modal windows that require user interaction.</Text>
   </Card>
 
-  <Row spacing={12}>
+  <Row gap={12}>
     <Button onClick={() => showInfoDialog = true}>
       <Text>Show Info</Text>
     </Button>

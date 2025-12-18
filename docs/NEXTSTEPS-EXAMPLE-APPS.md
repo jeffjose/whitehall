@@ -144,8 +144,8 @@ fun UserCard(user: User, isSelected: Boolean, onSelect: () -> Unit) {
     backgroundColor={isSelected ? "primaryContainer" : "surface"}
     onClick={onSelect}
   >
-    <Column spacing={8}>
-      <Row spacing={8}>
+    <Column gap={8}>
+      <Row gap={8}>
         <Text fontSize={18} fontWeight="bold">{user.name}</Text>
         <Text fontSize={12} color="primary">{user.role}</Text>
       </Row>
@@ -165,7 +165,7 @@ fun UserCard(user: User, isSelected: Boolean, onSelect: () -> Unit) {
 // Another helper - stats summary
 fun UserStats(totalUsers: Int, admins: Int) {
   <Card p={12} backgroundColor="secondaryContainer">
-    <Row spacing={16}>
+    <Row gap={16}>
       <Text>Total: {totalUsers}</Text>
       <Text>Admins: {admins}</Text>
       <Text>Users: {totalUsers - admins}</Text>
@@ -175,7 +175,7 @@ fun UserStats(totalUsers: Int, admins: Int) {
 
 val adminCount = users.filter { it.role == "Admin" }.size
 
-<Column spacing={16} p={20}>
+<Column gap={16} p={20}>
   <Text fontSize={32} fontWeight="bold">User Directory</Text>
 
   <UserStats totalUsers={users.size} admins={adminCount} />
@@ -242,7 +242,7 @@ fun addToCart(product: Product) {
   cartItems = cartItems + product
 }
 
-<Column p={20} spacing={16}>
+<Column p={20} gap={16}>
   <Text fontSize={32} fontWeight="bold">{R.string.app_name}</Text>
 
   <Card p={16} backgroundColor="primaryContainer">
@@ -253,8 +253,8 @@ fun addToCart(product: Product) {
 
   @for (product in products) {
     <Card p={12}>
-      <Row spacing={8}>
-        <Column spacing={4}>
+      <Row gap={8}>
+        <Column gap={4}>
           <Text fontSize={16}>{product.name}</Text>
           <Text fontSize={14}>{R.string.price_format(product.price)}</Text>
         </Column>
@@ -270,7 +270,7 @@ fun addToCart(product: Product) {
     @if (cartItems.isEmpty()) {
       <Text>{R.string.empty_cart}</Text>
     } else {
-      <Column spacing={8}>
+      <Column gap={8}>
         <Text fontSize={18} fontWeight="bold">
           {R.plurals.item_count(cartItems.size)}
         </Text>
@@ -312,18 +312,18 @@ var stepSize = 5
 // Computed from ranges
 val customRange = startRange..endRange:stepSize
 
-<Column p={20} spacing={16}>
+<Column p={20} gap={16}>
   <Text fontSize={32} fontWeight="bold">Collections Demo</Text>
 
   <Card p={16}>
-    <Column spacing={8}>
+    <Column gap={8}>
       <Text fontSize={18} fontWeight="bold">Array Operations:</Text>
       <Text>Numbers: {numbers.joinToString(", ")}</Text>
       <Text>Sum: {numbers.sum()}</Text>
       <Text>Average: {numbers.average()}</Text>
       <Text>Max: {numbers.maxOrNull() ?: 0}</Text>
 
-      <Row spacing={8}>
+      <Row gap={8}>
         <Button onClick={() => numbers = numbers + (numbers.size + 1)}>
           <Text>Add Number</Text>
         </Button>
@@ -338,7 +338,7 @@ val customRange = startRange..endRange:stepSize
   </Card>
 
   <Card p={16}>
-    <Column spacing={8}>
+    <Column gap={8}>
       <Text fontSize={18} fontWeight="bold">Range Examples:</Text>
       <Text fontSize={14}>Simple (1..10): {smallRange.take(5).joinToString(", ")}...</Text>
       <Text fontSize={14}>Even (0..20:2): {evenNumbers.take(5).joinToString(", ")}...</Text>
@@ -347,10 +347,10 @@ val customRange = startRange..endRange:stepSize
   </Card>
 
   <Card p={16}>
-    <Column spacing={12}>
+    <Column gap={12}>
       <Text fontSize={18} fontWeight="bold">Custom Range Builder:</Text>
 
-      <Row spacing={8}>
+      <Row gap={8}>
         <TextField
           value={startRange.toString()}
           onValueChange={(v) => startRange = v.toIntOrNull() ?: 1}
@@ -374,11 +374,11 @@ val customRange = startRange..endRange:stepSize
   </Card>
 
   <Card p={16}>
-    <Column spacing={8}>
+    <Column gap={8}>
       <Text fontSize={18} fontWeight="bold">Name Filter:</Text>
 
       @for ((index, name) in names.withIndex()) {
-        <Row spacing={8}>
+        <Row gap={8}>
           <Checkbox
             checked={selectedIndices.contains(index)}
             onCheckedChange={(checked) =>
@@ -451,11 +451,11 @@ Email: privacy@example.com
 
 var showPolicy = false
 
-<Column p={20} spacing={16}>
+<Column p={20} gap={16}>
   <Text fontSize={32} fontWeight="bold">App Settings</Text>
 
   <Card p={16}>
-    <Column spacing={12}>
+    <Column gap={12}>
       <Text fontSize={18} fontWeight="bold">User Preferences</Text>
 
       <TextField
@@ -463,19 +463,19 @@ var showPolicy = false
         label="Username"
       />
 
-      <Row spacing={8}>
+      <Row gap={8}>
         <Text>Dark Mode</Text>
         <Switch bind:checked={AppSettings.darkMode} />
       </Row>
 
-      <Row spacing={8}>
+      <Row gap={8}>
         <Text>Notifications</Text>
         <Switch bind:checked={AppSettings.notificationsEnabled} />
       </Row>
 
-      <Column spacing={4}>
+      <Column gap={4}>
         <Text>Font Size: {AppSettings.fontSize}sp</Text>
-        <Row spacing={8}>
+        <Row gap={8}>
           <Button
             onClick={() => AppSettings.fontSize = Math.max(12, AppSettings.fontSize - 2)}
             text="-"
@@ -487,10 +487,10 @@ var showPolicy = false
         </Row>
       </Column>
 
-      <Column spacing={4}>
+      <Column gap={4}>
         <Text>Language</Text>
         @for (lang in AppSettings.availableLanguages) {
-          <Row spacing={8}>
+          <Row gap={8}>
             <Checkbox
               checked={AppSettings.language == lang}
               onCheckedChange={(checked) =>
@@ -505,7 +505,7 @@ var showPolicy = false
   </Card>
 
   <Card p={16} backgroundColor="secondaryContainer">
-    <Column spacing={8}>
+    <Column gap={8}>
       <Text fontSize={14} fontWeight="bold">Current Settings:</Text>
       <Text fontSize={12}>Dark Mode: {AppSettings.darkMode ? "On" : "Off"}</Text>
       <Text fontSize={12}>Notifications: {AppSettings.notificationsEnabled ? "On" : "Off"}</Text>
@@ -617,12 +617,12 @@ suspend fun submitForm() {
   }
 }
 
-<Column p={20} spacing={16}>
+<Column p={20} gap={16}>
   <Text fontSize={32} fontWeight="bold">Sign Up</Text>
 
   <Card p={16}>
-    <Column spacing={12}>
-      <Column spacing={4}>
+    <Column gap={12}>
+      <Column gap={4}>
         <TextField
           bind:value={email}
           label="Email"
@@ -632,7 +632,7 @@ suspend fun submitForm() {
         }
       </Column>
 
-      <Column spacing={4}>
+      <Column gap={4}>
         <TextField
           bind:value={password}
           label="Password"
@@ -643,7 +643,7 @@ suspend fun submitForm() {
         }
       </Column>
 
-      <Column spacing={4}>
+      <Column gap={4}>
         <TextField
           bind:value={confirmPassword}
           label="Confirm Password"
@@ -665,7 +665,7 @@ suspend fun submitForm() {
     }
     is LoadingState.Loading -> {
       <Card p={16} backgroundColor="primaryContainer">
-        <Row spacing={8}>
+        <Row gap={8}>
           <CircularProgressIndicator />
           <Text>Creating account...</Text>
         </Row>
@@ -673,7 +673,7 @@ suspend fun submitForm() {
     }
     is LoadingState.Success -> {
       <Card p={16} backgroundColor="secondaryContainer">
-        <Column spacing={8}>
+        <Column gap={8}>
           <Text fontSize={16} fontWeight="bold" color="primary">✓ Success</Text>
           <Text>{state.data}</Text>
         </Column>
@@ -681,7 +681,7 @@ suspend fun submitForm() {
     }
     is LoadingState.Error -> {
       <Card p={16} backgroundColor="errorContainer">
-        <Column spacing={8}>
+        <Column gap={8}>
           <Text fontSize={16} fontWeight="bold" color="error">✗ Error</Text>
           <Text color="error">{state.message}</Text>
         </Column>
@@ -745,12 +745,12 @@ val products = [
 
 // Two screens: ProductList and ProductDetail
 fun ProductListScreen(onProductClick: (String) -> Unit) {
-  <Column p={20} spacing={16}>
+  <Column p={20} gap={16}>
     <Text fontSize={32} fontWeight="bold">Products</Text>
 
     @for (product in products) {
       <Card p={16} onClick={() => onProductClick(product.id)}>
-        <Column spacing={4}>
+        <Column gap={4}>
           <Text fontSize={18} fontWeight="bold">{product.name}</Text>
           <Text fontSize={16} color="primary">${product.price}</Text>
         </Column>
@@ -768,11 +768,11 @@ fun ProductDetailScreen(productId: String, onBack: () -> Unit) {
       <Button onClick={onBack} text="Go Back" />
     </Column>
   } else {
-    <Column p={20} spacing={16}>
+    <Column p={20} gap={16}>
       <Button onClick={onBack} text="← Back" />
 
       <Card p={20}>
-        <Column spacing={12}>
+        <Column gap={12}>
           <Text fontSize={32} fontWeight="bold">{product.name}</Text>
           <Text fontSize={24} color="primary">${product.price}</Text>
           <Text fontSize={16}>{product.description}</Text>
@@ -877,11 +877,11 @@ import $ffi.rust.ImageAnalyzer
 var imagePath = "/path/to/image.jpg"
 var batchSize = 10
 
-<Column p={20} spacing={16}>
+<Column p={20} gap={16}>
   <Text fontSize={32} fontWeight="bold">Image Processing</Text>
 
   <Card p={16}>
-    <Column spacing={8}>
+    <Column gap={8}>
       <Text fontSize={18} fontWeight="bold">C++ Direct:</Text>
       <Text>Width: {ImageProcessor.getImageWidth(imagePath)}px</Text>
 
@@ -891,7 +891,7 @@ var batchSize = 10
   </Card>
 
   <Card p={16}>
-    <Column spacing={8}>
+    <Column gap={8}>
       <Text fontSize={18} fontWeight="bold">Rust (calls C++):</Text>
       <Text>{ImageAnalyzer.analyzeImage(imagePath)}</Text>
       <Text>Batch result: {ImageAnalyzer.processBatch(batchSize)}</Text>
@@ -1013,13 +1013,13 @@ fun TaskCard(
   onDelete: () -> Unit
 ) {
   <Card p={16}>
-    <Column spacing={8}>
-      <Row spacing={8}>
+    <Column gap={8}>
+      <Row gap={8}>
         <Checkbox
           checked={task.status is TaskStatus.Done}
           onCheckedChange={(checked) => onToggle()}
         />
-        <Column spacing={4}>
+        <Column gap={4}>
           <Text
             fontSize={16}
             fontWeight="bold"
@@ -1031,7 +1031,7 @@ fun TaskCard(
         </Column>
       </Row>
 
-      <Row spacing={8}>
+      <Row gap={8}>
         @when (task.status) {
           is TaskStatus.Todo -> {
             <Text fontSize={10} color="orange">TODO</Text>
@@ -1065,14 +1065,14 @@ $onMount {
   launch { store.loadTasks() }
 }
 
-<Column p={20} spacing={16}>
-  <Row spacing={8}>
+<Column p={20} gap={16}>
+  <Row gap={8}>
     <Text fontSize={32} fontWeight="bold">Tasks</Text>
     <Button onClick={() => showAddDialog = true} text="+ Add" />
   </Row>
 
   <Card p={12} backgroundColor="secondaryContainer">
-    <Row spacing={16}>
+    <Row gap={16}>
       <Text>Total: {store.stats["total"]}</Text>
       <Text>Todo: {store.stats["todo"]}</Text>
       <Text>Done: {store.stats["done"]}</Text>
@@ -1084,7 +1084,7 @@ $onMount {
     label="Search tasks"
   />
 
-  <Row spacing={8}>
+  <Row gap={8}>
     <Button
       onClick={() => store.filter = "all"}
       text="All"
@@ -1120,7 +1120,7 @@ $onMount {
       onDismissRequest={() => showAddDialog = false}
       title={<Text>Add New Task</Text>}
       text={
-        <Column spacing={12}>
+        <Column gap={12}>
           <TextField
             bind:value={newTaskTitle}
             label="Title"

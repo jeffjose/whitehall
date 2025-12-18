@@ -21,7 +21,7 @@ fun removeTask(task: String) {
   tasks.remove(task)
 }
 
-<Column padding={20} spacing={16}>
+<Column padding={20} gap={16}>
   <Text fontSize={32} fontWeight="bold">Task List</Text>
 
   <Card padding={16} backgroundColor="primaryContainer">
@@ -29,9 +29,9 @@ fun removeTask(task: String) {
   </Card>
 
   <Card padding={16}>
-    <Column spacing={12}>
+    <Column gap={12}>
       <Text fontSize={18} fontWeight="bold">Add New Task</Text>
-      <Row spacing={8}>
+      <Row gap={8}>
         <TextField
           value={newTask}
           onValueChange={(value) => newTask = value}
@@ -53,7 +53,7 @@ fun removeTask(task: String) {
   } else {
     @for (task in tasks) {
       <Card padding={16}>
-        <Row spacing={12}>
+        <Row gap={12}>
           <Text fontSize={16}>{task}</Text>
           <Button onClick={() => removeTask(task)}>
             <Text>Remove</Text>

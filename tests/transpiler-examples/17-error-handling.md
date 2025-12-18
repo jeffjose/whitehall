@@ -27,7 +27,7 @@ import $models.User
     }
   }
 
-<Column spacing={16}>
+<Column gap={16}>
   @if (isLoading) {
     <LoadingSpinner />
   } else if (error != null) {

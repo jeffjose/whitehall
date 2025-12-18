@@ -35,7 +35,7 @@ onMount {
       <CircularProgressIndicator />
     </Box>
   } else {
-    <LazyColumn spacing={8} padding={16}>
+    <LazyColumn gap={8} padding={16}>
       @for (pokemon in store.pokemonList, key = { it.name }) {
         <PokemonCard
           name={pokemon.name}

@@ -1511,7 +1511,7 @@ fun ByteArray.toBitmap(): Bitmap {
   }
 </script>
 
-<Column spacing={16}>
+<Column gap={16}>
   <Row>
     <Image bitmap={originalImage} width={200} height={200} />
     @if (processedImage != null) {
@@ -1522,7 +1522,7 @@ fun ByteArray.toBitmap(): Bitmap {
   @if (isProcessing) {
     <LoadingSpinner />
   } @else {
-    <Row spacing={8}>
+    <Row gap={8}>
       <Button onClick={launch { applyBlur() }}>Blur</Button>
       <Button onClick={launch { applyGrayscale() }}>Grayscale</Button>
       <Button onClick={launch { resize() }}>Resize</Button>
@@ -1647,14 +1647,14 @@ int getFrameCount(const std::string& videoPath) {
   }
 </script>
 
-<Column spacing={16}>
+<Column gap={16}>
   @if (currentFrame != null) {
     <Image bitmap={currentFrame} />
   }
 
   <Text>Frame {frameIndex + 1} of {totalFrames}</Text>
 
-  <Row spacing={8}>
+  <Row gap={8}>
     <Button onClick={prevFrame} enabled={frameIndex > 0}>
       Previous
     </Button>

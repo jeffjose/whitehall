@@ -21,7 +21,7 @@ fun deleteNote(note: String) {
   notes = notes.filter { it != note }.toMutableList()
 }
 
-<Column modifier={Modifier.fillMaxSize().padding(16.dp)} spacing={16.dp}>
+<Column modifier={Modifier.fillMaxSize().padding(16.dp)} gap={16.dp}>
   <Text
     text="Quick Notes"
     fontSize={32.sp}
@@ -29,7 +29,7 @@ fun deleteNote(note: String) {
   />
 
   <Card elevation={4.dp} modifier={Modifier.fillMaxWidth()}>
-    <Column modifier={Modifier.padding(16.dp)} spacing={8.dp}>
+    <Column modifier={Modifier.padding(16.dp)} gap={8.dp}>
       <TextField
         bind:value={newNote}
         label="New note"

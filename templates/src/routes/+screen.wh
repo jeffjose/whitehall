@@ -4,7 +4,7 @@ fun handleClick() {
   message = "Button clicked!"
 }
 
-<Column padding={16} spacing={8}>
+<Column padding={16} gap={8}>
   <Text fontSize={24} fontWeight="bold">
     {message}
   </Text>

@@ -17,14 +17,14 @@ val fullName = if (firstName.isEmpty() && lastName.isEmpty()) "" else "$firstNam
 val ageCategory = if (age < 18) "Minor" else if (age < 65) "Adult" else "Senior"
 val itemLabel = if (itemCount == 0) "No items" else if (itemCount == 1) "1 item" else "$itemCount items"
 
-<Column padding={20} spacing={16}>
+<Column padding={20} gap={16}>
   <Text fontSize={32} fontWeight="bold">Computed Values</Text>
 
   <Card padding={16} backgroundColor="primaryContainer">
     <Text fontSize={14}>Computed values automatically update when their dependencies change</Text>
   </Card>
 
-  <Row spacing={12}>
+  <Row gap={12}>
     <TextField
       bind:value={firstName}
       label="First Name"
@@ -36,7 +36,7 @@ val itemLabel = if (itemCount == 0) "No items" else if (itemCount == 1) "1 item"
   </Row>
 
   <Card padding={16} backgroundColor="secondaryContainer">
-    <Column spacing={8}>
+    <Column gap={8}>
       <Text fontSize={18} fontWeight="bold">Full Name:</Text>
       <Text fontSize={16}>{fullName}</Text>
     </Column>
@@ -49,7 +49,7 @@ val itemLabel = if (itemCount == 0) "No items" else if (itemCount == 1) "1 item"
   />
 
   <Card padding={16} backgroundColor="tertiaryContainer">
-    <Column spacing={4}>
+    <Column gap={4}>
       <Text fontSize={16}>Category: {ageCategory}</Text>
       <Text fontSize={12} color="#666666">Updates automatically as age changes</Text>
     </Column>
@@ -57,7 +57,7 @@ val itemLabel = if (itemCount == 0) "No items" else if (itemCount == 1) "1 item"
 
   <Text fontSize={18} fontWeight="bold">Item Counter:</Text>
 
-  <Row spacing={8}>
+  <Row gap={8}>
     <Button onClick={() => itemCount++}>
       <Text>Add</Text>
     </Button>
@@ -71,7 +71,7 @@ val itemLabel = if (itemCount == 0) "No items" else if (itemCount == 1) "1 item"
   </Card>
 
   <Card padding={12} backgroundColor="surfaceVariant">
-    <Column spacing={4}>
+    <Column gap={4}>
       <Text fontSize={12} fontWeight="bold">How it works:</Text>
       <Text fontSize={10} color="#666666">• val computed = expression with vars</Text>
       <Text fontSize={10} color="#666666">• Auto-updates when any var changes</Text>

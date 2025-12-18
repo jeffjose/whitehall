@@ -41,12 +41,12 @@ onMount {
   loadWeather()
 }
 
-<Column padding={20} spacing={20}>
+<Column padding={20} gap={20}>
   <Text fontSize={32} fontWeight="bold">Weather</Text>
 
   @if (isLoading) {
     <Card padding={40}>
-      <Column spacing={16}>
+      <Column gap={16}>
         <CircularProgressIndicator />
         <Text>Loading weather data...</Text>
       </Column>
@@ -63,7 +63,7 @@ onMount {
 
     <Text fontSize={24} fontWeight="bold">7-Day Forecast</Text>
 
-    <LazyColumn spacing={12}>
+    <LazyColumn gap={12}>
       @for (day in forecast) {
         <ForecastItem
           day={day.name}

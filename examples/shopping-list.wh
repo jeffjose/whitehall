@@ -24,14 +24,14 @@ val filteredItems = if (searchQuery.isEmpty()) {
   items.filter { it.contains(searchQuery, ignoreCase = true) }
 }
 
-<Column modifier={Modifier.fillMaxSize().padding(16.dp)} spacing={12.dp}>
+<Column modifier={Modifier.fillMaxSize().padding(16.dp)} gap={12.dp}>
   <Text
     text="Shopping List"
     fontSize={28.sp}
     fontWeight={FontWeight.Bold}
   />
 
-  <Row spacing={8.dp}>
+  <Row gap={8.dp}>
     <TextField
       bind:value={newItem}
       label="Add item"

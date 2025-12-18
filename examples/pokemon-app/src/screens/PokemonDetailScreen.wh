@@ -13,7 +13,7 @@ onMount {
     backgroundColor="#6200EE"
     px={16}
     py={16}>
-    <Row spacing={12}>
+    <Row gap={12}>
       <Button
         text="← Back"
         onClick={() => navigateBack()} />
@@ -39,9 +39,9 @@ onMount {
   } else if (store.selectedPokemon != null) {
     val pokemon = store.selectedPokemon!!
 
-    <Column spacing={24} p={16}>
+    <Column gap={24} p={16}>
       <Card px={16} py={20}>
-        <Column spacing={16}>
+        <Column gap={16}>
           @if (pokemon.sprites.front_default != null) {
             <AsyncImage
               url={pokemon.sprites.front_default}
@@ -55,8 +55,8 @@ onMount {
             {pokemon.name.capitalize()}
           </Text>
 
-          <Row spacing={16}>
-            <Column spacing={4}>
+          <Row gap={16}>
+            <Column gap={4}>
               <Text
                 fontSize={12}
                 color="secondary">
@@ -67,7 +67,7 @@ onMount {
               </Text>
             </Column>
 
-            <Column spacing={4}>
+            <Column gap={4}>
               <Text
                 fontSize={12}
                 color="secondary">
@@ -82,14 +82,14 @@ onMount {
       </Card>
 
       <Card px={16} py={16}>
-        <Column spacing={12}>
+        <Column gap={12}>
           <Text
             fontSize={20}
             fontWeight="bold">
             Types
           </Text>
 
-          <Row spacing={8}>
+          <Row gap={8}>
             @for (typeSlot in pokemon.types, key = { it.type.name }) {
               <Box
                 backgroundColor="#03DAC6"
@@ -108,7 +108,7 @@ onMount {
       </Card>
 
       <Card px={16} py={16}>
-        <Column spacing={12}>
+        <Column gap={12}>
           <Text
             fontSize={20}
             fontWeight="bold">
@@ -116,8 +116,8 @@ onMount {
           </Text>
 
           @for (statSlot in pokemon.stats, key = { it.stat.name }) {
-            <Column spacing={4}>
-              <Row spacing={8}>
+            <Column gap={4}>
+              <Row gap={8}>
                 <Text
                   fontSize={14}
                   color="secondary"

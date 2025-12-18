@@ -23,12 +23,12 @@ fun deleteTodo(index: Int) {
   completedStates = completedStates.filterIndexed { i, _ -> i != index }
 }
 
-<Column padding={16} spacing={16}>
+<Column padding={16} gap={16}>
   <Text fontSize={24} fontWeight="bold">
     Todo List
   </Text>
 
-  <Column spacing={8}>
+  <Column gap={8}>
     <TextField
       bind:value={newTodo}
       label="New todo"
@@ -44,7 +44,7 @@ fun deleteTodo(index: Int) {
   @if (todos.isEmpty()) {
     <Text>No todos yet. Add one above!</Text>
   } else {
-    <Column spacing={8}>
+    <Column gap={8}>
       @for (todo in todos, key = { todos.indexOf(it) }) {
         <TodoItem
           text={todo}

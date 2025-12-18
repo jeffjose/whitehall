@@ -33,11 +33,11 @@ fun clearError() {
   errorMessage = null
 }
 
-<Column spacing={16}>
+<Column gap={16}>
   @if (isLoading) {
     <LoadingSpinner />
   } else if (errorMessage != null) {
-    <Column spacing={8}>
+    <Column gap={8}>
       <Text text="Error: {errorMessage}" color="#FF0000" />
       <Button onClick={() => clearError()} text="Dismiss" />
     </Column>

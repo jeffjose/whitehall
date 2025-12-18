@@ -2,7 +2,7 @@
 @prop val value: String
 
 <Card padding={16}>
-  <Column spacing={4}>
+  <Column gap={4}>
     <Text fontSize={24} fontWeight="bold">
       {value}
     </Text>

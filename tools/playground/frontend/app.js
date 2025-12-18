@@ -304,7 +304,7 @@ var name = "World"
 var version = 1
 
 // Interpolation: embed variables in text with {expression}
-<Column padding={16} spacing={8}>
+<Column padding={16} gap={8}>
   <Text>Hello, {name}!</Text>
   <Text>Version: {version}</Text>
   <Text>Name has {name.length} characters</Text>
@@ -315,7 +315,7 @@ var version = 1
         code: `// 'var' creates reactive state - changes automatically update the UI
 var count = 0
 
-<Column padding={16} spacing={12}>
+<Column padding={16} gap={12}>
   <Text fontSize={24}>{count}</Text>
 
   // onClick runs when the button is pressed
@@ -337,7 +337,7 @@ var count = 0
         code: `// @if shows or hides content based on a condition
 var isLoggedIn = false
 
-<Column padding={16} spacing={12}>
+<Column padding={16} gap={12}>
   @if (isLoggedIn) {
     <Text fontSize={20}>Welcome back!</Text>
     <Button onClick={() => isLoggedIn = false}>
@@ -357,7 +357,7 @@ var isLoggedIn = false
 var fruits = ["Apple", "Banana", "Cherry"]
 
 // @for loops over each item in a collection
-<Column padding={16} spacing={8}>
+<Column padding={16} gap={8}>
   <Text fontSize={20} fontWeight="bold">Fruits</Text>
 
   @for (fruit in fruits) {
@@ -373,7 +373,7 @@ var fruits = ["Apple", "Banana", "Cherry"]
 // When user types, the variable updates. When variable changes, input updates.
 var name = ""
 
-<Column padding={16} spacing={12}>
+<Column padding={16} gap={12}>
   <TextField
     bind:value={name}
     label="Enter your name"
@@ -394,10 +394,10 @@ val subtotal = price * quantity
 val tax = subtotal * 0.1
 val total = subtotal + tax
 
-<Column padding={16} spacing={12}>
+<Column padding={16} gap={12}>
   <Text fontSize={20} fontWeight="bold">Order</Text>
 
-  <Row spacing={8}>
+  <Row gap={8}>
     <Button onClick={() => if (quantity > 1) quantity--}>-</Button>
     <Text fontSize={18}>{quantity}</Text>
     <Button onClick={() => quantity++}>+</Button>
@@ -413,18 +413,18 @@ val total = subtotal + tax
         code: `// Column stacks children vertically
 // Row arranges children horizontally
 // spacing = gap between items, padding = space inside container
-<Column padding={16} spacing={16}>
+<Column padding={16} gap={16}>
   <Text fontSize={20} fontWeight="bold">Layouts</Text>
 
   <Text>Column (vertical):</Text>
-  <Column spacing={4}>
+  <Column gap={4}>
     <Text>First</Text>
     <Text>Second</Text>
     <Text>Third</Text>
   </Column>
 
   <Text>Row (horizontal):</Text>
-  <Row spacing={8}>
+  <Row gap={8}>
     <Text>Left</Text>
     <Text>•</Text>
     <Text>Right</Text>
@@ -435,7 +435,7 @@ val total = subtotal + tax
         name: '09. Styling',
         code: `// Style props: fontSize, fontWeight, color
 // Colors: hex (#FF5722) or theme names (primary, error)
-<Column padding={16} spacing={8}>
+<Column padding={16} gap={8}>
   <Text fontSize={24} fontWeight="bold">
     Large Bold
   </Text>
@@ -463,10 +463,10 @@ val total = subtotal + tax
 var items = ["Apple", "Banana"]
 var newItem = ""
 
-<Column padding={16} spacing={8}>
+<Column padding={16} gap={8}>
   <Text fontSize={20} fontWeight="bold">Shopping List</Text>
 
-  <Row spacing={8}>
+  <Row gap={8}>
     <TextField
       bind:value={newItem}
       label="Add item"
@@ -483,7 +483,7 @@ var newItem = ""
   </Row>
 
   @for (item in items) {
-    <Row spacing={8}>
+    <Row gap={8}>
       <Text modifier={Modifier.weight(1f)}>{item}</Text>
       <Button onClick={() => items = items - item}>
         Remove
@@ -503,7 +503,7 @@ val isValidEmail = email.contains("@")
 val isValidPassword = password.length >= 8
 val canSubmit = isValidEmail && isValidPassword
 
-<Column padding={16} spacing={12}>
+<Column padding={16} gap={12}>
   <Text fontSize={20} fontWeight="bold">Login</Text>
 
   <TextField bind:value={email} label="Email" />
@@ -527,10 +527,10 @@ val canSubmit = isValidEmail && isValidPassword
 var todos = ["Learn Whitehall", "Build an app"]
 var newTodo = ""
 
-<Column padding={16} spacing={12}>
+<Column padding={16} gap={12}>
   <Text fontSize={24} fontWeight="bold">My Todos</Text>
 
-  <Row spacing={8}>
+  <Row gap={8}>
     <TextField
       bind:value={newTodo}
       label="New todo"
@@ -548,7 +548,7 @@ var newTodo = ""
 
   @for (todo in todos) {
     <Card padding={12} modifier={Modifier.fillMaxWidth()}>
-      <Row spacing={8}>
+      <Row gap={8}>
         <Text modifier={Modifier.weight(1f)}>{todo}</Text>
         <Button onClick={() => todos = todos - todo}>
           Done

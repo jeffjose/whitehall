@@ -37,7 +37,7 @@ import $lib.api.ApiClient
     }
   }
 
-<Column spacing={16}>
+<Column gap={16}>
   <TextField
     label="Search users"
     bind:value={searchQuery}
@@ -61,7 +61,7 @@ import $lib.api.ApiClient
 
   @if (selectedUser != null) {
     <Card>
-      <Column spacing={8}>
+      <Column gap={8}>
         <Text fontSize={20}>Selected: {selectedUser.name}</Text>
         <Text color="secondary">{selectedUser.email}</Text>
       </Column>

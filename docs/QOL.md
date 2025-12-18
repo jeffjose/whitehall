@@ -8,7 +8,7 @@ This document tracks potential DX (Developer Experience) optimizations that coul
 ```kotlin
 // Whitehall automatically adds units based on context
 <Text fontSize={16}>           // → 16.sp automatically
-<Column padding={16} spacing={8}>  // → 16.dp, 8.dp automatically
+<Column padding={16} gap={8}>  // → 16.dp, 8.dp automatically
 ```
 
 ### Button Text Auto-Wrapping
@@ -281,7 +281,7 @@ See "Implemented" section above.
 **Impact: Medium | Complexity: Medium**
 
 ```kotlin
-<Grid cols={3} spacing={8}>
+<Grid cols={3} gap={8}>
   @for (item in items) {
     <Card>{item}</Card>
   }

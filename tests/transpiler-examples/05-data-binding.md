@@ -12,7 +12,7 @@ Tests two-way data binding with bind:value syntax.
     // Login logic
   }
 
-<Column spacing={16}>
+<Column gap={16}>
   <TextField
     label="Username"
     bind:value={username}

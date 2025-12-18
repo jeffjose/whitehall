@@ -46,7 +46,7 @@ import kotlinx.coroutines.launch
     />
   }
 >
-  <Column padding={16} spacing={16} fill>
+  <Column padding={16} gap={16} fill>
     <MultilineInput
       bind:value={content}
       placeholder="What's on your mind?"

@@ -12,7 +12,7 @@ import $ffi.cpp.StringUtils
 var inputText = "Hello World"
 var repeatCount = 3
 
-<Column padding={20} spacing={16}>
+<Column padding={20} gap={16}>
   <Text fontSize={32} fontWeight="bold">C++ FFI Basics</Text>
 
   <Card padding={16} backgroundColor="primaryContainer">
@@ -20,7 +20,7 @@ var repeatCount = 3
   </Card>
 
   <Card padding={16}>
-    <Column spacing={12}>
+    <Column gap={12}>
       <Text fontSize={18} fontWeight="bold">Input Text</Text>
       
       <TextField
@@ -32,32 +32,32 @@ var repeatCount = 3
   </Card>
 
   <Card padding={16}>
-    <Column spacing={12}>
+    <Column gap={12}>
       <Text fontSize={18} fontWeight="bold">String Operations</Text>
 
       <Card padding={12} backgroundColor="secondaryContainer">
-        <Column spacing={4}>
+        <Column gap={4}>
           <Text fontSize={12} color="#666666">Uppercase:</Text>
           <Text fontSize={16}>{StringUtils.to_uppercase(inputText)}</Text>
         </Column>
       </Card>
 
       <Card padding={12} backgroundColor="tertiaryContainer">
-        <Column spacing={4}>
+        <Column gap={4}>
           <Text fontSize={12} color="#666666">Lowercase:</Text>
           <Text fontSize={16}>{StringUtils.to_lowercase(inputText)}</Text>
         </Column>
       </Card>
 
       <Card padding={12} backgroundColor="primaryContainer">
-        <Column spacing={4}>
+        <Column gap={4}>
           <Text fontSize={12} color="#666666">Reversed:</Text>
           <Text fontSize={16}>{StringUtils.reverse_string(inputText)}</Text>
         </Column>
       </Card>
 
       <Card padding={12} backgroundColor="secondaryContainer">
-        <Column spacing={4}>
+        <Column gap={4}>
           <Text fontSize={12} color="#666666">Vowel Count:</Text>
           <Text fontSize={16}>{StringUtils.count_vowels(inputText)} vowels</Text>
         </Column>
@@ -72,7 +72,7 @@ var repeatCount = 3
   </Card>
 
   <Card padding={16}>
-    <Column spacing={12}>
+    <Column gap={12}>
       <Text fontSize={18} fontWeight="bold">Repeat String</Text>
       
       <TextField
@@ -88,7 +88,7 @@ var repeatCount = 3
   </Card>
 
   <Card padding={12} backgroundColor="surfaceVariant">
-    <Column spacing={4}>
+    <Column gap={4}>
       <Text fontSize={12} color="#666666">All string operations run in C++ for performance.</Text>
       <Text fontSize={12} color="#666666">The @ffi annotation auto-generates JNI bridges.</Text>
     </Column>

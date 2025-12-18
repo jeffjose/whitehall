@@ -32,11 +32,11 @@ fun handleLogin() {
 <Scaffold>
   <Column
     padding={16}
-    spacing={16}
+    gap={16}
     fill
     verticalArrangement="Center"
   >
-    <Column spacing={8} center>
+    <Column gap={8} center>
       <Icon name="microblog" size={64} color="primary" />
       <Text fontSize={32} fontWeight="bold">
         Microblog
@@ -85,7 +85,7 @@ fun handleLogin() {
     />
 
     // Sign up link
-    <Row center spacing={4}>
+    <Row center gap={4}>
       <Text color="secondary">Don't have an account?</Text>
       <TextButton
         text="Sign up"

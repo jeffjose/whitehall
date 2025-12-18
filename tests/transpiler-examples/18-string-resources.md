@@ -8,7 +8,7 @@ Tests string resource references for internationalization support.
   @prop val userName: String
   @prop val itemCount: Int
 
-<Column spacing={16}>
+<Column gap={16}>
   <Text fontSize={24} fontWeight="bold">
     {R.string.welcome_title}
   </Text>

@@ -22,7 +22,7 @@ fun selectTheme(index: Int) {
 
 <Column
   modifier={Modifier.fillMaxSize().padding(16.dp)}
-  spacing={16.dp}
+  gap={16.dp}
 >
   <Text
     text="Theme Picker"
@@ -34,7 +34,7 @@ fun selectTheme(index: Int) {
     modifier={Modifier.fillMaxWidth()}
     elevation={8.dp}
   >
-    <Column modifier={Modifier.padding(24.dp)} spacing={8.dp}>
+    <Column modifier={Modifier.padding(24.dp)} gap={8.dp}>
       <Text
         text="Current Theme"
         fontSize={16.sp}
@@ -55,7 +55,7 @@ fun selectTheme(index: Int) {
       modifier={Modifier.fillMaxWidth()}
       elevation={4.dp}
     >
-      <Column modifier={Modifier.padding(16.dp)} spacing={8.dp}>
+      <Column modifier={Modifier.padding(16.dp)} gap={8.dp}>
         <Text
           text="Theme Details"
           fontSize={18.sp}
@@ -74,7 +74,7 @@ fun selectTheme(index: Int) {
   />
 
   <Card modifier={Modifier.fillMaxWidth().clickable { selectTheme(0) }} elevation={if (selectedIndex == 0) 6.dp else 2.dp}>
-    <Row modifier={Modifier.padding(16.dp)} spacing={16.dp} verticalAlignment={Alignment.CenterVertically}>
+    <Row modifier={Modifier.padding(16.dp)} gap={16.dp} verticalAlignment={Alignment.CenterVertically}>
       <Box modifier={Modifier.size(48.dp).background(themeColors[0])} />
       <Text text="Light" fontSize={18.sp} fontWeight={FontWeight.Bold} modifier={Modifier.weight(1f)} />
       @if (selectedIndex == 0) { <Text text="✓" fontSize={24.sp} /> }
@@ -82,7 +82,7 @@ fun selectTheme(index: Int) {
   </Card>
 
   <Card modifier={Modifier.fillMaxWidth().clickable { selectTheme(1) }} elevation={if (selectedIndex == 1) 6.dp else 2.dp}>
-    <Row modifier={Modifier.padding(16.dp)} spacing={16.dp} verticalAlignment={Alignment.CenterVertically}>
+    <Row modifier={Modifier.padding(16.dp)} gap={16.dp} verticalAlignment={Alignment.CenterVertically}>
       <Box modifier={Modifier.size(48.dp).background(themeColors[1])} />
       <Text text="Dark" fontSize={18.sp} fontWeight={FontWeight.Bold} modifier={Modifier.weight(1f)} />
       @if (selectedIndex == 1) { <Text text="✓" fontSize={24.sp} /> }
@@ -90,7 +90,7 @@ fun selectTheme(index: Int) {
   </Card>
 
   <Card modifier={Modifier.fillMaxWidth().clickable { selectTheme(2) }} elevation={if (selectedIndex == 2) 6.dp else 2.dp}>
-    <Row modifier={Modifier.padding(16.dp)} spacing={16.dp} verticalAlignment={Alignment.CenterVertically}>
+    <Row modifier={Modifier.padding(16.dp)} gap={16.dp} verticalAlignment={Alignment.CenterVertically}>
       <Box modifier={Modifier.size(48.dp).background(themeColors[2])} />
       <Text text="Blue" fontSize={18.sp} fontWeight={FontWeight.Bold} modifier={Modifier.weight(1f)} />
       @if (selectedIndex == 2) { <Text text="✓" fontSize={24.sp} /> }
@@ -98,7 +98,7 @@ fun selectTheme(index: Int) {
   </Card>
 
   <Card modifier={Modifier.fillMaxWidth().clickable { selectTheme(3) }} elevation={if (selectedIndex == 3) 6.dp else 2.dp}>
-    <Row modifier={Modifier.padding(16.dp)} spacing={16.dp} verticalAlignment={Alignment.CenterVertically}>
+    <Row modifier={Modifier.padding(16.dp)} gap={16.dp} verticalAlignment={Alignment.CenterVertically}>
       <Box modifier={Modifier.size(48.dp).background(themeColors[3])} />
       <Text text="Green" fontSize={18.sp} fontWeight={FontWeight.Bold} modifier={Modifier.weight(1f)} />
       @if (selectedIndex == 3) { <Text text="✓" fontSize={24.sp} /> }
@@ -106,7 +106,7 @@ fun selectTheme(index: Int) {
   </Card>
 
   <Card modifier={Modifier.fillMaxWidth().clickable { selectTheme(4) }} elevation={if (selectedIndex == 4) 6.dp else 2.dp}>
-    <Row modifier={Modifier.padding(16.dp)} spacing={16.dp} verticalAlignment={Alignment.CenterVertically}>
+    <Row modifier={Modifier.padding(16.dp)} gap={16.dp} verticalAlignment={Alignment.CenterVertically}>
       <Box modifier={Modifier.size(48.dp).background(themeColors[4])} />
       <Text text="Purple" fontSize={18.sp} fontWeight={FontWeight.Bold} modifier={Modifier.weight(1f)} />
       @if (selectedIndex == 4) { <Text text="✓" fontSize={24.sp} /> }

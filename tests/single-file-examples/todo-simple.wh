@@ -15,10 +15,10 @@ fun addTodo() {
   }
 }
 
-<Column padding={16} spacing={12}>
+<Column padding={16} gap={12}>
   <Text fontSize={24}>Todo List</Text>
 
-  <Row spacing={8}>
+  <Row gap={8}>
     <TextField
       bind:value={newTodo}
       label="New Todo"

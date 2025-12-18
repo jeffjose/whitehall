@@ -3,8 +3,8 @@
 @prop val value: String
 
 <Card padding={16}>
-  <Row spacing={16}>
-    <Column modifier={Modifier.weight(1f)} spacing={4}>
+  <Row gap={16}>
+    <Column modifier={Modifier.weight(1f)} gap={4}>
       <Text fontSize={18} fontWeight="bold">{title}</Text>
       <Text fontSize={14} color="#666666">{description}</Text>
     </Column>

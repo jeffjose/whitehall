@@ -19,7 +19,7 @@ suspend fun loadData() {
   isLoading = false
 }
 
-<Column padding={20} spacing={16}>
+<Column padding={20} gap={16}>
   <Text fontSize={32} fontWeight="bold">Async Loading</Text>
 
   <Card padding={16} backgroundColor="primaryContainer">
@@ -32,7 +32,7 @@ suspend fun loadData() {
 
   @if (isLoading) {
     <Card padding={24} backgroundColor="surfaceVariant">
-      <Column spacing={8}>
+      <Column gap={8}>
         <Text fontSize={18} fontWeight="bold">Loading...</Text>
         <Text fontSize={14}>Please wait while we fetch the data</Text>
       </Column>
@@ -41,7 +41,7 @@ suspend fun loadData() {
 
   @if (!isLoading && data.isNotEmpty()) {
     <Card padding={16} backgroundColor="primaryContainer">
-      <Column spacing={8}>
+      <Column gap={8}>
         <Text fontSize={18} fontWeight="bold">Result:</Text>
         <Text fontSize={16}>{data}</Text>
       </Column>

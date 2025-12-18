@@ -14,7 +14,7 @@ val evens = 0..10:2
 // Range with countdown converts to (10 downTo 1).toList()
 val countdown = 10..1:-1
 
-<Column spacing={8}>
+<Column gap={8}>
   <Text>Simple: {simple.size} items</Text>
   <Text>Evens: {evens.size} items</Text>
   <Text>Countdown: {countdown.size} items</Text>

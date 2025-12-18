@@ -49,7 +49,7 @@ suspend fun runBothTasks() {
   launch { simulateDownload() }
 }
 
-<Column padding={20} spacing={16}>
+<Column padding={20} gap={16}>
   <Text fontSize={32} fontWeight="bold">Multiple Async Tasks</Text>
 
   <Card padding={16} backgroundColor="primaryContainer">
@@ -59,7 +59,7 @@ suspend fun runBothTasks() {
   <Text fontSize={18} fontWeight="bold">Upload Task:</Text>
 
   <Card padding={16}>
-    <Column spacing={12}>
+    <Column gap={12}>
       @if (isUploading) {
         <Text fontSize={16}>Uploading: {uploadProgress}%</Text>
       }
@@ -81,7 +81,7 @@ suspend fun runBothTasks() {
   <Text fontSize={18} fontWeight="bold">Download Task:</Text>
 
   <Card padding={16}>
-    <Column spacing={12}>
+    <Column gap={12}>
       @if (isDownloading) {
         <Text fontSize={16}>Downloading: {downloadProgress}%</Text>
       }
@@ -109,7 +109,7 @@ suspend fun runBothTasks() {
   </Button>
 
   <Card padding={12} backgroundColor="surfaceVariant">
-    <Column spacing={4}>
+    <Column gap={4}>
       <Text fontSize={12} fontWeight="bold">Pattern Info:</Text>
       <Text fontSize={10} color="#666666">• Each task tracks its own state</Text>
       <Text fontSize={10} color="#666666">• Tasks can run independently or together</Text>

@@ -25,14 +25,14 @@ fun reset() {
   lastIncrement = null
 }
 
-<Column spacing={16}>
+<Column gap={16}>
   <Text text="Count: {count}" fontSize={32} />
 
   @if (lastIncrement != null) {
     <Text text={lastIncrement} fontSize={12} color="#666" />
   }
 
-  <Row spacing={8}>
+  <Row gap={8}>
     <Button onClick={() => decrement()} text="-" />
     <Button onClick={() => increment()} text="+" />
   </Row>

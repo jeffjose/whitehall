@@ -72,9 +72,9 @@ import kotlinx.coroutines.launch
   } else {
     <Column fill>
       // Post content
-      <Column padding={12} spacing={8}>
+      <Column padding={12} gap={8}>
         <Row
-          spacing={8}
+          gap={8}
           onClick={() => navigate($routes.profile(id = post.authorId))}
         >
           <Avatar url={post.authorAvatar} size={48} />
@@ -94,15 +94,15 @@ import kotlinx.coroutines.launch
         </Text>
 
         // Stats
-        <Row spacing={16} padding={8}>
-          <Row spacing={4}>
+        <Row gap={16} padding={8}>
+          <Row gap={4}>
             <Icon name="favorite" size={20} color="secondary" />
             <Text fontSize={14} color="secondary">
               {post.likesCount}
             </Text>
           </Row>
 
-          <Row spacing={4}>
+          <Row gap={4}>
             <Icon name="comment" size={20} color="secondary" />
             <Text fontSize={14} color="secondary">
               {post.commentsCount}
@@ -114,7 +114,7 @@ import kotlinx.coroutines.launch
       <Divider />
 
       // Comment input
-      <Row padding={12} spacing={8}>
+      <Row padding={12} gap={8}>
         <Input
           bind:value={commentText}
           placeholder="Add a comment..."

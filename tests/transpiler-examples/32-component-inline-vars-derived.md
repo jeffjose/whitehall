@@ -24,7 +24,7 @@ fun celebrateBirthday() {
   age++
 }
 
-<Column spacing={16}>
+<Column gap={16}>
   <Text text="Name: {displayName}" fontSize={24} />
   <Text text="Age: {age}" fontSize={18} />
 
@@ -34,7 +34,7 @@ fun celebrateBirthday() {
     <Text text="Minor" color="#FFA000" />
   }
 
-  <Row spacing={8}>
+  <Row gap={8}>
     <TextField
       label="First Name"
       bind:value={firstName}

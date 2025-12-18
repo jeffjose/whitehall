@@ -9,7 +9,7 @@
   }
 </script>
 
-<Column padding={16} spacing={16}>
+<Column padding={16} gap={16}>
   <Text variant="h4">Rust FFI Example</Text>
 
   <Text variant="body1">

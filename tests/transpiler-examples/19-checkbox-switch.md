@@ -15,18 +15,18 @@ Tests boolean form inputs with two-way data binding using bind:checked.
     }
   }
 
-<Column spacing={16}>
-  <Row spacing={8}>
+<Column gap={16}>
+  <Row gap={8}>
     <Checkbox bind:checked={isEnabled} />
     <Text>Enable feature</Text>
   </Row>
 
-  <Row spacing={8}>
+  <Row gap={8}>
     <Checkbox bind:checked={acceptTerms} />
     <Text>I accept the terms and conditions</Text>
   </Row>
 
-  <Row spacing={8}>
+  <Row gap={8}>
     <Text>Push notifications</Text>
     <Switch bind:checked={notifications} />
   </Row>

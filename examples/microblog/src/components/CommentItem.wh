@@ -15,11 +15,11 @@ import $models.Comment
     }
   }
 
-<Row padding={12} spacing={8}>
+<Row padding={12} gap={8}>
   <Avatar url={comment.authorAvatar} size={32} />
 
-  <Column fill spacing={4}>
-    <Row spacing={4}>
+  <Column fill gap={4}>
+    <Row gap={4}>
       <Text fontSize={14} fontWeight="bold">
         {comment.authorName}
       </Text>

@@ -34,7 +34,7 @@ var selectedTab = 0
 
   <Divider />
 
-  <Column padding={20} spacing={16}>
+  <Column padding={20} gap={16}>
     @if (selectedTab == 0) {
       <Text fontSize={32} fontWeight="bold">Tab 1 Content</Text>
       <Card padding={16} backgroundColor="primaryContainer">

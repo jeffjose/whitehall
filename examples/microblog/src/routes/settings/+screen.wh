@@ -21,13 +21,13 @@
 >
   <Column fill>
     // Account Section
-    <Column padding={16} spacing={8}>
+    <Column padding={16} gap={8}>
       <Text fontSize={12} fontWeight="bold" color="primary">
         ACCOUNT
       </Text>
 
       <Card onClick={() => navigate($routes.profile(id = "current_user"))}>
-        <Row padding={16} spacing={12}>
+        <Row padding={16} gap={12}>
           <Icon name="person" size={24} />
           <Text fill>My Profile</Text>
           <Icon name="chevron_right" color="secondary" />
@@ -35,7 +35,7 @@
       </Card>
 
       <Card>
-        <Row padding={16} spacing={12}>
+        <Row padding={16} gap={12}>
           <Icon name="lock" size={24} />
           <Text fill>Change Password</Text>
           <Icon name="chevron_right" color="secondary" />
@@ -46,13 +46,13 @@
     <Divider />
 
     // Preferences Section
-    <Column padding={16} spacing={8}>
+    <Column padding={16} gap={8}>
       <Text fontSize={12} fontWeight="bold" color="primary">
         PREFERENCES
       </Text>
 
       <Card>
-        <Row padding={16} spacing={12}>
+        <Row padding={16} gap={12}>
           <Icon name="notifications" size={24} />
           <Text fill>Notifications</Text>
           <Switch bind:checked={notificationsEnabled} />
@@ -60,7 +60,7 @@
       </Card>
 
       <Card>
-        <Row padding={16} spacing={12}>
+        <Row padding={16} gap={12}>
           <Icon name="dark_mode" size={24} />
           <Text fill>Dark Mode</Text>
           <Switch bind:checked={darkModeEnabled} />
@@ -68,7 +68,7 @@
       </Card>
 
       <Card>
-        <Row padding={16} spacing={12}>
+        <Row padding={16} gap={12}>
           <Icon name="play_circle" size={24} />
           <Text fill>Auto-play Videos</Text>
           <Switch bind:checked={autoPlayVideos} />
@@ -79,13 +79,13 @@
     <Divider />
 
     // About Section
-    <Column padding={16} spacing={8}>
+    <Column padding={16} gap={8}>
       <Text fontSize={12} fontWeight="bold" color="primary">
         ABOUT
       </Text>
 
       <Card>
-        <Row padding={16} spacing={12}>
+        <Row padding={16} gap={12}>
           <Icon name="info" size={24} />
           <Text fill>About</Text>
           <Icon name="chevron_right" color="secondary" />
@@ -93,7 +93,7 @@
       </Card>
 
       <Card>
-        <Row padding={16} spacing={12}>
+        <Row padding={16} gap={12}>
           <Icon name="privacy_tip" size={24} />
           <Text fill>Privacy Policy</Text>
           <Icon name="chevron_right" color="secondary" />
@@ -101,7 +101,7 @@
       </Card>
 
       <Card>
-        <Row padding={16} spacing={12}>
+        <Row padding={16} gap={12}>
           <Icon name="gavel" size={24} />
           <Text fill>Terms of Service</Text>
           <Icon name="chevron_right" color="secondary" />
