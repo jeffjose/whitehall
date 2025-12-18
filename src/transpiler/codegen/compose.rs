@@ -2969,12 +2969,19 @@ impl ComposeBackend {
                         if !component_imports.contains(&import) {
                             component_imports.push(import);
                         }
-                        // If Scaffold has slot child, we'll generate Box(modifier = Modifier.padding(paddingValues))
-                        if comp.children.iter().any(|c| matches!(c, Markup::Component(ch) if ch.name == "slot")) {
-                            let box_import = "androidx.compose.foundation.layout.Box".to_string();
-                            if !component_imports.contains(&box_import) {
-                                component_imports.push(box_import);
+                        // Check if first child needs paddingValues (slot, Column, Row, Box)
+                        let first_child_needs_padding = comp.children.first().map_or(false, |c| {
+                            matches!(c, Markup::Component(ch) if ch.name == "slot" || ch.name == "Column" || ch.name == "Row" || ch.name == "Box")
+                        });
+                        if first_child_needs_padding {
+                            // If slot is direct child, we wrap it in Box
+                            if comp.children.iter().any(|c| matches!(c, Markup::Component(ch) if ch.name == "slot")) {
+                                let box_import = "androidx.compose.foundation.layout.Box".to_string();
+                                if !component_imports.contains(&box_import) {
+                                    component_imports.push(box_import);
+                                }
                             }
+                            // All cases need Modifier and padding
                             let modifier_import = "androidx.compose.ui.Modifier".to_string();
                             if !prop_imports.contains(&modifier_import) {
                                 prop_imports.push(modifier_import);
