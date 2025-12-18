@@ -645,7 +645,7 @@ fun ErrorScreen(
             verticalArrangement = Arrangement.Center
         ) {{
             Text(
-                text = "Screen Not Found",
+                text = "Route doesn't exist",
                 fontSize = 24.sp,
                 color = MaterialTheme.colorScheme.onBackground
             )
