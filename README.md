@@ -1,12 +1,8 @@
 # Whitehall
 
-A Kotlin superset for Jetpack Compose with component markup, automatic state management, and zero-config tooling.
+A modern framework for native Android apps. Simple to write, fast to run.
 
 > **Experimental.** APIs and syntax may change.
-
-## Overview
-
-Whitehall extends Kotlin with ergonomic syntax for building Android UIs. Any valid Kotlin code is valid Whitehall code.
 
 ```whitehall
 var count = 0
@@ -21,21 +17,18 @@ fun increment() {
 </Column>
 ```
 
-Transpiles to idiomatic Kotlin/Compose.
+## Pillars
 
-## Key Features
-
-- **Component markup** — `<Text>`, `<Column>`, `<LazyColumn>`
-- **Automatic reactivity** — `var` properties become `StateFlow`
-- **Data binding** — `bind:value`, `bind:checked`
-- **Control flow** — `@if`, `@for`, `@when`
-- **Lifecycle hooks** — `$onMount`, `$onDispose`
-- **Toolchain management** — automatic Java, Gradle, and Android SDK setup
+- **Reduce line noise** — Write less boilerplate, focus on what matters
+- **Developer experience first** — Intuitive syntax, helpful errors, fast iteration
+- **Fast by default** — Native performance without configuration
+- **Complex things are possible** — Escape hatches when you need them
+- **Batteries included** — Routing, state, toolchain—all built in
 
 ## Quick Start
 
 ```bash
-cargo install whitehall
+cargo install --git https://github.com/aspect-build/whitehall
 whitehall init my-app && cd my-app
 whitehall run
 ```
