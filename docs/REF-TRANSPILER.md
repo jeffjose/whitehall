@@ -456,12 +456,20 @@ $navigate.popUpTo("/home")
 
 **Generated Kotlin:**
 ```kotlin
-// $navigate("/settings") becomes:
-LocalNavController.current.navigate("settings")
+// $navigate("/settings") becomes (type-safe route):
+navController.navigate(Routes.Settings)
+
+// $navigate("/") becomes:
+navController.navigate(Routes.Home)
 
 // $navigate.back() becomes:
-LocalNavController.current.popBackStack()
+navController.popBackStack()
 ```
+
+Path-to-route mapping:
+- `"/"` → `Routes.Home`
+- `"/settings"` → `Routes.Settings`
+- `"/user-profile"` → `Routes.UserProfile` (kebab-case to PascalCase)
 
 **How It Works:**
 
