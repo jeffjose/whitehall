@@ -324,14 +324,14 @@ fn execute_single_file_watch(file_path: &str, device_query: Option<&str>) -> Res
         env::set_current_dir(&temp_project_dir)?;
         let config = config::load_config("whitehall.toml")?;
 
-        println!("{}", "─".repeat(60).dimmed());
+        print!("{}\r\n", "─".repeat(60).dimmed());
         let start = Instant::now();
         match install_cycle(&toolchain, &config, &device.id) {
             Ok(_) => {
                 print_install_status(&single_config.app.name, &device.id, start.elapsed());
             }
             Err(e) => {
-                eprintln!("{} {}", "error:".red().bold(), e);
+                eprint!("{} {}\r\n", "error:".red().bold(), e);
             }
         }
 
@@ -345,11 +345,11 @@ fn execute_single_file_watch(file_path: &str, device_query: Option<&str>) -> Res
         // Check for keyboard input first
         match keyboard::poll_key(Duration::from_millis(100))? {
             KeyAction::Quit => {
-                println!("\n   Exiting watch mode");
+                print!("\r\n   Exiting watch mode\r\n");
                 return Ok(());
             }
             KeyAction::Rebuild => {
-                println!("\n   Rebuilding...");
+                print!("\r\n   Rebuilding...\r\n");
                 run_reinstall()?;
                 last_build = Instant::now();
                 continue;
@@ -442,14 +442,14 @@ fn execute_project_watch(manifest_path: &str, device_query: Option<&str>) -> Res
 
     // Helper closure to run a full install cycle
     let run_reinstall = || {
-        println!("{}", "─".repeat(60).dimmed());
+        print!("{}\r\n", "─".repeat(60).dimmed());
         let start = Instant::now();
         match install_cycle(&toolchain, &config, &device.id) {
             Ok(_) => {
                 print_install_status(&config.project.name, &device.id, start.elapsed());
             }
             Err(e) => {
-                eprintln!("{} {}", "error:".red().bold(), e);
+                eprint!("{} {}\r\n", "error:".red().bold(), e);
             }
         }
     };
@@ -460,11 +460,11 @@ fn execute_project_watch(manifest_path: &str, device_query: Option<&str>) -> Res
         // Check for keyboard input first
         match keyboard::poll_key(Duration::from_millis(100))? {
             KeyAction::Quit => {
-                println!("\n   Exiting watch mode");
+                print!("\r\n   Exiting watch mode\r\n");
                 return Ok(());
             }
             KeyAction::Rebuild => {
-                println!("\n   Rebuilding...");
+                print!("\r\n   Rebuilding...\r\n");
                 run_reinstall();
                 last_build = Instant::now();
                 continue;
@@ -516,7 +516,8 @@ fn install_cycle(
 /// Print install status
 fn print_install_status(name: &str, _device_id: &str, elapsed: Duration) {
     let ms = elapsed.as_millis();
-    println!("  {} `{}` in {}ms", "Installed".green().bold(), name, format!("{}", ms).cyan());
+    // Use \r\n for raw mode compatibility
+    print!("  {} `{}` in {}ms\r\n", "Installed".green().bold(), name, format!("{}", ms).cyan());
 }
 
 /// Load gitignore from the directory if it exists

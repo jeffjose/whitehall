@@ -272,16 +272,16 @@ fn execute_single_file_watch(file_path: &str) -> Result<()> {
         // Check for keyboard input first
         match keyboard::poll_key(Duration::from_millis(100))? {
             KeyAction::Quit => {
-                println!("\n   Exiting watch mode");
+                print!("\r\n   Exiting watch mode\r\n");
                 return Ok(());
             }
             KeyAction::Rebuild => {
-                println!("\n   Rebuilding...");
+                print!("\r\n   Rebuilding...\r\n");
                 let start = Instant::now();
                 match run_single_file_build_watch(&file_path_buf, &original_dir) {
                     Ok(_) => print_build_status(start.elapsed(), true),
                     Err(e) => {
-                        eprintln!("{} {}", "error:".red().bold(), e);
+                        eprint!("{} {}\r\n", "error:".red().bold(), e);
                     }
                 }
                 last_build = Instant::now();
@@ -304,7 +304,7 @@ fn execute_single_file_watch(file_path: &str) -> Result<()> {
                 match run_single_file_build_watch(&file_path_buf, &original_dir) {
                     Ok(_) => print_build_status(start.elapsed(), true),
                     Err(e) => {
-                        eprintln!("{} {}", "error:".red().bold(), e);
+                        eprint!("{} {}\r\n", "error:".red().bold(), e);
                     }
                 }
                 last_build = Instant::now();
@@ -409,16 +409,16 @@ fn execute_project_watch(manifest_path: &str) -> Result<()> {
         // Check for keyboard input first
         match keyboard::poll_key(Duration::from_millis(100))? {
             KeyAction::Quit => {
-                println!("\n   Exiting watch mode");
+                print!("\r\n   Exiting watch mode\r\n");
                 return Ok(());
             }
             KeyAction::Rebuild => {
-                println!("\n   Rebuilding...");
+                print!("\r\n   Rebuilding...\r\n");
                 let start = Instant::now();
                 match run_build_watch(&config) {
                     Ok(_) => print_build_status(start.elapsed(), true),
                     Err(e) => {
-                        eprintln!("{} {}", "error:".red().bold(), e);
+                        eprint!("{} {}\r\n", "error:".red().bold(), e);
                     }
                 }
                 last_build = Instant::now();
@@ -441,7 +441,7 @@ fn execute_project_watch(manifest_path: &str) -> Result<()> {
                 match run_build_watch(&config) {
                     Ok(_) => print_build_status(start.elapsed(), true),
                     Err(e) => {
-                        eprintln!("{} {}", "error:".red().bold(), e);
+                        eprint!("{} {}\r\n", "error:".red().bold(), e);
                     }
                 }
                 last_build = Instant::now();
@@ -468,7 +468,8 @@ fn run_build_watch(config: &crate::config::Config) -> Result<()> {
 /// Print build status on a new line
 fn print_build_status(elapsed: Duration, _success: bool) {
     let ms = elapsed.as_millis();
-    println!("   {} transpilation in {}ms", "Finished".green().bold(), format!("{}", ms).cyan());
+    // Use \r\n for raw mode compatibility
+    print!("   {} transpilation in {}ms\r\n", "Finished".green().bold(), format!("{}", ms).cyan());
 }
 
 /// Load gitignore from the current directory if it exists

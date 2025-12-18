@@ -471,13 +471,15 @@ fn print_colorized_logcat(line: &str) {
                 _ => message.to_string(),
             };
 
-            println!("{}/{} {}", level_colored, tag_colored, message_colored);
+            // Use \r\n for raw mode compatibility (raw mode doesn't auto-add \r)
+            print!("{}/{} {}\r\n", level_colored, tag_colored, message_colored);
             return;
         }
     }
 
     // Fallback: print as-is if we couldn't parse
-    println!("{}", line);
+    // Use \r\n for raw mode compatibility
+    print!("{}\r\n", line);
 }
 
 // ============================================================================
@@ -567,19 +569,19 @@ fn execute_single_file_watch(file_path: &str, device_query: Option<&str>) -> Res
         env::set_current_dir(&temp_project_dir)?;
         let config = config::load_config("whitehall.toml")?;
 
-        println!("{}", "─".repeat(60).dimmed());
+        print!("{}\r\n", "─".repeat(60).dimmed());
         let start = Instant::now();
         match run_full_cycle(&toolchain, &config, &device.id, &config.android.package) {
             Ok(_) => {
                 print_build_status(start.elapsed());
                 // Restart logcat
-                println!("{}", "─".repeat(60).dimmed());
+                print!("{}\r\n", "─".repeat(60).dimmed());
                 if let Ok(handle) = start_logcat_background(&toolchain, &config.android.package, &device.id) {
                     *logcat_handle = Some(handle);
                 }
             }
             Err(e) => {
-                eprintln!("{} {}", "error:".red().bold(), e);
+                eprint!("{} {}\r\n", "error:".red().bold(), e);
             }
         }
 
@@ -596,11 +598,11 @@ fn execute_single_file_watch(file_path: &str, device_query: Option<&str>) -> Res
                 if let Some(ref mut handle) = logcat_handle {
                     handle.stop();
                 }
-                println!("\n   Exiting watch mode");
+                print!("\r\n   Exiting watch mode\r\n");
                 return Ok(());
             }
             KeyAction::Rebuild => {
-                println!("\n   Rebuilding...");
+                print!("\r\n   Rebuilding...\r\n");
                 run_rebuild(&mut logcat_handle)?;
                 last_build = Instant::now();
                 continue;
@@ -711,19 +713,19 @@ fn execute_project_watch(manifest_path: &str, device_query: Option<&str>) -> Res
             handle.stop();
         }
 
-        println!("{}", "─".repeat(60).dimmed());
+        print!("{}\r\n", "─".repeat(60).dimmed());
         let start = Instant::now();
         match run_full_cycle(&toolchain, &config, &device.id, &config.android.package) {
             Ok(_) => {
                 print_build_status(start.elapsed());
                 // Restart logcat
-                println!("{}", "─".repeat(60).dimmed());
+                print!("{}\r\n", "─".repeat(60).dimmed());
                 if let Ok(handle) = start_logcat_background(&toolchain, &config.android.package, &device.id) {
                     *logcat_handle = Some(handle);
                 }
             }
             Err(e) => {
-                eprintln!("{} {}", "error:".red().bold(), e);
+                eprint!("{} {}\r\n", "error:".red().bold(), e);
             }
         }
     };
@@ -737,11 +739,11 @@ fn execute_project_watch(manifest_path: &str, device_query: Option<&str>) -> Res
                 if let Some(ref mut handle) = logcat_handle {
                     handle.stop();
                 }
-                println!("\n   Exiting watch mode");
+                print!("\r\n   Exiting watch mode\r\n");
                 return Ok(());
             }
             KeyAction::Rebuild => {
-                println!("\n   Rebuilding...");
+                print!("\r\n   Rebuilding...\r\n");
                 run_rebuild(&mut logcat_handle);
                 last_build = Instant::now();
                 continue;
@@ -806,7 +808,8 @@ fn run_full_cycle(
 /// Print build status on a new line
 fn print_build_status(elapsed: Duration) {
     let ms = elapsed.as_millis();
-    println!("   {} in {}ms", "Finished".green().bold(), format!("{}", ms).cyan());
+    // Use \r\n for raw mode compatibility
+    print!("   {} in {}ms\r\n", "Finished".green().bold(), format!("{}", ms).cyan());
 }
 
 /// Clear logcat buffer before launching app to capture init logs

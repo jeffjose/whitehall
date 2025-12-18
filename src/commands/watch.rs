@@ -56,14 +56,14 @@ fn execute_single_file(file_path: &str) -> Result<()> {
         // Check for keyboard input first
         match keyboard::poll_key(Duration::from_millis(100))? {
             KeyAction::Quit => {
-                println!("\n   Exiting watch mode");
+                print!("\r\n   Exiting watch mode\r\n");
                 return Ok(());
             }
             KeyAction::Rebuild => {
-                println!("\n   Rebuilding...");
+                print!("\r\n   Rebuilding...\r\n");
                 match run_single_file_build(&file_path_buf, &original_dir) {
-                    Ok(_) => println!("   {}", "Finished".green().bold()),
-                    Err(e) => eprintln!("{} build failed: {}", "error:".red().bold(), e),
+                    Ok(_) => print!("   {}\r\n", "Finished".green().bold()),
+                    Err(e) => eprint!("{} build failed: {}\r\n", "error:".red().bold(), e),
                 }
                 continue;
             }
@@ -73,11 +73,11 @@ fn execute_single_file(file_path: &str) -> Result<()> {
         // Check for file system events (non-blocking)
         while let Ok(event) = rx.try_recv() {
             if should_rebuild(&event) {
-                println!("\nChange detected in {}", file_path);
+                print!("\r\nChange detected in {}\r\n", file_path);
 
                 match run_single_file_build(&file_path_buf, &original_dir) {
-                    Ok(_) => println!("   {}", "Finished".green().bold()),
-                    Err(e) => eprintln!("{} build failed: {}", "error:".red().bold(), e),
+                    Ok(_) => print!("   {}\r\n", "Finished".green().bold()),
+                    Err(e) => eprint!("{} build failed: {}\r\n", "error:".red().bold(), e),
                 }
             }
         }
@@ -176,14 +176,14 @@ fn execute_project(manifest_path: &str) -> Result<()> {
         // Check for keyboard input first
         match keyboard::poll_key(Duration::from_millis(100))? {
             KeyAction::Quit => {
-                println!("\n   Exiting watch mode");
+                print!("\r\n   Exiting watch mode\r\n");
                 return Ok(());
             }
             KeyAction::Rebuild => {
-                println!("\n   Rebuilding...");
+                print!("\r\n   Rebuilding...\r\n");
                 match run_build(&config) {
-                    Ok(_) => println!("   {}", "Finished".green().bold()),
-                    Err(e) => eprintln!("{} build failed: {}", "error:".red().bold(), e),
+                    Ok(_) => print!("   {}\r\n", "Finished".green().bold()),
+                    Err(e) => eprint!("{} build failed: {}\r\n", "error:".red().bold(), e),
                 }
                 continue;
             }
@@ -201,11 +201,11 @@ fn execute_project(manifest_path: &str) -> Result<()> {
                     .and_then(|n| n.to_str())
                     .unwrap_or("file");
 
-                println!("\nChange detected in {}", changed_file);
+                print!("\r\nChange detected in {}\r\n", changed_file);
 
                 match run_build(&config) {
-                    Ok(_) => println!("   {}", "Finished".green().bold()),
-                    Err(e) => eprintln!("{} build failed: {}", "error:".red().bold(), e),
+                    Ok(_) => print!("   {}\r\n", "Finished".green().bold()),
+                    Err(e) => eprint!("{} build failed: {}\r\n", "error:".red().bold(), e),
                 }
             }
         }

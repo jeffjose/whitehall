@@ -72,8 +72,9 @@ fn key_to_action(key: KeyEvent) -> KeyAction {
 }
 
 /// Print the keyboard shortcuts help message
+/// Uses \r\n for raw mode compatibility
 pub fn print_shortcuts() {
-    println!("   Press {} to rebuild, {} to quit", "r", "q");
+    print!("   Press {} to rebuild, {} to quit\r\n", "r", "q");
 }
 
 /// Check if we're running in a terminal that supports raw mode
