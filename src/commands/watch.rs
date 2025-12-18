@@ -9,6 +9,7 @@ use std::time::Duration;
 
 use crate::build_pipeline;
 use crate::config;
+use crate::keyboard::{self, KeyAction, RawModeGuard};
 use crate::single_file;
 use crate::commands::{detect_target, Target};
 
@@ -22,8 +23,6 @@ pub fn execute(target: &str) -> Result<()> {
 
 /// Watch a single .wh file
 fn execute_single_file(file_path: &str) -> Result<()> {
-    println!("   Watching {} (press Ctrl+C to stop)", file_path);
-
     let file_path_buf = PathBuf::from(file_path);
     let original_dir = env::current_dir()?;
 
@@ -36,6 +35,8 @@ fn execute_single_file(file_path: &str) -> Result<()> {
         }
     }
 
+    keyboard::print_shortcuts();
+
     // Set up file watcher
     let (tx, rx) = channel();
     let mut watcher = notify::recommended_watcher(move |res: Result<Event, _>| {
@@ -47,21 +48,37 @@ fn execute_single_file(file_path: &str) -> Result<()> {
     // Watch the single .wh file
     watcher.watch(&file_path_buf, RecursiveMode::NonRecursive)?;
 
+    // Enable raw mode for keyboard input
+    let _raw_guard = RawModeGuard::new()?;
+
     // Watch loop
     loop {
-        match rx.recv_timeout(Duration::from_millis(100)) {
-            Ok(event) => {
-                if should_rebuild(&event) {
-                    println!("\nChange detected in {}", file_path);
-
-                    match run_single_file_build(&file_path_buf, &original_dir) {
-                        Ok(_) => println!("   {}", "Finished".green().bold()),
-                        Err(e) => eprintln!("{} build failed: {}", "error:".red().bold(), e),
-                    }
-                }
+        // Check for keyboard input first
+        match keyboard::poll_key(Duration::from_millis(100))? {
+            KeyAction::Quit => {
+                println!("\n   Exiting watch mode");
+                return Ok(());
             }
-            Err(_) => {
-                // Timeout, continue loop (allows Ctrl+C to work)
+            KeyAction::Rebuild => {
+                println!("\n   Rebuilding...");
+                match run_single_file_build(&file_path_buf, &original_dir) {
+                    Ok(_) => println!("   {}", "Finished".green().bold()),
+                    Err(e) => eprintln!("{} build failed: {}", "error:".red().bold(), e),
+                }
+                continue;
+            }
+            KeyAction::None => {}
+        }
+
+        // Check for file system events (non-blocking)
+        while let Ok(event) = rx.try_recv() {
+            if should_rebuild(&event) {
+                println!("\nChange detected in {}", file_path);
+
+                match run_single_file_build(&file_path_buf, &original_dir) {
+                    Ok(_) => println!("   {}", "Finished".green().bold()),
+                    Err(e) => eprintln!("{} build failed: {}", "error:".red().bold(), e),
+                }
             }
         }
     }
@@ -100,8 +117,6 @@ fn run_single_file_build(file_path: &Path, original_dir: &Path) -> Result<()> {
 
 /// Watch a project (existing behavior)
 fn execute_project(manifest_path: &str) -> Result<()> {
-    println!("   Watching project (press Ctrl+C to stop)");
-
     // 1. Determine project directory from manifest path (same as build command)
     let manifest_path = Path::new(manifest_path);
     let original_dir = env::current_dir()?;
@@ -139,6 +154,8 @@ fn execute_project(manifest_path: &str) -> Result<()> {
         }
     }
 
+    keyboard::print_shortcuts();
+
     // 4. Set up file watcher
     let (tx, rx) = channel();
     let mut watcher = notify::recommended_watcher(move |res: Result<Event, _>| {
@@ -151,29 +168,45 @@ fn execute_project(manifest_path: &str) -> Result<()> {
     watcher.watch(Path::new("src"), RecursiveMode::Recursive)?;
     watcher.watch(Path::new(manifest_file), RecursiveMode::NonRecursive)?;
 
+    // Enable raw mode for keyboard input
+    let _raw_guard = RawModeGuard::new()?;
+
     // 5. Watch loop
     loop {
-        match rx.recv_timeout(Duration::from_millis(100)) {
-            Ok(event) => {
-                if should_rebuild(&event) {
-                    // Get the changed file name for display
-                    let changed_file = event
-                        .paths
-                        .first()
-                        .and_then(|p| p.file_name())
-                        .and_then(|n| n.to_str())
-                        .unwrap_or("file");
-
-                    println!("\nChange detected in {}", changed_file);
-
-                    match run_build(&config) {
-                        Ok(_) => println!("   {}", "Finished".green().bold()),
-                        Err(e) => eprintln!("{} build failed: {}", "error:".red().bold(), e),
-                    }
-                }
+        // Check for keyboard input first
+        match keyboard::poll_key(Duration::from_millis(100))? {
+            KeyAction::Quit => {
+                println!("\n   Exiting watch mode");
+                return Ok(());
             }
-            Err(_) => {
-                // Timeout, continue loop (allows Ctrl+C to work)
+            KeyAction::Rebuild => {
+                println!("\n   Rebuilding...");
+                match run_build(&config) {
+                    Ok(_) => println!("   {}", "Finished".green().bold()),
+                    Err(e) => eprintln!("{} build failed: {}", "error:".red().bold(), e),
+                }
+                continue;
+            }
+            KeyAction::None => {}
+        }
+
+        // Check for file system events (non-blocking)
+        while let Ok(event) = rx.try_recv() {
+            if should_rebuild(&event) {
+                // Get the changed file name for display
+                let changed_file = event
+                    .paths
+                    .first()
+                    .and_then(|p| p.file_name())
+                    .and_then(|n| n.to_str())
+                    .unwrap_or("file");
+
+                println!("\nChange detected in {}", changed_file);
+
+                match run_build(&config) {
+                    Ok(_) => println!("   {}", "Finished".green().bold()),
+                    Err(e) => eprintln!("{} build failed: {}", "error:".red().bold(), e),
+                }
             }
         }
     }

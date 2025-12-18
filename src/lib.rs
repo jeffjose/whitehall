@@ -1,4 +1,5 @@
 pub mod commands;
+pub mod keyboard;
 pub mod transpiler;
 pub mod config;
 pub mod project;

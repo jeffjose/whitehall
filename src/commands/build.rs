@@ -11,6 +11,7 @@ use std::time::{Duration, Instant};
 
 use crate::build_pipeline;
 use crate::config;
+use crate::keyboard::{self, KeyAction, RawModeGuard};
 use crate::single_file;
 use crate::commands::{detect_target, Target};
 use crate::toolchain::Toolchain;
@@ -249,6 +250,8 @@ fn execute_single_file_watch(file_path: &str) -> Result<()> {
         }
     }
 
+    keyboard::print_shortcuts();
+
     // Set up file watcher
     let (tx, rx) = channel();
     let mut watcher = notify::recommended_watcher(move |res: Result<Event, _>| {
@@ -260,31 +263,51 @@ fn execute_single_file_watch(file_path: &str) -> Result<()> {
     // Watch the single .wh file
     watcher.watch(&file_path_buf, RecursiveMode::NonRecursive)?;
 
+    // Enable raw mode for keyboard input
+    let _raw_guard = RawModeGuard::new()?;
+
     // Watch loop with debouncing
     let mut last_build = Instant::now();
     loop {
-        match rx.recv_timeout(Duration::from_millis(100)) {
-            Ok(event) => {
-                if should_rebuild(&event, &gitignore) {
-                    // Debounce: skip if we just built within 100ms
-                    if last_build.elapsed() < Duration::from_millis(100) {
-                        continue;
-                    }
-                    // Drain any additional pending events
-                    while rx.try_recv().is_ok() {}
-
-                    let start = Instant::now();
-                    match run_single_file_build_watch(&file_path_buf, &original_dir) {
-                        Ok(_) => print_build_status(start.elapsed(), true),
-                        Err(e) => {
-                            eprintln!("{} {}", "error:".red().bold(), e);
-                        }
-                    }
-                    last_build = Instant::now();
-                }
+        // Check for keyboard input first
+        match keyboard::poll_key(Duration::from_millis(100))? {
+            KeyAction::Quit => {
+                println!("\n   Exiting watch mode");
+                return Ok(());
             }
-            Err(_) => {
-                // Timeout, continue loop (allows Ctrl+C to work)
+            KeyAction::Rebuild => {
+                println!("\n   Rebuilding...");
+                let start = Instant::now();
+                match run_single_file_build_watch(&file_path_buf, &original_dir) {
+                    Ok(_) => print_build_status(start.elapsed(), true),
+                    Err(e) => {
+                        eprintln!("{} {}", "error:".red().bold(), e);
+                    }
+                }
+                last_build = Instant::now();
+                continue;
+            }
+            KeyAction::None => {}
+        }
+
+        // Check for file system events (non-blocking)
+        while let Ok(event) = rx.try_recv() {
+            if should_rebuild(&event, &gitignore) {
+                // Debounce: skip if we just built within 100ms
+                if last_build.elapsed() < Duration::from_millis(100) {
+                    continue;
+                }
+                // Drain any additional pending events
+                while rx.try_recv().is_ok() {}
+
+                let start = Instant::now();
+                match run_single_file_build_watch(&file_path_buf, &original_dir) {
+                    Ok(_) => print_build_status(start.elapsed(), true),
+                    Err(e) => {
+                        eprintln!("{} {}", "error:".red().bold(), e);
+                    }
+                }
+                last_build = Instant::now();
             }
         }
     }
@@ -363,6 +386,8 @@ fn execute_project_watch(manifest_path: &str) -> Result<()> {
         }
     }
 
+    keyboard::print_shortcuts();
+
     // Set up file watcher
     let (tx, rx) = channel();
     let mut watcher = notify::recommended_watcher(move |res: Result<Event, _>| {
@@ -375,31 +400,51 @@ fn execute_project_watch(manifest_path: &str) -> Result<()> {
     watcher.watch(Path::new("src"), RecursiveMode::Recursive)?;
     watcher.watch(Path::new(manifest_file), RecursiveMode::NonRecursive)?;
 
+    // Enable raw mode for keyboard input
+    let _raw_guard = RawModeGuard::new()?;
+
     // Watch loop with debouncing
     let mut last_build = Instant::now();
     loop {
-        match rx.recv_timeout(Duration::from_millis(100)) {
-            Ok(event) => {
-                if should_rebuild(&event, &gitignore) {
-                    // Debounce: skip if we just built within 100ms
-                    if last_build.elapsed() < Duration::from_millis(100) {
-                        continue;
-                    }
-                    // Drain any additional pending events
-                    while rx.try_recv().is_ok() {}
-
-                    let start = Instant::now();
-                    match run_build_watch(&config) {
-                        Ok(_) => print_build_status(start.elapsed(), true),
-                        Err(e) => {
-                            eprintln!("{} {}", "error:".red().bold(), e);
-                        }
-                    }
-                    last_build = Instant::now();
-                }
+        // Check for keyboard input first
+        match keyboard::poll_key(Duration::from_millis(100))? {
+            KeyAction::Quit => {
+                println!("\n   Exiting watch mode");
+                return Ok(());
             }
-            Err(_) => {
-                // Timeout, continue loop (allows Ctrl+C to work)
+            KeyAction::Rebuild => {
+                println!("\n   Rebuilding...");
+                let start = Instant::now();
+                match run_build_watch(&config) {
+                    Ok(_) => print_build_status(start.elapsed(), true),
+                    Err(e) => {
+                        eprintln!("{} {}", "error:".red().bold(), e);
+                    }
+                }
+                last_build = Instant::now();
+                continue;
+            }
+            KeyAction::None => {}
+        }
+
+        // Check for file system events (non-blocking)
+        while let Ok(event) = rx.try_recv() {
+            if should_rebuild(&event, &gitignore) {
+                // Debounce: skip if we just built within 100ms
+                if last_build.elapsed() < Duration::from_millis(100) {
+                    continue;
+                }
+                // Drain any additional pending events
+                while rx.try_recv().is_ok() {}
+
+                let start = Instant::now();
+                match run_build_watch(&config) {
+                    Ok(_) => print_build_status(start.elapsed(), true),
+                    Err(e) => {
+                        eprintln!("{} {}", "error:".red().bold(), e);
+                    }
+                }
+                last_build = Instant::now();
             }
         }
     }

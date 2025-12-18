@@ -11,6 +11,7 @@ use std::time::{Duration, Instant};
 
 use crate::build_pipeline;
 use crate::config;
+use crate::keyboard::{self, KeyAction, RawModeGuard};
 use crate::single_file;
 use crate::commands::{detect_target, Target};
 use crate::commands::device;
@@ -296,7 +297,8 @@ fn execute_single_file_watch(file_path: &str, device_query: Option<&str>) -> Res
     // Restore to original directory for watching
     env::set_current_dir(&original_dir)?;
 
-    println!("\n{} (press Ctrl+C to stop)", "Watching for changes...".cyan().bold());
+    println!("\n{}", "Watching for changes...".cyan().bold());
+    keyboard::print_shortcuts();
 
     // Set up file watcher
     let (tx, rx) = channel();
@@ -309,42 +311,64 @@ fn execute_single_file_watch(file_path: &str, device_query: Option<&str>) -> Res
     // Watch the single .wh file
     watcher.watch(&file_path_buf, RecursiveMode::NonRecursive)?;
 
+    // Enable raw mode for keyboard input
+    let _raw_guard = RawModeGuard::new()?;
+
+    // Helper closure to run a full install cycle
+    let run_reinstall = || -> Result<()> {
+        // Re-read and regenerate project
+        let content = fs::read_to_string(&file_path_buf)?;
+        let (single_config, code) = single_file::parse_frontmatter(&content)?;
+        let temp_project_dir = single_file::generate_temp_project(&file_path_buf, &single_config, &code)?;
+
+        env::set_current_dir(&temp_project_dir)?;
+        let config = config::load_config("whitehall.toml")?;
+
+        println!("{}", "─".repeat(60).dimmed());
+        let start = Instant::now();
+        match install_cycle(&toolchain, &config, &device.id) {
+            Ok(_) => {
+                print_install_status(&single_config.app.name, &device.id, start.elapsed());
+            }
+            Err(e) => {
+                eprintln!("{} {}", "error:".red().bold(), e);
+            }
+        }
+
+        env::set_current_dir(&original_dir)?;
+        Ok(())
+    };
+
     // Watch loop with debouncing
     let mut last_build = Instant::now();
     loop {
-        match rx.recv_timeout(Duration::from_millis(100)) {
-            Ok(event) => {
-                if should_rebuild(&event, &gitignore) {
-                    // Debounce
-                    if last_build.elapsed() < Duration::from_millis(100) {
-                        continue;
-                    }
-                    while rx.try_recv().is_ok() {}
-
-                    // Re-read and regenerate project
-                    let content = fs::read_to_string(&file_path_buf)?;
-                    let (single_config, code) = single_file::parse_frontmatter(&content)?;
-                    let temp_project_dir = single_file::generate_temp_project(&file_path_buf, &single_config, &code)?;
-
-                    env::set_current_dir(&temp_project_dir)?;
-                    let config = config::load_config("whitehall.toml")?;
-
-                    println!("{}", "─".repeat(60).dimmed());
-                    let start = Instant::now();
-                    match install_cycle(&toolchain, &config, &device.id) {
-                        Ok(_) => {
-                            print_install_status(&single_config.app.name, &device.id, start.elapsed());
-                        }
-                        Err(e) => {
-                            eprintln!("{} {}", "error:".red().bold(), e);
-                        }
-                    }
-
-                    env::set_current_dir(&original_dir)?;
-                    last_build = Instant::now();
-                }
+        // Check for keyboard input first
+        match keyboard::poll_key(Duration::from_millis(100))? {
+            KeyAction::Quit => {
+                println!("\n   Exiting watch mode");
+                return Ok(());
             }
-            Err(_) => {}
+            KeyAction::Rebuild => {
+                println!("\n   Rebuilding...");
+                run_reinstall()?;
+                last_build = Instant::now();
+                continue;
+            }
+            KeyAction::None => {}
+        }
+
+        // Check for file system events (non-blocking)
+        while let Ok(event) = rx.try_recv() {
+            if should_rebuild(&event, &gitignore) {
+                // Debounce
+                if last_build.elapsed() < Duration::from_millis(100) {
+                    continue;
+                }
+                while rx.try_recv().is_ok() {}
+
+                run_reinstall()?;
+                last_build = Instant::now();
+            }
         }
     }
 }
@@ -398,7 +422,8 @@ fn execute_project_watch(manifest_path: &str, device_query: Option<&str>) -> Res
         }
     }
 
-    println!("\n{} (press Ctrl+C to stop)", "Watching for changes...".cyan().bold());
+    println!("\n{}", "Watching for changes...".cyan().bold());
+    keyboard::print_shortcuts();
 
     // Set up file watcher
     let (tx, rx) = channel();
@@ -412,32 +437,53 @@ fn execute_project_watch(manifest_path: &str, device_query: Option<&str>) -> Res
     watcher.watch(Path::new("src"), RecursiveMode::Recursive)?;
     watcher.watch(Path::new(manifest_file), RecursiveMode::NonRecursive)?;
 
+    // Enable raw mode for keyboard input
+    let _raw_guard = RawModeGuard::new()?;
+
+    // Helper closure to run a full install cycle
+    let run_reinstall = || {
+        println!("{}", "─".repeat(60).dimmed());
+        let start = Instant::now();
+        match install_cycle(&toolchain, &config, &device.id) {
+            Ok(_) => {
+                print_install_status(&config.project.name, &device.id, start.elapsed());
+            }
+            Err(e) => {
+                eprintln!("{} {}", "error:".red().bold(), e);
+            }
+        }
+    };
+
     // Watch loop with debouncing
     let mut last_build = Instant::now();
     loop {
-        match rx.recv_timeout(Duration::from_millis(100)) {
-            Ok(event) => {
-                if should_rebuild(&event, &gitignore) {
-                    // Debounce
-                    if last_build.elapsed() < Duration::from_millis(100) {
-                        continue;
-                    }
-                    while rx.try_recv().is_ok() {}
-
-                    println!("{}", "─".repeat(60).dimmed());
-                    let start = Instant::now();
-                    match install_cycle(&toolchain, &config, &device.id) {
-                        Ok(_) => {
-                            print_install_status(&config.project.name, &device.id, start.elapsed());
-                        }
-                        Err(e) => {
-                            eprintln!("{} {}", "error:".red().bold(), e);
-                        }
-                    }
-                    last_build = Instant::now();
-                }
+        // Check for keyboard input first
+        match keyboard::poll_key(Duration::from_millis(100))? {
+            KeyAction::Quit => {
+                println!("\n   Exiting watch mode");
+                return Ok(());
             }
-            Err(_) => {}
+            KeyAction::Rebuild => {
+                println!("\n   Rebuilding...");
+                run_reinstall();
+                last_build = Instant::now();
+                continue;
+            }
+            KeyAction::None => {}
+        }
+
+        // Check for file system events (non-blocking)
+        while let Ok(event) = rx.try_recv() {
+            if should_rebuild(&event, &gitignore) {
+                // Debounce
+                if last_build.elapsed() < Duration::from_millis(100) {
+                    continue;
+                }
+                while rx.try_recv().is_ok() {}
+
+                run_reinstall();
+                last_build = Instant::now();
+            }
         }
     }
 }

@@ -16,6 +16,7 @@ use std::time::{Duration, Instant};
 
 use crate::build_pipeline;
 use crate::config;
+use crate::keyboard::{self, KeyAction, RawModeGuard};
 use crate::single_file;
 use crate::commands::{detect_target, Target};
 use crate::commands::device;
@@ -535,6 +536,8 @@ fn execute_single_file_watch(file_path: &str, device_query: Option<&str>) -> Res
     // Restore to original directory for watching
     env::set_current_dir(&original_dir)?;
 
+    keyboard::print_shortcuts();
+
     // Set up file watcher
     let (tx, rx) = channel();
     let mut watcher = notify::recommended_watcher(move |res: Result<Event, _>| {
@@ -546,60 +549,85 @@ fn execute_single_file_watch(file_path: &str, device_query: Option<&str>) -> Res
     // Watch the single .wh file
     watcher.watch(&file_path_buf, RecursiveMode::NonRecursive)?;
 
+    // Enable raw mode for keyboard input
+    let _raw_guard = RawModeGuard::new()?;
+
+    // Helper closure to run a full rebuild cycle
+    let run_rebuild = |logcat_handle: &mut Option<LogcatHandle>| -> Result<()> {
+        // Stop current logcat
+        if let Some(ref mut handle) = logcat_handle {
+            handle.stop();
+        }
+
+        // Re-read and regenerate project
+        let content = fs::read_to_string(&file_path_buf)?;
+        let (single_config, code) = single_file::parse_frontmatter(&content)?;
+        let temp_project_dir = single_file::generate_temp_project(&file_path_buf, &single_config, &code)?;
+
+        env::set_current_dir(&temp_project_dir)?;
+        let config = config::load_config("whitehall.toml")?;
+
+        println!("{}", "─".repeat(60).dimmed());
+        let start = Instant::now();
+        match run_full_cycle(&toolchain, &config, &device.id, &config.android.package) {
+            Ok(_) => {
+                print_build_status(start.elapsed());
+                // Restart logcat
+                println!("{}", "─".repeat(60).dimmed());
+                if let Ok(handle) = start_logcat_background(&toolchain, &config.android.package, &device.id) {
+                    *logcat_handle = Some(handle);
+                }
+            }
+            Err(e) => {
+                eprintln!("{} {}", "error:".red().bold(), e);
+            }
+        }
+
+        env::set_current_dir(&original_dir)?;
+        Ok(())
+    };
+
     // Watch loop with debouncing
     let mut last_build = Instant::now();
     loop {
-        match rx.recv_timeout(Duration::from_millis(100)) {
-            Ok(event) => {
-                if should_rebuild(&event, &gitignore) {
-                    // Debounce - wait for file saves to settle
-                    if last_build.elapsed() < Duration::from_millis(500) {
-                        continue;
-                    }
+        // Check for keyboard input first
+        match keyboard::poll_key(Duration::from_millis(100))? {
+            KeyAction::Quit => {
+                if let Some(ref mut handle) = logcat_handle {
+                    handle.stop();
+                }
+                println!("\n   Exiting watch mode");
+                return Ok(());
+            }
+            KeyAction::Rebuild => {
+                println!("\n   Rebuilding...");
+                run_rebuild(&mut logcat_handle)?;
+                last_build = Instant::now();
+                continue;
+            }
+            KeyAction::None => {}
+        }
+
+        // Check for file system events (non-blocking)
+        while let Ok(event) = rx.try_recv() {
+            if should_rebuild(&event, &gitignore) {
+                // Debounce - wait for file saves to settle
+                if last_build.elapsed() < Duration::from_millis(500) {
+                    continue;
+                }
+                while rx.try_recv().is_ok() {}
+
+                run_rebuild(&mut logcat_handle)?;
+
+                // Check if more changes came in during build
+                // If so, don't reset timer - allow immediate rebuild
+                if rx.try_recv().is_err() {
+                    last_build = Instant::now();
+                } else {
+                    // Drain remaining events, will rebuild on next iteration
                     while rx.try_recv().is_ok() {}
-
-                    // Stop current logcat
-                    if let Some(ref mut handle) = logcat_handle {
-                        handle.stop();
-                    }
-
-                    // Re-read and regenerate project
-                    let content = fs::read_to_string(&file_path_buf)?;
-                    let (single_config, code) = single_file::parse_frontmatter(&content)?;
-                    let temp_project_dir = single_file::generate_temp_project(&file_path_buf, &single_config, &code)?;
-
-                    env::set_current_dir(&temp_project_dir)?;
-                    let config = config::load_config("whitehall.toml")?;
-
-                    println!("{}", "─".repeat(60).dimmed());
-                    let start = Instant::now();
-                    match run_full_cycle(&toolchain, &config, &device.id, &config.android.package) {
-                        Ok(_) => {
-                            print_build_status(start.elapsed());
-                            // Restart logcat
-                            println!("{}", "─".repeat(60).dimmed());
-                            if let Ok(handle) = start_logcat_background(&toolchain, &config.android.package, &device.id) {
-                                logcat_handle = Some(handle);
-                            }
-                        }
-                        Err(e) => {
-                            eprintln!("{} {}", "error:".red().bold(), e);
-                        }
-                    }
-
-                    env::set_current_dir(&original_dir)?;
-
-                    // Check if more changes came in during build
-                    // If so, don't reset timer - allow immediate rebuild
-                    if rx.try_recv().is_err() {
-                        last_build = Instant::now();
-                    } else {
-                        // Drain remaining events, will rebuild on next iteration
-                        while rx.try_recv().is_ok() {}
-                    }
                 }
             }
-            Err(_) => {}
         }
     }
 }
@@ -659,6 +687,8 @@ fn execute_project_watch(manifest_path: &str, device_query: Option<&str>) -> Res
         }
     }
 
+    keyboard::print_shortcuts();
+
     // Set up file watcher
     let (tx, rx) = channel();
     let mut watcher = notify::recommended_watcher(move |res: Result<Event, _>| {
@@ -671,50 +701,74 @@ fn execute_project_watch(manifest_path: &str, device_query: Option<&str>) -> Res
     watcher.watch(Path::new("src"), RecursiveMode::Recursive)?;
     watcher.watch(Path::new(manifest_file), RecursiveMode::NonRecursive)?;
 
+    // Enable raw mode for keyboard input
+    let _raw_guard = RawModeGuard::new()?;
+
+    // Helper closure to run a full rebuild cycle
+    let run_rebuild = |logcat_handle: &mut Option<LogcatHandle>| {
+        // Stop current logcat
+        if let Some(ref mut handle) = logcat_handle {
+            handle.stop();
+        }
+
+        println!("{}", "─".repeat(60).dimmed());
+        let start = Instant::now();
+        match run_full_cycle(&toolchain, &config, &device.id, &config.android.package) {
+            Ok(_) => {
+                print_build_status(start.elapsed());
+                // Restart logcat
+                println!("{}", "─".repeat(60).dimmed());
+                if let Ok(handle) = start_logcat_background(&toolchain, &config.android.package, &device.id) {
+                    *logcat_handle = Some(handle);
+                }
+            }
+            Err(e) => {
+                eprintln!("{} {}", "error:".red().bold(), e);
+            }
+        }
+    };
+
     // Watch loop with debouncing
     let mut last_build = Instant::now();
     loop {
-        match rx.recv_timeout(Duration::from_millis(100)) {
-            Ok(event) => {
-                if should_rebuild(&event, &gitignore) {
-                    // Debounce - wait for file saves to settle
-                    if last_build.elapsed() < Duration::from_millis(500) {
-                        continue;
-                    }
+        // Check for keyboard input first
+        match keyboard::poll_key(Duration::from_millis(100))? {
+            KeyAction::Quit => {
+                if let Some(ref mut handle) = logcat_handle {
+                    handle.stop();
+                }
+                println!("\n   Exiting watch mode");
+                return Ok(());
+            }
+            KeyAction::Rebuild => {
+                println!("\n   Rebuilding...");
+                run_rebuild(&mut logcat_handle);
+                last_build = Instant::now();
+                continue;
+            }
+            KeyAction::None => {}
+        }
+
+        // Check for file system events (non-blocking)
+        while let Ok(event) = rx.try_recv() {
+            if should_rebuild(&event, &gitignore) {
+                // Debounce - wait for file saves to settle
+                if last_build.elapsed() < Duration::from_millis(500) {
+                    continue;
+                }
+                while rx.try_recv().is_ok() {}
+
+                run_rebuild(&mut logcat_handle);
+
+                // Check if more changes came in during build
+                // If so, don't reset timer - allow immediate rebuild
+                if rx.try_recv().is_err() {
+                    last_build = Instant::now();
+                } else {
+                    // Drain remaining events, will rebuild on next iteration
                     while rx.try_recv().is_ok() {}
-
-                    // Stop current logcat
-                    if let Some(ref mut handle) = logcat_handle {
-                        handle.stop();
-                    }
-
-                    println!("{}", "─".repeat(60).dimmed());
-                    let start = Instant::now();
-                    match run_full_cycle(&toolchain, &config, &device.id, &config.android.package) {
-                        Ok(_) => {
-                            print_build_status(start.elapsed());
-                            // Restart logcat
-                            println!("{}", "─".repeat(60).dimmed());
-                            if let Ok(handle) = start_logcat_background(&toolchain, &config.android.package, &device.id) {
-                                logcat_handle = Some(handle);
-                            }
-                        }
-                        Err(e) => {
-                            eprintln!("{} {}", "error:".red().bold(), e);
-                        }
-                    }
-
-                    // Check if more changes came in during build
-                    // If so, don't reset timer - allow immediate rebuild
-                    if rx.try_recv().is_err() {
-                        last_build = Instant::now();
-                    } else {
-                        // Drain remaining events, will rebuild on next iteration
-                        while rx.try_recv().is_ok() {}
-                    }
                 }
             }
-            Err(_) => {}
         }
     }
 }
