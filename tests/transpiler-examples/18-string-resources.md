@@ -69,7 +69,7 @@ fun WelcomeScreen(
             text = "${stringResource(R.string.items_count, itemCount)}"
         )
         Button(
-            onClick = { navController.navigate(Routes.Home) }
+            onClick = { navController.navigate(Routes.Home) { launchSingleTop = true } }
         ) {
             Text(text = "${stringResource(R.string.action_continue)}")
         }

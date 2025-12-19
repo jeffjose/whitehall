@@ -47,11 +47,11 @@ import com.example.app.routes.Routes
 @Composable
 fun WelcomeScreen(navController: NavController) {
     fun handleLoginClick() {
-        navController.navigate(Routes.Login)
+        navController.navigate(Routes.Login) { launchSingleTop = true }
     }
 
     fun handleSignupClick() {
-        navController.navigate(Routes.Signup)
+        navController.navigate(Routes.Signup) { launchSingleTop = true }
     }
 
     Column(

@@ -61,7 +61,7 @@ fun PostList(
             posts.forEach { post ->
                 key(post.id) {
                     Card(
-                        onClick = { navController.navigate(Routes.Post.Detail(id = post.id)) }
+                        onClick = { navController.navigate(Routes.Post.Detail(id = post.id)) { launchSingleTop = true } }
                     ) {
                         Column(modifier = Modifier.padding(12.dp)) {
                             Text(

@@ -25,6 +25,7 @@ pub struct ComposeBackend {
     uses_pull_to_refresh: bool, // Track if onRefresh prop is used (for PullToRefreshBox)
     uses_auto_column: bool, // Track if auto-wrap Column is used (for Column import)
     uses_navigate: bool, // Track if $navigate() is used (for LocalNavController import)
+    uses_route_path: bool, // Track if $route.path is used (for currentBackStackEntry observation)
     uses_material_icons: bool, // Track if Icon with name prop is used (for Icons import)
     // Phase 1.1: ViewModel wrapper context
     in_viewmodel_wrapper: bool, // Are we generating markup inside a ViewModel wrapper?
@@ -126,6 +127,7 @@ impl ComposeBackend {
             uses_pull_to_refresh: false, // Track onRefresh prop usage for PullToRefreshBox
             uses_auto_column: false, // Track auto-wrap Column usage
             uses_navigate: false, // Track $navigate() usage for LocalNavController import
+            uses_route_path: false, // Track $route.path usage for route observation
             uses_material_icons: false, // Track Icon with name prop for Icons import
             in_viewmodel_wrapper: false, // Phase 1.1: Not in ViewModel wrapper by default
             mutable_vars: std::collections::HashSet::new(), // Phase 1.1: Track mutable vars
@@ -422,6 +424,12 @@ impl ComposeBackend {
             }
         }
 
+        // Add currentBackStackEntryAsState import for $route.path
+        if self.uses_route_path {
+            imports.push("androidx.navigation.compose.currentBackStackEntryAsState".to_string());
+            imports.push("androidx.compose.runtime.getValue".to_string());
+        }
+
         // Note: Dispatchers import is added later if needed (see end of generate function)
 
         // Deduplicate and sort imports alphabetically (standard Kotlin convention)
@@ -531,6 +539,14 @@ impl ComposeBackend {
         if self.uses_navigate && !is_screen {
             output.push_str(&self.indent());
             output.push_str("val navController = LocalNavController.current\n");
+        }
+
+        // For components that use $route.path, add current route observation
+        if self.uses_route_path {
+            output.push_str(&self.indent());
+            output.push_str("val currentBackStackEntry by navController.currentBackStackEntryAsState()\n");
+            output.push_str(&self.indent());
+            output.push_str("val currentRoutePath = \"/\" + (currentBackStackEntry?.destination?.route?.substringBefore(\"/\") ?: \"\")\n");
         }
 
         // Separate mutable (var) and computed (val) state
@@ -728,6 +744,9 @@ impl ComposeBackend {
 
                         // Transform $navigate() to use LocalNavController (works everywhere)
                         transformed_line = self.transform_navigate_call(&transformed_line);
+
+                        // Transform $route.path to currentRoutePath
+                        transformed_line = self.transform_route_path(&transformed_line);
 
                         // For non-suspend functions with launch calls, prefix with coroutineScope.
                         if !func.is_suspend && (transformed_line.trim().starts_with("launch ") || transformed_line.trim().starts_with("launch{")) {
@@ -934,6 +953,9 @@ impl ComposeBackend {
 
                         // Transform $navigate() to use LocalNavController (works everywhere)
                         transformed_line = self.transform_navigate_call(&transformed_line);
+
+                        // Transform $route.path to currentRoutePath
+                        transformed_line = self.transform_route_path(&transformed_line);
 
                         // For non-suspend functions with launch calls, prefix with coroutineScope.
                         if !func.is_suspend && (transformed_line.trim().starts_with("launch ") || transformed_line.trim().starts_with("launch{")) {
@@ -1498,21 +1520,21 @@ impl ComposeBackend {
                         return Err("DropdownMenu requires value, onValueChange, and items props".to_string());
                     }
                 }
-                // Special handling for Scaffold with topBar
+                // Special handling for Scaffold with topBar and bottomBar
                 else if comp.name == "Scaffold" {
                     for prop in &comp.props {
-                        if prop.name == "topBar" {
+                        if prop.name == "topBar" || prop.name == "bottomBar" {
                             match &prop.value {
                                 PropValue::Markup(markup) => {
-                                    // topBar with component: wrap in lambda
+                                    // topBar/bottomBar with component: wrap in lambda
                                     // Generate at indent + 2 (Scaffold at indent + 1, content at indent + 2)
-                                    let topbar_code = self.generate_markup_with_indent(markup, indent + 2)?;
+                                    let bar_code = self.generate_markup_with_indent(markup, indent + 2)?;
                                     let closing_indent = "    ".repeat(indent + 1);
-                                    params.push(format!("topBar = {{\n{}{}}}", topbar_code, closing_indent));
+                                    params.push(format!("{} = {{\n{}{}}}", prop.name, bar_code, closing_indent));
                                 }
                                 PropValue::Expression(expr) => {
                                     // Regular expression - just pass through
-                                    params.push(format!("topBar = {}", expr));
+                                    params.push(format!("{} = {}", prop.name, expr));
                                 }
                             }
                         } else {
@@ -1636,6 +1658,53 @@ impl ComposeBackend {
                             }
                         } else {
                             // Other FilterChip props - handle normally (selected, onClick, etc.)
+                            let prop_expr = self.get_prop_expr(&prop.value);
+                            let transformed = self.transform_prop(&comp.name, &prop.name, prop_expr);
+                            params.extend(transformed?);
+                        }
+                    }
+                }
+                // Special handling for NavigationBarItem with composable icon and label props
+                else if comp.name == "NavigationBarItem" {
+                    for prop in &comp.props {
+                        // icon prop accepts composable lambda
+                        if prop.name == "icon" {
+                            match &prop.value {
+                                PropValue::Markup(markup) => {
+                                    // JSX markup: wrap in lambda
+                                    let icon_code = self.generate_markup_with_indent(markup, indent + 2)?;
+                                    let closing_indent = "    ".repeat(indent + 1);
+                                    params.push(format!("icon = {{\n{}{}}}", icon_code, closing_indent));
+                                }
+                                PropValue::Expression(expr) => {
+                                    // Expression - likely a lambda already
+                                    let transformed = self.transform_lambda_arrow(expr);
+                                    params.push(format!("icon = {}", transformed));
+                                }
+                            }
+                        // label prop accepts composable lambda, wrap string in Text()
+                        } else if prop.name == "label" {
+                            match &prop.value {
+                                PropValue::Markup(markup) => {
+                                    // Component prop: wrap in lambda
+                                    let label_code = self.generate_markup_with_indent(markup, indent + 2)?;
+                                    let closing_indent = "    ".repeat(indent + 1);
+                                    params.push(format!("label = {{\n{}{}}}", label_code, closing_indent));
+                                }
+                                PropValue::Expression(expr) => {
+                                    // Expression prop: wrap in lambda with Text component
+                                    params.push(format!("label = {{ Text({}) }}", expr));
+                                }
+                            }
+                        // onClick passes through as-is (native prop, not modifier)
+                        } else if prop.name == "onClick" {
+                            let prop_expr = self.get_prop_expr(&prop.value);
+                            let transformed = self.transform_lambda_arrow(&prop_expr);
+                            let transformed = self.transform_navigate_call(&transformed);
+                            let transformed = self.transform_route_path(&transformed);
+                            params.push(format!("onClick = {}", transformed));
+                        // selected, enabled, etc. pass through normally
+                        } else {
                             let prop_expr = self.get_prop_expr(&prop.value);
                             let transformed = self.transform_prop(&comp.name, &prop.name, prop_expr);
                             params.extend(transformed?);
@@ -2345,8 +2414,8 @@ impl ComposeBackend {
                 // Generate children if any (but not for Text, which uses children for text parameter)
                 if has_children {
                     // Check if we should auto-wrap multiple children in Column (HTML-like vertical flow)
-                    // Skip auto-wrap for explicit layout containers: Box, Row, Column, LazyColumn, LazyRow
-                    let is_layout_container = matches!(comp.name.as_str(), "Box" | "Row" | "Column" | "LazyColumn" | "LazyRow");
+                    // Skip auto-wrap for explicit layout containers: Box, Row, Column, LazyColumn, LazyRow, NavigationBar
+                    let is_layout_container = matches!(comp.name.as_str(), "Box" | "Row" | "Column" | "LazyColumn" | "LazyRow" | "NavigationBar");
                     let non_empty_children: Vec<_> = comp.children.iter()
                         .filter(|c| !matches!(c, Markup::Text(t) if t.trim().is_empty()))
                         .collect();
@@ -2531,6 +2600,7 @@ impl ComposeBackend {
                                                 String::new()
                                             } else {
                                                 let t = self.transform_navigate_call(&trimmed.to_string());
+                                                let t = self.transform_route_path(&t);
                                                 self.transform_viewmodel_expression(&t)
                                             }
                                         })
@@ -2541,12 +2611,14 @@ impl ComposeBackend {
                                 } else {
                                     // Single line
                                     let inner_transformed = self.transform_navigate_call(&inner.to_string());
+                                    let inner_transformed = self.transform_route_path(&inner_transformed);
                                     let inner_transformed = self.transform_viewmodel_expression(&inner_transformed);
                                     output.push_str(&format!("{}    onClick = {{ {} }},\n", indent_str, inner_transformed));
                                 }
                             } else {
                                 // Single expression
                                 let transformed = self.transform_navigate_call(&transformed);
+                                let transformed = self.transform_route_path(&transformed);
                                 let transformed = self.transform_viewmodel_expression(&transformed);
                                 output.push_str(&format!("{}    onClick = {{ {} }},\n", indent_str, transformed));
                             }
@@ -3317,6 +3389,25 @@ impl ComposeBackend {
                             }
                         }
                     }
+                    "NavigationBar" => {
+                        let import = "androidx.compose.material3.NavigationBar".to_string();
+                        if !component_imports.contains(&import) {
+                            component_imports.push(import);
+                        }
+                    }
+                    "NavigationBarItem" => {
+                        let import = "androidx.compose.material3.NavigationBarItem".to_string();
+                        if !component_imports.contains(&import) {
+                            component_imports.push(import);
+                        }
+                        // NavigationBarItem label prop generates Text() - need to import it
+                        if comp.props.iter().any(|p| p.name == "label") {
+                            let text_import = "androidx.compose.material3.Text".to_string();
+                            if !component_imports.contains(&text_import) {
+                                component_imports.push(text_import);
+                            }
+                        }
+                    }
                     "Row" => {
                         let import = "androidx.compose.foundation.layout.Row".to_string();
                         if !component_imports.contains(&import) {
@@ -3862,6 +3953,9 @@ impl ComposeBackend {
 
         // Transform $navigate() to use LocalNavController (works everywhere)
         let value = self.transform_navigate_call(&value);
+
+        // Transform $route.path to currentRoutePath
+        let value = self.transform_route_path(&value);
 
         // Transform lambda arrow syntax: () => to {}
         let value = self.transform_lambda_arrow(&value);
@@ -4470,7 +4564,23 @@ impl ComposeBackend {
         while let Some(start) = result.find("$navigate(") {
             self.uses_navigate = true;
             let after_call = &result[start + 10..]; // Skip "$navigate("
-            if let Some(end) = after_call.find(')') {
+            // Find matching closing paren (handle nested parens like Routes.Photo(id = x))
+            let mut paren_depth = 1;
+            let mut end = 0;
+            for (i, c) in after_call.char_indices() {
+                match c {
+                    '(' => paren_depth += 1,
+                    ')' => {
+                        paren_depth -= 1;
+                        if paren_depth == 0 {
+                            end = i;
+                            break;
+                        }
+                    }
+                    _ => {}
+                }
+            }
+            if paren_depth == 0 {
                 let path_with_quotes = &after_call[..end];
                 // Check if it's a string literal (starts with ") or a typed route (Routes.*)
                 let route_expr = if path_with_quotes.starts_with('"') && path_with_quotes.len() > 2 {
@@ -4536,7 +4646,8 @@ impl ComposeBackend {
                     // These are compile-time checked
                     path_with_quotes.to_string()
                 };
-                let replacement = format!("{}.navigate({})", nav_ref, route_expr);
+                // Use launchSingleTop = true to prevent duplicate destinations on back stack
+                let replacement = format!("{}.navigate({}) {{ launchSingleTop = true }}", nav_ref, route_expr);
                 result = format!("{}{}{}", &result[..start], replacement, &result[start + 11 + end..]);
             } else {
                 break;
@@ -4544,6 +4655,17 @@ impl ComposeBackend {
         }
 
         result
+    }
+
+    /// Transform $route.path to currentRoutePath variable
+    fn transform_route_path(&mut self, value: &str) -> String {
+        if value.contains("$route.path") {
+            self.uses_route_path = true;
+            self.uses_navigate = true; // $route needs navController
+            value.replace("$route.path", "currentRoutePath")
+        } else {
+            value.to_string()
+        }
     }
 
     fn extract_route_params(&self, file: &WhitehallFile) -> Vec<String> {
@@ -5137,9 +5259,9 @@ impl ComposeBackend {
         }
     }
 
-    /// Detect if a file uses $routes or $navigate (needs Routes and LocalNavController imports)
+    /// Detect if a file uses $routes, $navigate, or $route (needs Routes and LocalNavController imports)
     fn detect_routes_usage(&mut self, file: &WhitehallFile) {
-        // Check functions for $routes or $navigate
+        // Check functions for $routes, $navigate, or $route
         for func in &file.functions {
             if func.body.contains("$routes") {
                 self.uses_routes = true;
@@ -5147,6 +5269,10 @@ impl ComposeBackend {
             if func.body.contains("$navigate") {
                 self.uses_navigate = true;
                 self.uses_routes = true; // $navigate uses Routes for type-safe navigation
+            }
+            if func.body.contains("$route.") {
+                self.uses_route_path = true;
+                self.uses_navigate = true; // $route needs navController for currentBackStackEntry
             }
         }
         // Check lifecycle hooks
@@ -5158,6 +5284,10 @@ impl ComposeBackend {
                 self.uses_navigate = true;
                 self.uses_routes = true;
             }
+            if hook.body.contains("$route.") {
+                self.uses_route_path = true;
+                self.uses_navigate = true;
+            }
         }
         // Check markup (onClick handlers, etc.)
         let markup_str = format!("{:?}", file.markup);
@@ -5167,6 +5297,10 @@ impl ComposeBackend {
         if markup_str.contains("$navigate") {
             self.uses_navigate = true;
             self.uses_routes = true;
+        }
+        if markup_str.contains("$route.") {
+            self.uses_route_path = true;
+            self.uses_navigate = true;
         }
     }
 
@@ -6779,6 +6913,12 @@ impl ComposeBackend {
             }
         }
 
+        // Add currentBackStackEntryAsState import for $route.path
+        if self.uses_route_path {
+            imports.push("androidx.navigation.compose.currentBackStackEntryAsState".to_string());
+            imports.push("androidx.compose.runtime.getValue".to_string());
+        }
+
         // Add Material Icons imports for Icon with name prop
         if self.uses_material_icons {
             imports.push("androidx.compose.material.icons.Icons".to_string());
@@ -6851,6 +6991,14 @@ impl ComposeBackend {
         if self.uses_navigate && !is_screen {
             output.push_str(&self.indent());
             output.push_str("val navController = LocalNavController.current\n");
+        }
+
+        // For components that use $route.path, add current route observation
+        if self.uses_route_path {
+            output.push_str(&self.indent());
+            output.push_str("val currentBackStackEntry by navController.currentBackStackEntryAsState()\n");
+            output.push_str(&self.indent());
+            output.push_str("val currentRoutePath = \"/\" + (currentBackStackEntry?.destination?.route?.substringBefore(\"/\") ?: \"\")\n");
         }
 
         // Phase 1.1: Set up ViewModel wrapper context before generating markup

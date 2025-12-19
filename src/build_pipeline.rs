@@ -450,8 +450,14 @@ fn generate_navhost_main_activity(config: &Config, routes: &[routes::Route], app
             result
         };
 
+        // Use instant transitions (no animation) by default for snappy navigation
         let composable = format!(
-            "        composable<Routes.{}>{{ {} }}",
+            "        composable<Routes.{}>(
+            enterTransition = {{ EnterTransition.None }},
+            exitTransition = {{ ExitTransition.None }},
+            popEnterTransition = {{ EnterTransition.None }},
+            popExitTransition = {{ ExitTransition.None }}
+        ){{ {} }}",
             route.name, wrapped_screen
         );
         composable_entries.push(composable);
@@ -643,6 +649,8 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.animation.EnterTransition
+import androidx.compose.animation.ExitTransition
 import androidx.navigation.NavController
 {}
 import androidx.navigation.compose.NavHost
