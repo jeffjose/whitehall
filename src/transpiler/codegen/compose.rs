@@ -546,7 +546,8 @@ impl ComposeBackend {
             output.push_str(&self.indent());
             output.push_str("val currentBackStackEntry by navController.currentBackStackEntryAsState()\n");
             output.push_str(&self.indent());
-            output.push_str("val currentRoutePath = \"/\" + (currentBackStackEntry?.destination?.route?.substringBefore(\"/\") ?: \"\")\n");
+            // Use lowercase() to match user-written paths like "/favorites" with Routes.Favorites
+            output.push_str("val currentRoutePath = \"/\" + (currentBackStackEntry?.destination?.route?.substringBefore(\"/\")?.lowercase() ?: \"\")\n");
         }
 
         // Separate mutable (var) and computed (val) state
@@ -7027,7 +7028,8 @@ impl ComposeBackend {
             output.push_str(&self.indent());
             output.push_str("val currentBackStackEntry by navController.currentBackStackEntryAsState()\n");
             output.push_str(&self.indent());
-            output.push_str("val currentRoutePath = \"/\" + (currentBackStackEntry?.destination?.route?.substringBefore(\"/\") ?: \"\")\n");
+            // Use lowercase() to match user-written paths like "/favorites" with Routes.Favorites
+            output.push_str("val currentRoutePath = \"/\" + (currentBackStackEntry?.destination?.route?.substringBefore(\"/\")?.lowercase() ?: \"\")\n");
         }
 
         // Phase 1.1: Set up ViewModel wrapper context before generating markup
