@@ -678,6 +678,16 @@ fun NavController.navigateSafe(route: String) {{
     }}
 }}
 
+// Smart navigation that skips if already at destination (prevents flash on re-tap)
+inline fun <reified T : Any> NavController.navigateIfNeeded(route: T) {{
+    val currentRoute = currentBackStackEntry?.destination?.route?.lowercase() ?: ""
+    val targetName = T::class.simpleName?.lowercase() ?: ""
+    // Only navigate if not already at this destination
+    if (!currentRoute.endsWith(targetName)) {{
+        navigate(route) {{ launchSingleTop = true }}
+    }}
+}}
+
 // Error screen for navigation failures
 @Composable
 fun ErrorScreen(
