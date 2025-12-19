@@ -1,9 +1,9 @@
 import $components.AppTopBar
+import $components.AppBottomBar
 
 <Scaffold
-  topBar={
-    <AppTopBar/>
-  }
+  topBar={ <AppTopBar/> }
+  bottomBar = { <AppBottomBar/> }
 >
   <slot />
 </Scaffold>

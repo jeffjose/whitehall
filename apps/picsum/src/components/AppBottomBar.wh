@@ -1,0 +1,20 @@
+<NavigationBar>                                                                                           
+  <NavigationBarItem                                                                                      
+    selected={$route.path == "/"}                                                                         
+    onClick={() => $navigate("/")}                                                                        
+    icon={<Icon name="Home" />}                                                                           
+    label="Home"                                                                                          
+  />                                                                                                      
+  <NavigationBarItem                                                                                      
+    selected={$route.path == "/favorites"}                                                                
+    onClick={() => $navigate("/favorites")}                                                               
+    icon={<Icon name="Favorite" />}                                                                       
+    label="Favorites"                                                                                     
+  />                                                                                                      
+  <NavigationBarItem                                                                                      
+    selected={$route.path == "/settings"}                                                                 
+    onClick={() => $navigate("/settings")}                                                                
+    icon={<Icon name="Settings" />}                                                                       
+    label="Settings"                                                                                      
+  />                                                                                                      
+</NavigationBar> 
