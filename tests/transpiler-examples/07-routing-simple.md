@@ -42,16 +42,17 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
+import com.example.app.navigateIfNeeded
 import com.example.app.routes.Routes
 
 @Composable
 fun WelcomeScreen(navController: NavController) {
     fun handleLoginClick() {
-        navController.navigate(Routes.Login) { launchSingleTop = true }
+        navController.navigateIfNeeded(Routes.Login)
     }
 
     fun handleSignupClick() {
-        navController.navigate(Routes.Signup) { launchSingleTop = true }
+        navController.navigateIfNeeded(Routes.Signup)
     }
 
     Column(

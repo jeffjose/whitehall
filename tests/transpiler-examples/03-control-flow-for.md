@@ -42,6 +42,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.app.LocalNavController
 import com.example.app.models.Post
+import com.example.app.navigateIfNeeded
 import com.example.app.routes.Routes
 
 @Composable
@@ -61,7 +62,7 @@ fun PostList(
             posts.forEach { post ->
                 key(post.id) {
                     Card(
-                        onClick = { navController.navigate(Routes.Post.Detail(id = post.id)) { launchSingleTop = true } }
+                        onClick = { navController.navigateIfNeeded(Routes.Post.Detail(id = post.id)) }
                     ) {
                         Column(modifier = Modifier.padding(12.dp)) {
                             Text(

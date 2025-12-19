@@ -45,6 +45,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.app.LocalNavController
 import com.example.app.R
+import com.example.app.navigateIfNeeded
 import com.example.app.routes.Routes
 
 @Composable
@@ -69,7 +70,7 @@ fun WelcomeScreen(
             text = "${stringResource(R.string.items_count, itemCount)}"
         )
         Button(
-            onClick = { navController.navigate(Routes.Home) { launchSingleTop = true } }
+            onClick = { navController.navigateIfNeeded(Routes.Home) }
         ) {
             Text(text = "${stringResource(R.string.action_continue)}")
         }
