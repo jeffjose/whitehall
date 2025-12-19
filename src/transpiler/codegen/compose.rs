@@ -1702,7 +1702,36 @@ impl ComposeBackend {
                             let transformed = self.transform_lambda_arrow(&prop_expr);
                             let transformed = self.transform_navigate_call(&transformed);
                             let transformed = self.transform_route_path(&transformed);
-                            params.push(format!("onClick = {}", transformed));
+
+                            // For NavigationBarItem, check selected prop and add guard to prevent re-navigation
+                            // Find the selected prop to extract the route path for the guard
+                            let selected_route = comp.props.iter()
+                                .find(|p| p.name == "selected")
+                                .and_then(|p| {
+                                    let sel_expr = self.get_prop_expr(&p.value);
+                                    // Extract route from patterns like: $route.path == "/settings" or currentRoutePath == "/settings"
+                                    if let Some(start) = sel_expr.find("== \"") {
+                                        let after = &sel_expr[start + 4..];
+                                        if let Some(end) = after.find('"') {
+                                            return Some(after[..end].to_string());
+                                        }
+                                    }
+                                    None
+                                });
+
+                            if let Some(route_path) = selected_route {
+                                // Add guard: only navigate if not already on this route
+                                // Wrap the whole onClick body in an if statement
+                                if transformed.starts_with('{') && transformed.ends_with('}') {
+                                    // Remove outer braces, trim, and wrap in conditional
+                                    let inner = &transformed[1..transformed.len()-1];
+                                    params.push(format!("onClick = {{ if (currentRoutePath != \"{}\") {{{} }} }}", route_path, inner));
+                                } else {
+                                    params.push(format!("onClick = {}", transformed));
+                                }
+                            } else {
+                                params.push(format!("onClick = {}", transformed));
+                            }
                         // selected, enabled, etc. pass through normally
                         } else {
                             let prop_expr = self.get_prop_expr(&prop.value);

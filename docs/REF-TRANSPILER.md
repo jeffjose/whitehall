@@ -996,6 +996,81 @@ Scaffold(
 }
 ```
 
+### NavigationBar and NavigationBarItem
+
+Bottom navigation with automatic route detection and instant transitions.
+
+```whitehall
+<NavigationBar>
+  <NavigationBarItem
+    selected={$route.path == "/"}
+    onClick={() => $navigate("/")}
+    icon={<Icon name="Home" />}
+    label="Home"
+  />
+  <NavigationBarItem
+    selected={$route.path == "/settings"}
+    onClick={() => $navigate("/settings")}
+    icon={<Icon name="Settings" />}
+    label="Settings"
+  />
+</NavigationBar>
+```
+
+**Generates:**
+
+```kotlin
+val currentBackStackEntry by navController.currentBackStackEntryAsState()
+val currentRoutePath = "/" + (currentBackStackEntry?.destination?.route?.substringBefore("/") ?: "")
+NavigationBar {
+    NavigationBarItem(
+        selected = currentRoutePath == "/",
+        onClick = { navController.navigate(Routes.Home) { launchSingleTop = true } },
+        icon = { Icon(imageVector = Icons.Default.Home, contentDescription = null) },
+        label = { Text("Home") }
+    )
+    NavigationBarItem(
+        selected = currentRoutePath == "/settings",
+        onClick = { navController.navigate(Routes.Settings) { launchSingleTop = true } },
+        icon = { Icon(imageVector = Icons.Default.Settings, contentDescription = null) },
+        label = { Text("Settings") }
+    )
+}
+```
+
+**Key Features:**
+- `$route.path` → Current route path (observed via `currentBackStackEntryAsState()`)
+- `$navigate()` → Includes `launchSingleTop = true` to prevent duplicate destinations
+- Navigation guard → Automatically adds `if (currentRoutePath != "/path")` to prevent re-navigation when already on target route
+- `icon` prop → Wrapped in composable lambda
+- `label` prop → Wrapped in `{ Text("...") }` lambda
+- NavigationBar children are not auto-wrapped in Column
+- Instant transitions (no animation) for snappy navigation
+
+### Scaffold with bottomBar
+
+```whitehall
+<Scaffold
+  topBar={<AppTopBar />}
+  bottomBar={<AppBottomBar />}
+>
+  <slot />
+</Scaffold>
+```
+
+**Generates:**
+
+```kotlin
+Scaffold(
+    topBar = { AppTopBar() },
+    bottomBar = { AppBottomBar() }
+) { paddingValues ->
+    Box(modifier = Modifier.padding(paddingValues)) {
+        content()
+    }
+}
+```
+
 ---
 
 ## Testing Strategy
