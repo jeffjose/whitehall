@@ -2575,7 +2575,7 @@ impl ComposeBackend {
             // Extract the root package by removing common package type suffixes
             // e.g., "com.example.app.components" -> "com.example.app"
             // e.g., "com.example.app.screens" -> "com.example.app"
-            let known_suffixes = [".components", ".screens", ".routes", ".layouts", ".lib", ".models", ".utils"];
+            let known_suffixes = [".components", ".screens", ".routes", ".layouts", ".lib", ".models", ".utils", ".stores"];
             let root_package = known_suffixes.iter()
                 .find_map(|&suffix| {
                     if self.package.ends_with(suffix) {

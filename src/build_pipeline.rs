@@ -13,6 +13,7 @@ use crate::transpiler;
 pub struct AppConfig {
     pub color_scheme: ColorScheme,
     pub dark_mode: DarkMode,
+    pub imports: Vec<String>,  // Imports from main.wh (for store bindings)
 }
 
 #[derive(Debug, Clone, Default)]
@@ -36,6 +37,10 @@ pub enum DarkMode {
     System,  // Follow system setting
     Light,   // Always light
     Dark,    // Always dark
+    Binding {  // Dynamic binding to a store property
+        store: String,     // e.g., "SettingsStore"
+        property: String,  // e.g., "theme"
+    },
 }
 
 /// Represents the result of a build operation
@@ -462,31 +467,69 @@ fn generate_navhost_main_activity(config: &Config, routes: &[routes::Route], app
         .unwrap_or_else(|| format!("Routes.{}", routes[0].name));
 
     // Generate imports based on color scheme
+    // Generate store binding imports if needed
+    let binding_imports = if let DarkMode::Binding { store, .. } = &app_config.dark_mode {
+        // Find the import for this store and resolve it
+        let store_import = app_config.imports.iter()
+            .find(|imp| imp.ends_with(store))
+            .map(|imp| {
+                // Resolve $stores.X to package.stores.X
+                if imp.starts_with('$') {
+                    let rest = &imp[1..];
+                    format!("{}.{}", config.android.package, rest)
+                } else {
+                    imp.clone()
+                }
+            })
+            .unwrap_or_else(|| format!("{}.stores.{}", config.android.package, store));
+
+        format!(r#"
+import {}
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue"#, store_import)
+    } else {
+        String::new()
+    };
+
     let theme_imports = match &app_config.color_scheme {
-        ColorScheme::Dynamic => r#"import android.os.Build
+        ColorScheme::Dynamic => format!(r#"import android.os.Build
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.dynamicDarkColorScheme
 import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.material3.lightColorScheme
-import androidx.compose.ui.platform.LocalContext"#,
+import androidx.compose.ui.platform.LocalContext{}"#, binding_imports),
         ColorScheme::Default | ColorScheme::Custom { .. } => {
             match &app_config.dark_mode {
+                DarkMode::Binding { .. } => format!(r#"import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.darkColorScheme
+import androidx.compose.material3.lightColorScheme{}"#, binding_imports),
                 DarkMode::System => r#"import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
-import androidx.compose.material3.lightColorScheme"#,
-                _ => "import androidx.compose.material3.MaterialTheme",
+import androidx.compose.material3.lightColorScheme"#.to_string(),
+                _ => "import androidx.compose.material3.MaterialTheme".to_string(),
             }
         }
     };
 
     // Generate dark theme check based on dark_mode setting
     let dark_theme_check = match &app_config.dark_mode {
-        DarkMode::System => "val darkTheme = isSystemInDarkTheme()",
-        DarkMode::Light => "val darkTheme = false",
-        DarkMode::Dark => "val darkTheme = true",
+        DarkMode::System => "val darkTheme = isSystemInDarkTheme()".to_string(),
+        DarkMode::Light => "val darkTheme = false".to_string(),
+        DarkMode::Dark => "val darkTheme = true".to_string(),
+        DarkMode::Binding { store, property } => format!(
+            r#"val settingsState by {}.state.collectAsState()
+            val systemDarkTheme = isSystemInDarkTheme()
+            val darkTheme = when (settingsState.{}) {{
+                "light" -> false
+                "dark" -> true
+                else -> systemDarkTheme
+            }}"#,
+            store, property
+        ),
     };
 
     // Generate color scheme setup based on color_scheme setting
@@ -504,7 +547,7 @@ import androidx.compose.material3.lightColorScheme"#,
             dark_theme_check
         ),
         ColorScheme::Default => match &app_config.dark_mode {
-            DarkMode::System => format!(
+            DarkMode::System | DarkMode::Binding { .. } => format!(
                 r#"{}
             val colorScheme = if (darkTheme) darkColorScheme() else lightColorScheme()"#,
                 dark_theme_check
@@ -743,8 +786,17 @@ fn parse_app_config(main_file: Option<&WhitehallFile>) -> AppConfig {
 
     let mut config = AppConfig::default();
 
+    // Parse imports (e.g., "import $stores.SettingsStore")
+    for line in source.lines() {
+        let trimmed = line.trim();
+        if trimmed.starts_with("import ") {
+            config.imports.push(trimmed[7..].trim().to_string());
+        }
+    }
+
     // Simple parsing: look for <App ...> and extract props
     // Format: <App colorScheme="dynamic" darkMode="system">
+    // Or: <App colorScheme="dynamic" darkMode={SettingsStore.theme}>
     if let Some(app_start) = source.find("<App") {
         let app_section = &source[app_start..];
         let app_end = app_section.find('>').unwrap_or(app_section.len());
@@ -764,12 +816,21 @@ fn parse_app_config(main_file: Option<&WhitehallFile>) -> AppConfig {
         // Parse darkMode prop
         if let Some(dm_start) = app_tag.find("darkMode=") {
             let after_eq = &app_tag[dm_start + 9..];
-            if let Some(value) = extract_prop_value(after_eq) {
-                config.dark_mode = match value.as_str() {
-                    "light" => DarkMode::Light,
-                    "dark" => DarkMode::Dark,
-                    "system" | _ => DarkMode::System,
-                };
+            if let Some((value, is_binding)) = extract_prop_value_with_type(after_eq) {
+                if is_binding {
+                    // Parse binding like "SettingsStore.theme"
+                    if let Some((store, property)) = parse_store_binding(&value) {
+                        config.dark_mode = DarkMode::Binding { store, property };
+                    } else {
+                        config.dark_mode = DarkMode::System;
+                    }
+                } else {
+                    config.dark_mode = match value.as_str() {
+                        "light" => DarkMode::Light,
+                        "dark" => DarkMode::Dark,
+                        "system" | _ => DarkMode::System,
+                    };
+                }
             }
         }
     }
@@ -777,22 +838,39 @@ fn parse_app_config(main_file: Option<&WhitehallFile>) -> AppConfig {
     config
 }
 
+/// Parse a store binding expression like "SettingsStore.theme" into (store, property)
+fn parse_store_binding(expr: &str) -> Option<(String, String)> {
+    let parts: Vec<&str> = expr.split('.').collect();
+    if parts.len() == 2 {
+        Some((parts[0].to_string(), parts[1].to_string()))
+    } else {
+        None
+    }
+}
+
 /// Extract a quoted prop value from a string starting after the '='
 fn extract_prop_value(s: &str) -> Option<String> {
+    extract_prop_value_with_type(s).map(|(v, _)| v)
+}
+
+/// Extract a prop value and whether it's a binding (in curly braces)
+/// Returns (value, is_binding)
+fn extract_prop_value_with_type(s: &str) -> Option<(String, bool)> {
     let s = s.trim_start();
     if s.starts_with('"') {
-        // "value"
+        // "value" - static string
         let end = s[1..].find('"')?;
-        Some(s[1..=end].to_string())
+        Some((s[1..=end].to_string(), false))
     } else if s.starts_with('{') {
-        // {value} - for expression props, just extract the content
+        // {value} - expression/binding
         let end = s[1..].find('}')?;
         let inner = s[1..=end].trim();
-        // Handle {"value"} case
+        // Handle {"value"} case - still a static value
         if inner.starts_with('"') && inner.ends_with('"') {
-            Some(inner[1..inner.len()-1].to_string())
+            Some((inner[1..inner.len()-1].to_string(), false))
         } else {
-            Some(inner.to_string())
+            // Expression binding like {SettingsStore.theme}
+            Some((inner.to_string(), true))
         }
     } else {
         None

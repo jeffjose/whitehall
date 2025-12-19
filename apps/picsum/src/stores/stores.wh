@@ -1,0 +1,5 @@
+@store object SettingsStore {
+  var theme: String = "system" // "light", "dark", "system"
+  var gridColumns: Int = 2
+  var imageQuality: String = "medium" // "low", "medium", "high"
+}

@@ -1,8 +1,4 @@
-@store object SettingsStore {
-  var theme: String = "system" // "light", "dark", "system"
-  var gridColumns: Int = 2
-  var imageQuality: String = "medium" // "low", "medium", "high"
-}
+import $stores.SettingsStore
 
 <Column p={16} gap={16}>
   <Text style="title-md">Theme</Text>

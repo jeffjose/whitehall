@@ -522,14 +522,38 @@ fun ProfileScreen() {
 
 **Key Difference:** `@store object` generates a **singleton with StateFlow** (NOT a ViewModel!)
 
-**Syntax:**
+### File Location
+
+Place stores in `src/stores/`:
+
+```
+src/
+├── stores/
+│   └── settings.wh    # SettingsStore
+├── routes/
+│   └── settings/
+│       └── +screen.wh # Uses SettingsStore
+└── main.wh            # Can bind to store
+```
+
+### Import Syntax
+
+Use the `$stores` alias to import:
 
 ```whitehall
-@store object AppSettings {
-  var darkMode = false
-  var language = "en"
-  
-  val isDarkModeEnabled: Boolean get() = darkMode
+import $stores.SettingsStore
+```
+
+This resolves to `{package}.stores.SettingsStore`.
+
+### Basic Syntax
+
+```whitehall
+@store object SettingsStore {
+  var theme: String = "system"  // "light", "dark", "system"
+  var language: String = "en"
+
+  val isDarkModeEnabled: Boolean get() = theme == "dark"
 }
 ```
 
@@ -563,7 +587,61 @@ object AppSettings {  // object, NOT class
 - ✅ StateFlow only (NO ViewModel, NO viewModelScope)
 - ✅ Suspend functions keep `suspend` keyword (caller provides scope)
 - ✅ Lives for entire app lifetime (not screen-scoped)
-- ✅ Accessed directly: `AppSettings.darkMode = true`
+- ✅ Accessed directly: `SettingsStore.theme = "dark"`
+
+### Theme Binding in main.wh
+
+You can bind a store property to the app's theme in `main.wh`:
+
+**src/stores/settings.wh:**
+```whitehall
+@store object SettingsStore {
+  var theme: String = "system"  // "light", "dark", "system"
+}
+```
+
+**src/main.wh:**
+```whitehall
+import $stores.SettingsStore
+
+<App colorScheme="dynamic" darkMode={SettingsStore.theme}>
+  <slot />
+</App>
+```
+
+**src/routes/settings/+screen.wh:**
+```whitehall
+import $stores.SettingsStore
+
+<Row gap={8}>
+  <FilterChip
+    selected={SettingsStore.theme == "light"}
+    onClick={() => SettingsStore.theme = "light"}
+    label="Light"
+  />
+  <FilterChip
+    selected={SettingsStore.theme == "dark"}
+    onClick={() => SettingsStore.theme = "dark"}
+    label="Dark"
+  />
+  <FilterChip
+    selected={SettingsStore.theme == "system"}
+    onClick={() => SettingsStore.theme = "system"}
+    label="System"
+  />
+</Row>
+```
+
+**How it works:**
+
+The `darkMode={SettingsStore.theme}` binding generates MainActivity code that:
+1. Imports and observes `SettingsStore.state` via `collectAsState()`
+2. Maps the theme value to dark mode:
+   - `"light"` → force light theme
+   - `"dark"` → force dark theme
+   - `"system"` → follow system setting
+
+Changes to `SettingsStore.theme` immediately update the app's theme.
 
 ---
 

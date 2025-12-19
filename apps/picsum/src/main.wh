@@ -1,4 +1,6 @@
-<App colorScheme="dynamic" darkMode="system">
+import $stores.SettingsStore
+
+<App colorScheme="dynamic" darkMode={SettingsStore.theme}>
 <Text>main.wh</Text>
   <slot />
 </App>
