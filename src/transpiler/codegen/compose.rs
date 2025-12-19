@@ -4585,7 +4585,35 @@ impl ComposeBackend {
                 }
             }
             if paren_depth == 0 {
-                let path_with_quotes = &after_call[..end];
+                let full_args = &after_call[..end];
+
+                // Check for reload option: $navigate('/path', reload = true)
+                // Split args by comma at depth 0 to handle nested parens
+                let mut args: Vec<&str> = Vec::new();
+                let mut arg_start = 0;
+                let mut depth = 0;
+                for (i, c) in full_args.char_indices() {
+                    match c {
+                        '(' => depth += 1,
+                        ')' => depth -= 1,
+                        ',' if depth == 0 => {
+                            args.push(full_args[arg_start..i].trim());
+                            arg_start = i + 1;
+                        }
+                        _ => {}
+                    }
+                }
+                args.push(full_args[arg_start..].trim());
+
+                // First arg is the route
+                let path_with_quotes = args.first().unwrap_or(&"");
+
+                // Check if reload = true is specified
+                let force_reload = args.iter().skip(1).any(|arg| {
+                    let normalized = arg.replace(' ', "").to_lowercase();
+                    normalized == "reload=true"
+                });
+
                 // Check if it's a string literal (starts with ") or a typed route (Routes.*)
                 let route_expr = if path_with_quotes.starts_with('"') && path_with_quotes.len() > 2 {
                     // String route - convert to typed route for type-safe navigation
@@ -4650,8 +4678,15 @@ impl ComposeBackend {
                     // These are compile-time checked
                     path_with_quotes.to_string()
                 };
-                // Use navigateIfNeeded to skip navigation if already at destination (prevents flash on re-tap)
-                let replacement = format!("{}.navigateIfNeeded({})", nav_ref, route_expr);
+
+                // Use navigateIfNeeded by default, but use regular navigate with reload = true
+                let replacement = if force_reload {
+                    // Force reload: use regular navigate (will always navigate, even if same route)
+                    format!("{}.navigate({}) {{ launchSingleTop = true }}", nav_ref, route_expr)
+                } else {
+                    // Default: use navigateIfNeeded (skips if already at destination)
+                    format!("{}.navigateIfNeeded({})", nav_ref, route_expr)
+                };
                 result = format!("{}{}{}", &result[..start], replacement, &result[start + 11 + end..]);
             } else {
                 break;
