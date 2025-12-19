@@ -643,6 +643,23 @@ The `darkMode={SettingsStore.theme}` binding generates MainActivity code that:
 
 Changes to `SettingsStore.theme` immediately update the app's theme.
 
+**Current Limitation:**
+
+The binding currently only supports `{Store.property}` format (exactly two parts separated by `.`). More complex expressions are not yet supported:
+
+```whitehall
+// ✓ Works
+darkMode={SettingsStore.theme}
+
+// ✗ Not yet supported
+darkMode={SettingsStore.state.theme}
+darkMode={theme}
+darkMode={getTheme()}
+darkMode={settings.isDark || forceLight}
+```
+
+**Future:** Parse any expression and extract store references from imports to enable generic reactive bindings.
+
 ---
 
 ## Suspend Functions & Coroutines
