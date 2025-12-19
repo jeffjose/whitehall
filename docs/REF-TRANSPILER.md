@@ -483,9 +483,12 @@ Whitehall provides transparent navigation via the `$navigate` API. Navigation wo
 
 **Basic Navigation:**
 ```whitehall
-// Navigate to a route
+// Navigate to a route (skips if already there)
 $navigate("/settings")
 $navigate("/profile/123")
+
+// Force navigation even if already at destination (triggers reload)
+$navigate("/settings", reload = true)
 
 // Go back
 $navigate.back()
@@ -499,11 +502,14 @@ $navigate.popUpTo("/home")
 
 **Generated Kotlin:**
 ```kotlin
-// $navigate("/settings") becomes (type-safe route):
-navController.navigate(Routes.Settings)
+// $navigate("/settings") becomes (skips if already there):
+navController.navigateIfNeeded(Routes.Settings)
+
+// $navigate("/settings", reload = true) becomes (always navigates):
+navController.navigate(Routes.Settings) { launchSingleTop = true }
 
 // $navigate("/") becomes:
-navController.navigate(Routes.Home)
+navController.navigateIfNeeded(Routes.Home)
 
 // $navigate.back() becomes:
 navController.popBackStack()
@@ -567,7 +573,8 @@ src/routes/
 
 | Syntax | Description |
 |--------|-------------|
-| `$navigate("/path")` | Navigate to path on default NavHost |
+| `$navigate("/path")` | Navigate to path (skips if already there) |
+| `$navigate("/path", reload = true)` | Navigate to path (always, even if same) |
 | `$navigate("@name/path")` | Navigate to path on named NavHost |
 | `$navigate.back()` | Go back (context-aware) |
 | `$navigate.back("@name")` | Go back on named NavHost |
@@ -1021,17 +1028,17 @@ Bottom navigation with automatic route detection and instant transitions.
 
 ```kotlin
 val currentBackStackEntry by navController.currentBackStackEntryAsState()
-val currentRoutePath = "/" + (currentBackStackEntry?.destination?.route?.substringBefore("/") ?: "")
+val currentRoutePath = "/" + (currentBackStackEntry?.destination?.route?.substringBefore("/")?.lowercase() ?: "")
 NavigationBar {
     NavigationBarItem(
         selected = currentRoutePath == "/",
-        onClick = { navController.navigate(Routes.Home) { launchSingleTop = true } },
+        onClick = { navController.navigateIfNeeded(Routes.Home) },
         icon = { Icon(imageVector = Icons.Default.Home, contentDescription = null) },
         label = { Text("Home") }
     )
     NavigationBarItem(
         selected = currentRoutePath == "/settings",
-        onClick = { navController.navigate(Routes.Settings) { launchSingleTop = true } },
+        onClick = { navController.navigateIfNeeded(Routes.Settings) },
         icon = { Icon(imageVector = Icons.Default.Settings, contentDescription = null) },
         label = { Text("Settings") }
     )
@@ -1040,8 +1047,8 @@ NavigationBar {
 
 **Key Features:**
 - `$route.path` → Current route path (observed via `currentBackStackEntryAsState()`)
-- `$navigate()` → Includes `launchSingleTop = true` to prevent duplicate destinations
-- Navigation guard → Automatically adds `if (currentRoutePath != "/path")` to prevent re-navigation when already on target route
+- `$navigate()` → Uses `navigateIfNeeded()` which skips navigation if already at destination (no flash on re-tap)
+- `$navigate(..., reload = true)` → Forces navigation even if already there
 - `icon` prop → Wrapped in composable lambda
 - `label` prop → Wrapped in `{ Text("...") }` lambda
 - NavigationBar children are not auto-wrapped in Column
